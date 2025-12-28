@@ -1,16 +1,25 @@
 [package]
 name = "audium"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+description = "A simple TUI audio player made in rust"
+authors = ["takashialpha <takashialpha@protonmail.com>"]
+license = "Apache-2.0"
 
 [dependencies]
-crossterm = "0.28.1"
-ratatui = "0.29.0"
-rodio = "0.20.1"
+app-base = { git = "https://github.com/takashialpha/app-base.git" }
+clap = { version = "4.5.53", features = ["derive"] }
+phonic = "0.13.0"
+serde = { version = "1.0.228", features = ["derive"] }
+
+[features]
+default = ["file_choosing"]
+
+file_choosing = []
 
 [profile.release]
 strip = true
-opt-level = "s" # change this to z if you want to make this lighter (but less performant), or 3 if you somehow need performance on an audio player.
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
