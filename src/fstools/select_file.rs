@@ -28,7 +28,10 @@ impl SelectFile {
     pub fn get_file(&mut self) -> Result<(), AudioPlayerError> {
         let status = Command::new("sh")
             .arg("-c")
-            .arg(format!("ranger -c --choosefile={} --selectfile=/home/", &self.file_path))
+            .arg(format!(
+                "ranger -c --choosefile={} --selectfile=/home/",
+                &self.file_path
+            ))
             .status()
             .map_err(AudioPlayerError::IoError)?;
 

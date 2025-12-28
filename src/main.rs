@@ -8,7 +8,14 @@ use std::path::PathBuf;
 use tui::tui::Tui;
 
 fn main() {
-    let mut player = AudioPlayer::new();
+    let mut player = match AudioPlayer::new() {
+        Ok(player) => player,
+        Err(e) => {
+            eprintln!("Error initializing AudioPlayer: {}", e);
+            return;
+        }
+    };
+
     match fstools::select_file::SelectFile::new() {
         Ok(mut select_file) => {
             if let Err(e) = select_file.get_file() {

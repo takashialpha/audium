@@ -1,7 +1,6 @@
-use crate::error::error::AudioPlayerError;
-use crate::player::stream::StreamHandler;
-use crate::player::wav;
-use std::fs;
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
+use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
 
 #[derive(PartialEq)]
@@ -13,65 +12,64 @@ enum State {
 
 pub struct AudioPlayer {
     state: State,
-    stream_handler: Option<StreamHandler>,
+    sink: Option<Sink>,
     current_file_name: Option<String>,
+    _stream: OutputStream,
+    stream_handle: OutputStreamHandle,
 }
 
 impl AudioPlayer {
-    pub fn new() -> AudioPlayer {
-        AudioPlayer {
+    pub fn new() -> Result<Self, String> {
+        let (_stream, stream_handle) = OutputStream::try_default()
+            .map_err(|e| format!("Failed to initialize audio output: {}", e))?;
+
+        Ok(AudioPlayer {
             state: State::WaitingForFile,
-            stream_handler: None,
+            sink: None,
             current_file_name: None,
-        }
+            _stream,
+            stream_handle,
+        })
     }
 
-    pub fn play_file(&mut self, path: PathBuf) -> Result<(), AudioPlayerError> {
+    pub fn play_file(&mut self, path: PathBuf) -> Result<(), String> {
         self.current_file_name = path
             .file_stem()
-            .and_then(|os_str| os_str.to_os_string().into_string().ok())
-            .map(Some)
-            .ok_or(AudioPlayerError::InvalidFileName)?;
+            .and_then(|os_str| os_str.to_os_string().into_string().ok());
 
-        let file_bytes = fs::read(&path).map_err(AudioPlayerError::IoError)?;
+        let file = File::open(&path).map_err(|e| format!("Failed to open file: {}", e))?;
+        let decoder = Decoder::new(BufReader::new(file))
+            .map_err(|e| format!("Failed to decode audio file: {}", e))?;
 
-        let stream_handler = match path.extension().and_then(|ext| ext.to_str()) {
-            Some("wav") | Some("wave") => {
-                let samples = wav::stream_from_wav_file(&file_bytes)?;
-                StreamHandler::from_samples(samples)?
-            }
-            _ => return Err(AudioPlayerError::UnsupportedFileFormat),
-        };
+        let sink = Sink::try_new(&self.stream_handle)
+            .map_err(|e| format!("Failed to create audio sink: {}", e))?;
 
-        match stream_handler.play() {
-            Ok(_) => (),
-            Err(e) => return Err(e),
-        }
+        sink.append(decoder);
+        sink.play();
 
-        self.stream_handler = Some(stream_handler);
+        self.sink = Some(sink);
         self.state = State::Playing;
 
         Ok(())
     }
 
     pub fn toggle_playing(&mut self) {
-        if let Some(stream_handler) = &self.stream_handler {
+        if let Some(sink) = &self.sink {
             match self.state {
                 State::Playing => {
                     self.state = State::Paused;
-                    let _ = stream_handler.pause();
+                    sink.pause();
                 }
                 State::Paused => {
                     self.state = State::Playing;
-                    let _ = stream_handler.play();
+                    sink.play();
                 }
                 _ => {}
             }
         }
     }
-
     pub fn progress(&self) -> f32 {
-        self.stream_handler.as_ref().map_or(0.0, |s| s.progress())
+        // temporary not working
     }
 
     pub fn pause_or_play_button_text(&self) -> &str {
@@ -80,9 +78,12 @@ impl AudioPlayer {
             _ => "Play",
         }
     }
+
     pub fn restart(&mut self) {
-        if let Some(stream_handler) = &self.stream_handler {
-            let _ = stream_handler.restart();
+        if let Some(ref mut sink) = self.sink {
+            sink.stop();
         }
+        self.state = State::WaitingForFile;
+        self.sink = None; // Drop the sink (temporary not working)
     }
 }

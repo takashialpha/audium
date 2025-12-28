@@ -1,15 +1,14 @@
-use ratatui::{
-    backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
-    widgets::{Block, Borders, Paragraph, Gauge},
-    text::Text,
-    Terminal,
-};
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEvent},
-    execute,
-    terminal,
+    execute, terminal,
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Constraint, Direction, Layout},
+    text::Text,
+    widgets::{Block, Borders, Gauge, Paragraph},
+    Terminal,
 };
 use std::{io, thread, time::Duration};
 
@@ -56,17 +55,29 @@ impl Tui {
         Ok(())
     }
 
-    fn setup_terminal(&self, terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> io::Result<()> {
+    fn setup_terminal(
+        &self,
+        terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    ) -> io::Result<()> {
         terminal::enable_raw_mode()?;
         execute!(terminal.backend_mut(), cursor::Hide)?;
         terminal.clear()?;
-        execute!(terminal.backend_mut(), terminal::Clear(terminal::ClearType::Purge))?;
+        execute!(
+            terminal.backend_mut(),
+            terminal::Clear(terminal::ClearType::Purge)
+        )?;
         Ok(())
     }
 
-    fn cleanup_terminal(&self, terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> io::Result<()> {
+    fn cleanup_terminal(
+        &self,
+        terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    ) -> io::Result<()> {
         terminal.clear()?;
-        execute!(terminal.backend_mut(), terminal::Clear(terminal::ClearType::Purge))?;
+        execute!(
+            terminal.backend_mut(),
+            terminal::Clear(terminal::ClearType::Purge)
+        )?;
         terminal::disable_raw_mode()?;
         execute!(terminal.backend_mut(), cursor::Show)?;
         Ok(())
@@ -81,7 +92,7 @@ impl Tui {
                 Constraint::Percentage(20),
             ])
             .split(area)
-            .to_vec()  // Convert Rc<[Rect]> to Vec<Rect>
+            .to_vec() // Convert Rc<[Rect]> to Vec<Rect>
     }
 
     fn render_player(&self, f: &mut ratatui::Frame, area: ratatui::layout::Rect) {
@@ -95,9 +106,7 @@ impl Tui {
     fn render_progress_bar(&self, f: &mut ratatui::Frame, area: ratatui::layout::Rect) {
         let progress = self.player.progress();
         let gauge = Gauge::default()
-            .gauge_style(
-                ratatui::style::Style::default().fg(ratatui::style::Color::Green)
-            )
+            .gauge_style(ratatui::style::Style::default().fg(ratatui::style::Color::Green))
             .percent((progress * 100.0) as u16);
 
         // Set the gauge to a smaller area within the Audio Player block
@@ -112,20 +121,15 @@ impl Tui {
 
     fn render_controls(&self, f: &mut ratatui::Frame, area: ratatui::layout::Rect) {
         let play_pause_button = self.player.pause_or_play_button_text();
-        let paragraph = Paragraph::new(play_pause_button)
-            .block(self.default_block("Control"));
+        let paragraph = Paragraph::new(play_pause_button).block(self.default_block("Control"));
         f.render_widget(paragraph, area);
     }
 
     fn render_shortcuts(&self, f: &mut ratatui::Frame, area: ratatui::layout::Rect) {
-        let controls = vec![
-            "Space - Play/Pause",
-            "R - Restart",
-            "Esc or Q - Quit",
-        ];
+        let controls = vec!["Space - Play/Pause", "R - Restart", "Esc or Q - Quit"];
         let controls_text = Text::from(controls.join("\n"));
-        let shortcuts = Paragraph::new(controls_text)
-            .block(self.default_block("Keyboard Shortcuts"));
+        let shortcuts =
+            Paragraph::new(controls_text).block(self.default_block("Keyboard Shortcuts"));
         f.render_widget(shortcuts, area);
     }
 
@@ -146,7 +150,8 @@ impl Tui {
     }
 
     fn default_block(&self, title: &str) -> Block {
-        Block::default().title(title.to_string()).borders(Borders::ALL)  // Convert &str to String
+        Block::default()
+            .title(title.to_string())
+            .borders(Borders::ALL) // Convert &str to String
     }
 }
-
