@@ -9,8 +9,10 @@ license = "Apache-2.0"
 [dependencies]
 app_base = { git = "https://github.com/takashialpha/app_base.git" }
 clap = { version = "4.5.53", features = ["derive"] }
-phonic = "0.13.0"
-serde = { version = "1.0.228", features = ["derive"] }
+crossterm = "0.29.0"
+ratatui = "0.30.0"
+rodio = "0.21.1"
+thiserror = "2.0.17"
 
 [features]
 
