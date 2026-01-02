@@ -7,15 +7,12 @@ authors = ["takashialpha <takashialpha@protonmail.com>"]
 license = "Apache-2.0"
 
 [dependencies]
-app-base = { git = "https://github.com/takashialpha/app-base.git" }
+app_base = { git = "https://github.com/takashialpha/app_base.git" }
 clap = { version = "4.5.53", features = ["derive"] }
 phonic = "0.13.0"
 serde = { version = "1.0.228", features = ["derive"] }
 
 [features]
-default = ["file_choosing"]
-
-file_choosing = []
 
 [profile.release]
 strip = true
