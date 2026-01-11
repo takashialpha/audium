@@ -1,1 +1,2 @@
-refactor: all the code; plan new structure
+add tui with ratatui;
+add player with rodio;
