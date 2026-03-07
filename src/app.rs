@@ -4,9 +4,9 @@ use app_base::{
     app::{Context, Privilege, error::AppError},
 };
 
-pub struct MotMot;
+pub struct Audium;
 
-impl App for MotMot {
+impl App for Audium {
     type Config = ();
     type Cli = Cli;
 

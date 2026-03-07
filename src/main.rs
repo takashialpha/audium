@@ -5,7 +5,7 @@ use clap::Parser;
 fn main() {
     let cli = Cli::parse();
 
-    if let Err(e) = run(app::MotMot, None, cli) {
+    if let Err(e) = run(app::Audium, None, cli) {
         eprintln!("{}", e);
         std::process::exit(1);
     }

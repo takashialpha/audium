@@ -1,2 +1,3 @@
 add tui with ratatui;
 add player with rodio;
+docs;
