@@ -1,7 +1,14 @@
-use audium::cli::Cli;
-use clap::Parser;
-use ratatui::{DefaultTerminal, Frame};
+mod app;
+mod cli;
+mod library;
+mod player;
+mod ui;
 
-pub fn main() -> anyhow::Result<()> {
-    Ok(())
+use anyhow::Result;
+use clap::Parser;
+use cli::Cli;
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    app::run(cli)
 }

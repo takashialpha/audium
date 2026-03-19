@@ -1,5 +1,7 @@
-use crate::APP_NAME;
 use clap::Parser;
+use std::path::PathBuf;
+
+pub const APP_NAME: &str = "audium";
 
 #[derive(Debug, Parser, Clone)]
 #[command(
@@ -7,4 +9,8 @@ use clap::Parser;
     version,
     about = "A simple tui music app made in rust"
 )]
-pub struct Cli {}
+pub struct Cli {
+    /// Music file to open
+    #[arg(value_name = "FILE")]
+    pub file: Option<PathBuf>,
+}
