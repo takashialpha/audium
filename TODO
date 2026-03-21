@@ -1,13 +1,14 @@
 bugs to solve:
 	play/pause buttons are inverted after adding song to the queue(it automatically plays it);
 	
-feature to add:
+features to add:
 	add a mention to the name audium somewhere on the ui, introduce menus too;
 	pop-up after adding song to the library;
 	remove/rename song from queue, library/track. (show confirmation pop-ups);
 	review track and library concepts because they may sound redundant, along with that, see if its possible to introduce or replace with 'playlists';
 	maybe adding a help pop-up for keybindings would be fine;
 	add a file picker inside audium using ratatui (see alongside menus introduction);
+	add async/multithreading: the audio plays in the same thread as the UI; with high IO the sound delays.
 
 tasks:
 	test heavily; (mostly untested, some bugs may be unknown);
