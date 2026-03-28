@@ -1,6 +1,8 @@
 mod app;
 mod cli;
+mod filepicker;
 mod library;
+mod modal;
 mod player;
 mod ui;
 

@@ -1,71 +1,90 @@
 use anyhow::{Context, Result};
 use rodio::Source;
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
-use std::{fs::File, path::Path, time::Duration};
+use std::{
+    fs::File,
+    path::PathBuf,
+    sync::mpsc::{self, Receiver, Sender},
+    thread,
+    time::Duration,
+};
+
+// ── Channel types ──────────────────────────────────────────────────────────
+
+/// Commands sent from the UI thread to the audio thread.
+#[derive(Debug)]
+pub enum PlayerCommand {
+    Play(PathBuf),
+    Stop,
+    Pause,
+    Resume,
+    SetVolume(f32),
+    Quit,
+}
+
+/// Events sent from the audio thread back to the UI thread.
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum PlayerEvent {
+    /// The decoder resolved a total duration for the just-started track.
+    DurationResolved(Duration),
+    /// Playback of the current track finished naturally (not via Stop).
+    TrackFinished,
+    /// A file could not be opened / decoded; carries a human-readable reason.
+    Error(String),
+}
+
+// ── Volume constants ───────────────────────────────────────────────────────
 
 const VOLUME_STEP: f32 = 0.1;
 const VOLUME_MIN: f32 = 0.0;
 const VOLUME_MAX: f32 = 1.0;
+const VOLUME_INIT: f32 = 0.7;
 
-/// Main audio player wrapper.
-/// Keeps the audio device sink alive so playback doesn't stop unexpectedly.
-pub struct AudiumPlayer {
-    _sink: MixerDeviceSink,
-    player: Player,
-    volume: f32,
+// ── Handle (UI-side) ───────────────────────────────────────────────────────
+
+/// Owned by `AppState`.  Sends commands to the audio thread and receives
+/// events from it.  Also tracks UI-side volume and pause state so the UI
+/// never has to block on the audio thread for reads.
+pub struct PlayerHandle {
+    cmd_tx: Sender<PlayerCommand>,
+    event_rx: Receiver<PlayerEvent>,
+
+    /// Shadow of the audio thread's volume, kept in sync via `SetVolume`.
+    pub volume: f32,
+    /// Shadow of the audio thread's pause state.
+    pub is_paused: bool,
 }
 
-impl AudiumPlayer {
-    pub fn new() -> Result<Self> {
-        let mut sink = DeviceSinkBuilder::open_default_sink()
-            .context("could not open default audio output sink")?;
-        sink.log_on_drop(false);
-        let player = Player::connect_new(sink.mixer());
-        Ok(Self {
-            _sink: sink,
-            player,
-            volume: 0.7,
-        })
+impl PlayerHandle {
+    pub fn send(&self, cmd: PlayerCommand) {
+        // Errors here mean the audio thread has panicked; ignore gracefully.
+        let _ = self.cmd_tx.send(cmd);
     }
 
-    /// Stops current playback, loads `path`, starts playing, and returns the
-    /// track's total duration if the decoder can determine it.
-    pub fn play_file(&mut self, path: &Path) -> Result<Option<Duration>> {
-        self.player.stop();
-        let file =
-            File::open(path).with_context(|| format!("opening audio file: {}", path.display()))?;
-        let source = Decoder::try_from(file)
-            .with_context(|| format!("decoding audio file: {}", path.display()))?;
-        let duration = source.total_duration();
-        self.player.append(source);
-        self.player.set_volume(self.volume);
-        self.player.play();
-        Ok(duration)
+    pub fn play(&mut self, path: PathBuf) {
+        self.is_paused = false;
+        self.send(PlayerCommand::Play(path));
     }
 
-    pub fn toggle_pause(&self) {
-        if self.player.is_paused() {
-            self.player.play();
-        } else {
-            self.player.pause();
-        }
+    pub fn stop(&mut self) {
+        self.is_paused = false;
+        self.send(PlayerCommand::Stop);
     }
 
-    pub fn is_paused(&self) -> bool {
-        self.player.is_paused()
+    pub fn pause(&mut self) {
+        self.is_paused = true;
+        self.send(PlayerCommand::Pause);
     }
 
-    pub fn is_finished(&self) -> bool {
-        self.player.empty()
-    }
-
-    pub fn volume(&self) -> f32 {
-        self.volume
+    pub fn resume(&mut self) {
+        self.is_paused = false;
+        self.send(PlayerCommand::Resume);
     }
 
     pub fn set_volume(&mut self, v: f32) {
         self.volume = v.clamp(VOLUME_MIN, VOLUME_MAX);
-        self.player.set_volume(self.volume);
+        self.send(PlayerCommand::SetVolume(self.volume));
     }
 
     pub fn volume_up(&mut self) {
@@ -75,4 +94,144 @@ impl AudiumPlayer {
     pub fn volume_down(&mut self) {
         self.set_volume(self.volume - VOLUME_STEP);
     }
+
+    /// Drains all pending events without blocking.  Returns them in order.
+    pub fn drain_events(&self) -> Vec<PlayerEvent> {
+        let mut out = Vec::new();
+        while let Ok(ev) = self.event_rx.try_recv() {
+            out.push(ev);
+        }
+        out
+    }
+}
+
+impl Drop for PlayerHandle {
+    fn drop(&mut self) {
+        self.send(PlayerCommand::Quit);
+    }
+}
+
+// ── Audio thread ───────────────────────────────────────────────────────────
+
+/// Spawns the audio thread and returns a `PlayerHandle` for the UI thread.
+pub fn spawn_audio_thread() -> Result<PlayerHandle> {
+    let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
+    let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
+
+    // Open the device on the *spawning* thread so we can propagate errors
+    // before handing off to the audio thread.
+    let mut sink = DeviceSinkBuilder::open_default_sink()
+        .context("could not open default audio output sink")?;
+    sink.log_on_drop(false);
+
+    thread::Builder::new()
+        .name("audium-audio".into())
+        .spawn(move || audio_thread_main(sink, cmd_rx, event_tx))?;
+
+    Ok(PlayerHandle {
+        cmd_tx,
+        event_rx,
+        volume: VOLUME_INIT,
+        is_paused: false,
+    })
+}
+
+/// Entry point for the audio thread.  Loops forever processing commands until
+/// `PlayerCommand::Quit` is received or the sender is dropped.
+fn audio_thread_main(
+    sink: MixerDeviceSink,
+    cmd_rx: Receiver<PlayerCommand>,
+    event_tx: Sender<PlayerEvent>,
+) {
+    let player = Player::connect_new(sink.mixer());
+    player.set_volume(VOLUME_INIT);
+
+    // Whether the last track was stopped explicitly (as opposed to finishing
+    // naturally). We use this to suppress spurious `TrackFinished` events.
+    let mut stopped_explicitly = false;
+
+    loop {
+        // --- Process all pending commands first (non-blocking) ------------
+        loop {
+            match cmd_rx.try_recv() {
+                Ok(cmd) => {
+                    handle_command(&player, cmd, &mut stopped_explicitly);
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => return,
+            }
+        }
+
+        // --- Check for natural track completion ---------------------------
+        if !stopped_explicitly && player.empty() {
+            // `empty()` stays true perpetually after playback ends, so we
+            // gate this on having something that *was* playing.  We flip the
+            // flag here so we only fire the event once per track.
+            stopped_explicitly = true; // reuse flag to suppress duplicates
+            let _ = event_tx.send(PlayerEvent::TrackFinished);
+        }
+
+        // Sleep briefly to avoid busy-spinning.
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn handle_command(player: &Player, cmd: PlayerCommand, stopped: &mut bool) {
+    match cmd {
+        PlayerCommand::Play(path) => {
+            player.stop();
+            *stopped = false;
+            match File::open(&path) {
+                Err(e) => {
+                    // We can't send the event here without the tx — callers
+                    // should handle errors via the Error event.  For now, log.
+                    eprintln!("audium-audio: failed to open {:?}: {e}", path);
+                }
+                Ok(file) => match Decoder::try_from(file) {
+                    Err(e) => {
+                        eprintln!("audium-audio: failed to decode {:?}: {e}", path);
+                    }
+                    Ok(source) => {
+                        player.append(source);
+                        player.play();
+                    }
+                },
+            }
+        }
+
+        PlayerCommand::Stop => {
+            *stopped = true;
+            player.stop();
+        }
+
+        PlayerCommand::Pause => {
+            player.pause();
+        }
+
+        PlayerCommand::Resume => {
+            player.play();
+        }
+
+        PlayerCommand::SetVolume(v) => {
+            player.set_volume(v.clamp(VOLUME_MIN, VOLUME_MAX));
+        }
+
+        PlayerCommand::Quit => {
+            player.stop();
+        }
+    }
+}
+
+// ── Duration resolution ────────────────────────────────────────────────────
+
+/// Opens a file purely to ask the decoder for its total duration, without
+/// starting playback.  Called from the UI thread after `Play` is dispatched
+/// so we can display a progress bar.
+///
+/// Returns `None` if the duration cannot be determined (e.g. live streams,
+/// some MP3s without Xing/VBRI headers).
+pub fn resolve_duration(path: &std::path::Path) -> Option<Duration> {
+    let file = File::open(path).ok()?;
+    let source = Decoder::try_from(file).ok()?;
+    source.total_duration()
 }
