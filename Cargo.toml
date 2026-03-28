@@ -1,8 +1,8 @@
 [package]
 name = "audium"
-version = "0.1.0"
+version = "0.8.0"
 edition = "2024"
-description = "A simple TUI audio player made in rust"
+description = "A terminal music app"
 authors = ["takashialpha <takashialpha@protonmail.com>"]
 license = "Apache-2.0"
 

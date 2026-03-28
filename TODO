@@ -10,6 +10,7 @@ the user and not by song metadata.
 - (complexity: 6/10) manage to add seeking to the player (might be challenging cuz of rodio),
 it must be well integrated to the progress bar too.
 
-tasks:
+before 1.0.0:
+- make all stuff above;
 - test more;
 - make docs/fancy readme;
