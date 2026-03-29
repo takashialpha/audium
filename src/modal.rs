@@ -485,7 +485,7 @@ fn render_playlist_picker(
 
 fn render_help(frame: &mut Frame) {
     let area = frame.area();
-    let rect = centered_rect(60, 28, area);
+    let rect = centered_rect(60, 30, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Help — Keybindings");
@@ -506,6 +506,7 @@ fn render_help(frame: &mut Frame) {
         ("Space", "Play / Pause"),
         ("n", "Next track"),
         ("N", "Previous track"),
+        ("← / →", "Seek ±5 seconds"),
         ("+ / =", "Volume up"),
         ("-", "Volume down"),
         ("", ""),

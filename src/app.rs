@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use crate::{
     cli::Cli,
     filepicker::{FilePicker, FilePickerOutcome},
-    library::{ALL_TRACKS_ID, Library, PlaylistId, Track},
+    library::{Library, PlaylistId, Track, ALL_TRACKS_ID},
     modal::{Modal, ModalConfirm, ModalOutcome, RemoveTarget, TextInput},
     player::{PlayerEvent, PlayerHandle, resolve_duration, spawn_audio_thread},
     ui,
@@ -25,9 +25,9 @@ pub enum Focus {
 impl Focus {
     pub fn cycle(self) -> Self {
         match self {
-            Self::Sidebar => Self::TrackList,
-            Self::TrackList => Self::Queue,
-            Self::Queue => Self::Sidebar,
+            Self::Sidebar    => Self::TrackList,
+            Self::TrackList  => Self::Queue,
+            Self::Queue      => Self::Sidebar,
         }
     }
 }
@@ -36,34 +36,34 @@ impl Focus {
 
 pub struct AppState {
     pub library: Library,
-    pub player: PlayerHandle,
+    pub player:  PlayerHandle,
 
     // ── UI ──────────────────────────────────────────────────────────────
-    pub focus: Focus,
+    pub focus:   Focus,
 
     /// Which playlist is currently displayed in the tracklist panel.
     pub active_playlist: PlaylistId,
 
     /// Cursor inside the sidebar (playlist list).
-    pub sidebar_cursor: usize,
+    pub sidebar_cursor:   usize,
     /// Cursor inside the tracklist (tracks of `active_playlist`).
     pub tracklist_cursor: usize,
     /// Cursor inside the queue panel.
-    pub queue_cursor: usize,
+    pub queue_cursor:     usize,
 
     // ── Playback queue ──────────────────────────────────────────────────
     /// Ephemeral ordered list of tracks waiting to be played.
-    pub queue: Vec<Track>,
+    pub queue:        Vec<Track>,
     /// Index of the currently playing track inside `queue`, if any.
-    pub now_playing: Option<usize>,
+    pub now_playing:  Option<usize>,
 
     // ── Progress tracking ───────────────────────────────────────────────
-    pub track_start: Option<Instant>,
-    pub seek_offset: Duration,
+    pub track_start:    Option<Instant>,
+    pub seek_offset:    Duration,
     pub track_duration: Option<Duration>,
 
     // ── Overlay state ───────────────────────────────────────────────────
-    pub modal: Option<Modal>,
+    pub modal:       Option<Modal>,
     pub file_picker: Option<FilePicker>,
 
     pub should_quit: bool,
@@ -74,19 +74,19 @@ impl AppState {
         Self {
             library,
             player,
-            focus: Focus::Sidebar,
-            active_playlist: ALL_TRACKS_ID,
-            sidebar_cursor: 0,
+            focus:            Focus::Sidebar,
+            active_playlist:  ALL_TRACKS_ID,
+            sidebar_cursor:   0,
             tracklist_cursor: 0,
-            queue_cursor: 0,
-            queue: Vec::new(),
-            now_playing: None,
-            track_start: None,
-            seek_offset: Duration::ZERO,
-            track_duration: None,
-            modal: None,
-            file_picker: None,
-            should_quit: false,
+            queue_cursor:     0,
+            queue:            Vec::new(),
+            now_playing:      None,
+            track_start:      None,
+            seek_offset:      Duration::ZERO,
+            track_duration:   None,
+            modal:            None,
+            file_picker:      None,
+            should_quit:      false,
         }
     }
 
@@ -97,10 +97,7 @@ impl AppState {
             return self.seek_offset;
         }
         self.seek_offset
-            + self
-                .track_start
-                .map(|s| s.elapsed())
-                .unwrap_or(Duration::ZERO)
+            + self.track_start.map(|s| s.elapsed()).unwrap_or(Duration::ZERO)
     }
 
     pub fn progress_ratio(&self) -> f64 {
@@ -125,9 +122,9 @@ impl AppState {
         }
         let path = self.queue[idx].path.clone();
         self.player.play(path.clone());
-        self.now_playing = Some(idx);
-        self.track_start = Some(Instant::now());
-        self.seek_offset = Duration::ZERO;
+        self.now_playing    = Some(idx);
+        self.track_start    = Some(Instant::now());
+        self.seek_offset    = Duration::ZERO;
         self.track_duration = resolve_duration(&path);
     }
 
@@ -152,9 +149,9 @@ impl AppState {
     /// Use this everywhere a track is forcibly interrupted (removal, queue
     /// exhaustion, etc.) so the player bar always shows a clean 0:00 / -:--.
     fn halt_playback(&mut self) {
-        self.now_playing = None;
-        self.track_start = None;
-        self.seek_offset = Duration::ZERO;
+        self.now_playing    = None;
+        self.track_start    = None;
+        self.seek_offset    = Duration::ZERO;
         self.track_duration = None;
         self.player.stop();
     }
@@ -178,9 +175,7 @@ impl AppState {
                 }
                 PlayerEvent::Error(msg) => {
                     // Surface as a transient notification modal.
-                    self.modal = Some(Modal::TrackAdded {
-                        name: format!("Error: {}", msg),
-                    });
+                    self.modal = Some(Modal::TrackAdded { name: format!("Error: {}", msg) });
                 }
             }
         }
@@ -192,11 +187,8 @@ impl AppState {
         // ── File picker takes priority ────────────────────────────────
         if let Some(picker) = &mut self.file_picker {
             match picker.handle_key(code) {
-                FilePickerOutcome::Continue => return,
-                FilePickerOutcome::Dismissed => {
-                    self.file_picker = None;
-                    return;
-                }
+                FilePickerOutcome::Continue  => return,
+                FilePickerOutcome::Dismissed => { self.file_picker = None; return; }
                 FilePickerOutcome::Selected(path) => {
                     let path_clone = path.clone();
                     self.file_picker = None;
@@ -209,11 +201,8 @@ impl AppState {
         // ── Modal intercepts next ─────────────────────────────────────
         if let Some(modal) = &mut self.modal {
             match modal.handle_key(code) {
-                ModalOutcome::Consumed => return,
-                ModalOutcome::Dismissed => {
-                    self.modal = None;
-                    return;
-                }
+                ModalOutcome::Consumed   => return,
+                ModalOutcome::Dismissed  => { self.modal = None; return; }
                 ModalOutcome::Confirm(c) => {
                     self.modal = None;
                     self.apply_modal_confirm(c);
@@ -231,16 +220,18 @@ impl AppState {
             KeyCode::Char(' ') => self.action_toggle_play(),
             KeyCode::Char('n') => self.play_next(),
             KeyCode::Char('N') => self.play_prev(),
+            KeyCode::Left      => self.action_seek(-5),
+            KeyCode::Right     => self.action_seek(5),
             KeyCode::Char('+') | KeyCode::Char('=') => self.player.volume_up(),
-            KeyCode::Char('-') => self.player.volume_down(),
+            KeyCode::Char('-')                       => self.player.volume_down(),
 
             // Navigation
-            KeyCode::Tab => self.focus = self.focus.cycle(),
-            KeyCode::Char('j') | KeyCode::Down => self.cursor_down(),
-            KeyCode::Char('k') | KeyCode::Up => self.cursor_up(),
+            KeyCode::Tab                              => self.focus = self.focus.cycle(),
+            KeyCode::Char('j') | KeyCode::Down        => self.cursor_down(),
+            KeyCode::Char('k') | KeyCode::Up          => self.cursor_up(),
 
             // Context actions
-            KeyCode::Enter => self.action_enter(),
+            KeyCode::Enter   => self.action_enter(),
             KeyCode::Char('a') => self.action_add_to_queue(),
             KeyCode::Char('p') => self.action_add_to_playlist(),
             KeyCode::Char('d') => self.action_remove(),
@@ -297,7 +288,7 @@ impl AppState {
     /// Keeps `active_playlist` in sync with `sidebar_cursor`.
     fn sync_active_playlist(&mut self) {
         if let Some(pl) = self.library.playlists.get(self.sidebar_cursor) {
-            self.active_playlist = pl.id;
+            self.active_playlist  = pl.id;
             self.tracklist_cursor = 0;
         }
     }
@@ -323,6 +314,28 @@ impl AppState {
         }
     }
 
+    /// Seek by `delta_secs` seconds (negative = rewind, positive = forward).
+    /// No-op if nothing is playing or the track path is unavailable.
+    fn action_seek(&mut self, delta_secs: i64) {
+        let idx  = match self.now_playing { Some(i) => i, None => return };
+        let path = match self.queue.get(idx) { Some(t) => t.path.clone(), None => return };
+
+        // Compute new position, clamped to [0, duration].
+        let current = self.elapsed().as_secs() as i64;
+        let max_secs = self.track_duration
+            .map(|d| d.as_secs().saturating_sub(1) as i64)
+            .unwrap_or(i64::MAX);
+        let target_secs = (current + delta_secs).clamp(0, max_secs) as u64;
+        let target = Duration::from_secs(target_secs);
+
+        // Update UI-side clock immediately so the bar moves on the next frame.
+        self.seek_offset  = target;
+        self.track_start  = if self.player.is_paused { None } else { Some(Instant::now()) };
+
+        // Tell the audio thread to reopen, seek, and continue (or stay paused).
+        self.player.seek(path, target, self.player.is_paused);
+    }
+
     /// Enter on tracklist  →  play immediately (inserts after current).
     /// Enter on queue      →  play that queue entry immediately.
     fn action_enter(&mut self) {
@@ -332,11 +345,7 @@ impl AppState {
                 self.focus = Focus::TrackList;
             }
             Focus::TrackList => {
-                let tracks = self
-                    .active_tracks()
-                    .into_iter()
-                    .cloned()
-                    .collect::<Vec<_>>();
+                let tracks = self.active_tracks().into_iter().cloned().collect::<Vec<_>>();
                 if let Some(track) = tracks.get(self.tracklist_cursor).cloned() {
                     let insert_at = self.now_playing.map(|i| i + 1).unwrap_or(0);
                     self.queue.insert(insert_at, track);
@@ -351,22 +360,14 @@ impl AppState {
     }
 
     fn action_add_to_queue(&mut self) {
-        let tracks = self
-            .active_tracks()
-            .into_iter()
-            .cloned()
-            .collect::<Vec<_>>();
+        let tracks = self.active_tracks().into_iter().cloned().collect::<Vec<_>>();
         if let Some(track) = tracks.get(self.tracklist_cursor).cloned() {
             self.queue.push(track);
         }
     }
 
     fn action_add_to_playlist(&mut self) {
-        let tracks = self
-            .active_tracks()
-            .into_iter()
-            .cloned()
-            .collect::<Vec<_>>();
+        let tracks = self.active_tracks().into_iter().cloned().collect::<Vec<_>>();
         if let Some(track) = tracks.get(self.tracklist_cursor) {
             let choices: Vec<(u64, String)> = self
                 .library
@@ -377,7 +378,7 @@ impl AppState {
                 .collect();
 
             self.modal = Some(Modal::AddToPlaylist {
-                track_id: track.id,
+                track_id:   track.id,
                 track_name: track.name.clone(),
                 choices,
                 cursor: 0,
@@ -399,11 +400,7 @@ impl AppState {
                 }
             }
             Focus::TrackList => {
-                let tracks = self
-                    .active_tracks()
-                    .into_iter()
-                    .cloned()
-                    .collect::<Vec<_>>();
+                let tracks = self.active_tracks().into_iter().cloned().collect::<Vec<_>>();
                 if let Some(track) = tracks.get(self.tracklist_cursor) {
                     self.modal = Some(Modal::ConfirmRemove {
                         description: format!("Remove \"{}\" from library?", track.name),
@@ -415,9 +412,7 @@ impl AppState {
                 if self.queue_cursor < self.queue.len() {
                     self.modal = Some(Modal::ConfirmRemove {
                         description: "Remove this track from the queue?".into(),
-                        target: RemoveTarget::TrackFromQueue {
-                            queue_idx: self.queue_cursor,
-                        },
+                        target: RemoveTarget::TrackFromQueue { queue_idx: self.queue_cursor },
                     });
                 }
             }
@@ -428,29 +423,26 @@ impl AppState {
         match self.focus {
             Focus::Sidebar => {
                 if let Some(pl) = self.library.playlists.get(self.sidebar_cursor) {
-                    if pl.id == ALL_TRACKS_ID {
-                        return;
-                    }
+                    if pl.id == ALL_TRACKS_ID { return; }
                     self.modal = Some(Modal::Rename {
-                        kind: "Playlist".into(),
-                        id: pl.id,
+                        kind:  "Playlist".into(),
+                        id:    pl.id,
                         input: TextInput::with_value(&pl.name),
                     });
                 }
             }
             Focus::TrackList | Focus::Queue => {
                 let track: Option<Track> = match self.focus {
-                    Focus::TrackList => self
-                        .active_tracks()
-                        .get(self.tracklist_cursor)
-                        .map(|t| (*t).clone()),
+                    Focus::TrackList => {
+                        self.active_tracks().get(self.tracklist_cursor).map(|t| (*t).clone())
+                    }
                     Focus::Queue => self.queue.get(self.queue_cursor).cloned(),
                     _ => None,
                 };
                 if let Some(t) = track {
                     self.modal = Some(Modal::Rename {
-                        kind: "Track".into(),
-                        id: t.id,
+                        kind:  "Track".into(),
+                        id:    t.id,
                         input: TextInput::with_value(&t.name),
                     });
                 }
@@ -462,9 +454,7 @@ impl AppState {
         if self.queue_cursor < self.queue.len() {
             self.modal = Some(Modal::ConfirmRemove {
                 description: "Remove this track from the queue?".into(),
-                target: RemoveTarget::TrackFromQueue {
-                    queue_idx: self.queue_cursor,
-                },
+                target: RemoveTarget::TrackFromQueue { queue_idx: self.queue_cursor },
             });
         }
     }
@@ -514,9 +504,8 @@ impl AppState {
                 }
                 RemoveTarget::Playlist { playlist_id } => {
                     let _ = self.library.delete_playlist(playlist_id);
-                    self.sidebar_cursor = self
-                        .sidebar_cursor
-                        .min(self.library.playlists.len().saturating_sub(1));
+                    self.sidebar_cursor =
+                        self.sidebar_cursor.min(self.library.playlists.len().saturating_sub(1));
                     self.sync_active_playlist();
                 }
             },
@@ -539,10 +528,7 @@ impl AppState {
                 let _ = self.library.create_playlist(name);
             }
 
-            ModalConfirm::AddToPlaylist {
-                track_id,
-                playlist_id,
-            } => {
+            ModalConfirm::AddToPlaylist { track_id, playlist_id } => {
                 let _ = self.library.playlist_add_track(playlist_id, track_id);
             }
         }
@@ -554,9 +540,7 @@ impl AppState {
         match self.library.add_file(path) {
             Ok((track, is_new)) => {
                 if is_new {
-                    self.modal = Some(Modal::TrackAdded {
-                        name: track.name.clone(),
-                    });
+                    self.modal = Some(Modal::TrackAdded { name: track.name.clone() });
                 }
             }
             Err(e) => {
@@ -589,7 +573,7 @@ pub fn run(cli: Cli) -> Result<()> {
     }
 
     let terminal = ratatui::init();
-    let result = event_loop(terminal, &mut state);
+    let result   = event_loop(terminal, &mut state);
     ratatui::restore();
     result
 }

@@ -18,6 +18,13 @@ pub enum PlayerCommand {
     Stop,
     Pause,
     Resume,
+    /// Seek to an absolute position.  `paused` tells the thread whether to
+    /// stay paused after repositioning.
+    Seek {
+        path: PathBuf,
+        position: Duration,
+        paused: bool,
+    },
     SetVolume(f32),
     Quit,
 }
@@ -80,6 +87,17 @@ impl PlayerHandle {
     pub fn resume(&mut self) {
         self.is_paused = false;
         self.send(PlayerCommand::Resume);
+    }
+
+    /// Seek to `position` in the current track.  The path is required because
+    /// the audio thread must reopen the file to create a fresh decoder.
+    /// `is_paused` on the handle is not changed here — the caller manages that.
+    pub fn seek(&self, path: PathBuf, position: Duration, paused: bool) {
+        self.send(PlayerCommand::Seek {
+            path,
+            position,
+            paused,
+        });
     }
 
     pub fn set_volume(&mut self, v: f32) {
@@ -194,6 +212,32 @@ fn handle_command(player: &Player, cmd: PlayerCommand, stopped: &mut bool) {
                     Ok(source) => {
                         player.append(source);
                         player.play();
+                    }
+                },
+            }
+        }
+
+        PlayerCommand::Seek {
+            path,
+            position,
+            paused,
+        } => {
+            player.stop();
+            *stopped = false;
+            match File::open(&path) {
+                Err(e) => eprintln!("audium-audio: seek: failed to open {:?}: {e}", path),
+                Ok(file) => match Decoder::try_from(file) {
+                    Err(e) => eprintln!("audium-audio: seek: failed to decode {:?}: {e}", path),
+                    Ok(mut source) => {
+                        // try_seek is a best-effort: formats that don't
+                        // support it (rare) will just restart from 0.
+                        let _ = source.try_seek(position);
+                        player.append(source);
+                        if paused {
+                            player.pause();
+                        } else {
+                            player.play();
+                        }
                     }
                 },
             }

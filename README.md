@@ -105,6 +105,7 @@ audium stores your library at `~/.audium/library.json` and your music at `~/.aud
 | `Space`      | Play / Pause             |
 | `n`          | Next track               |
 | `N`          | Previous track           |
+| `←` / `→`   | Seek backward / forward  |
 | `+` / `=`   | Volume up                |
 | `-`          | Volume down              |
 
@@ -167,14 +168,6 @@ sudo dnf install alsa-lib-devel
 ```
 
 `library.json` is human-readable. You can edit it directly if needed, though audium will re-validate it on next launch.
-
----
-
-## Roadmap
-
-- [ ] Time-synced lyrics with highlighting
-- [ ] Seeking (progress bar scrubbing)
-- [ ] More — see [issues](https://github.com/takashialpha/audium/issues)
 
 ---
 
