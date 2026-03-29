@@ -2,24 +2,45 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: arch
+          - os: macos-latest
+            target: macos
+
+    runs-on: ${{ matrix.os }}
+
+    container:
+      image: archlinux:latest
+      if: matrix.target == 'arch'
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install system dependencies
+    # Arch Linux setup
+    - name: Install dependencies (Arch)
+      if: matrix.target == 'arch'
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libjack-jackd2-dev pkg-config libasound2-dev
+        pacman -Syu --noconfirm
+        pacman -S --noconfirm rust jack pkgconf alsa-lib
+
+    # macOS setup
+    - name: Install dependencies (macOS)
+      if: matrix.target == 'macos'
+      run: |
+        brew update
+        brew install jack pkg-config
 
     - name: Build
       run: cargo build --verbose
