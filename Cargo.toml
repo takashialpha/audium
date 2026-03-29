@@ -5,6 +5,7 @@ edition = "2024"
 description = "A terminal music app"
 authors = ["takashialpha <takashialpha@protonmail.com>"]
 license = "Apache-2.0"
+repository = "https://github.com/takashialpha/audium"
 
 [dependencies]
 anyhow = "1.0"
