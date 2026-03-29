@@ -54,9 +54,6 @@
     .dot { width:11px; height:11px; border-radius:50%; }
     .dot-r { background:#ff5f57; } .dot-y { background:#febc2e; } .dot-g { background:#28c840; }
     .term-title { flex:1; text-align:center; color:var(--muted); font-size:11px; letter-spacing:0.04em; }
-    /* SVG mockup container */
-    .tui-svg { display:block; width:100%; overflow-x:auto; padding:0; }
-    .tui-svg svg { display:block; font-family:'DM Mono',monospace; }
     .section { padding:80px 0; border-top:1px solid var(--border); }
     .section-label { font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
     .section h2 { font-family:var(--serif); font-size:clamp(28px,4vw,42px); font-weight:400; line-height:1.15; margin-bottom:40px; }
@@ -124,87 +121,67 @@
           <div class="dot dot-g"></div>
           <span class="term-title">audium</span>
         </div>
-        <!-- SVG mockup: ch=7.22px, line-height=18px, pad=16px top/left -->
-        <div class="tui-svg">
-          <svg viewBox="0 0 610 330" xmlns="http://www.w3.org/2000/svg"
-               style="background:#161616; width:100%; height:auto;">
-            <defs>
-              <style>
-                .t { font-family:'DM Mono',monospace; font-size:11px; }
-                .a { fill:#64b4ff; }
-                .d { fill:#2e2e2e; }
-                .m { fill:#606060; }
-                .w { fill:#f0f0f0; font-weight:600; }
-              </style>
-            </defs>
-            <!-- row 0: topbar -->
-            <text class="t a" x="16" y="28">audium</text>
-            <text class="t m" x="59" y="28">  —  terminal music player      [?] help  [f] file picker  [c] playlist  [q] quit</text>
-            <!-- row 1: top border -->
-            <text class="t d" x="16" y="50">&#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;</text>
-            <!-- row 2: Playlists | All Tracks -->
-            <text class="t d"  x="16"  y="68">&#x2502;</text>
-            <text class="t a"  x="23"  y="68"> Playlists               </text>
-            <text class="t d"  x="204" y="68">&#x2502;</text>
-            <text class="t a"  x="211" y="68"> All Tracks                                           </text>
-            <text class="t d"  x="594" y="68">&#x2502;</text>
-            <!-- row 3: col headers -->
-            <text class="t d"  x="16"  y="86">&#x2502;                         &#x2502;</text>
-            <text class="t m"  x="211" y="86">  #    Title                                          </text>
-            <text class="t d"  x="594" y="86">&#x2502;</text>
-            <!-- row 4 -->
-            <text class="t d"  x="16"  y="104">&#x2502;</text>
-            <text class="t a"  x="23"  y="104"> &gt; All Tracks (4)        </text>
-            <text class="t d"  x="204" y="104">&#x2502;</text>
-            <text class="t m"  x="211" y="104">    1  04 - Neon Arpeggio                             </text>
-            <text class="t d"  x="594" y="104">&#x2502;</text>
-            <!-- row 5 -->
-            <text class="t d"  x="16"  y="122">&#x2502;</text>
-            <text class="t m"  x="23"  y="122">   Late Night (2)         </text>
-            <text class="t d"  x="204" y="122">&#x2502;</text>
-            <text class="t m"  x="211" y="122">    2  Drift                                          </text>
-            <text class="t d"  x="594" y="122">&#x2502;</text>
-            <!-- row 6 -->
-            <text class="t d"  x="16"  y="140">&#x2502;</text>
-            <text class="t m"  x="23"  y="140">   Focus (2)              </text>
-            <text class="t d"  x="204" y="140">&#x2502;</text>
-            <text class="t a"  x="211" y="140"> &gt;  3  Weightless (feat. Macarena)                    </text>
-            <text class="t d"  x="594" y="140">&#x2502;</text>
-            <!-- row 7 -->
-            <text class="t d"  x="16"  y="158">&#x2502;                         &#x2502;</text>
-            <text class="t m"  x="211" y="158">    4  The River Calls                                </text>
-            <text class="t d"  x="594" y="158">&#x2502;</text>
-            <!-- row 8: blank -->
-            <text class="t d"  x="16"  y="176">&#x2502;                         &#x2502;                                                      &#x2502;</text>
-            <!-- row 9: mid separator -->
-            <text class="t d"  x="16"  y="194">&#x2502;                         &#x251C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2524;</text>
-            <!-- row 10: Queue header -->
-            <text class="t d"  x="16"  y="212">&#x2502;                         &#x2502;</text>
-            <text class="t a"  x="211" y="212"> Queue                                                </text>
-            <text class="t d"  x="594" y="212">&#x2502;</text>
-            <!-- row 11 -->
-            <text class="t d"  x="16"  y="230">&#x2502;                         &#x2502;</text>
-            <text class="t m"  x="211" y="230">    1  04 - Neon Arpeggio                             </text>
-            <text class="t d"  x="594" y="230">&#x2502;</text>
-            <!-- row 12 -->
-            <text class="t d"  x="16"  y="248">&#x2502;                         &#x2502;</text>
-            <text class="t m"  x="211" y="248">    2  Drift                                          </text>
-            <text class="t d"  x="594" y="248">&#x2502;</text>
-            <!-- row 13 -->
-            <text class="t d"  x="16"  y="266">&#x2502;                         &#x2502;</text>
-            <text class="t a"  x="211" y="266"> &gt;  3  Weightless (feat. Macarena)                    </text>
-            <text class="t d"  x="594" y="266">&#x2502;</text>
-            <!-- row 14: bottom border -->
-            <text class="t d" x="16" y="284">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;</text>
-            <!-- row 15: player -->
-            <text class="t a" x="16" y="302">&#x23F8; </text>
-            <text class="t w" x="30" y="302">Weightless (feat. Macarena)</text>
-            <!-- row 16: progress -->
-            <text class="t a" x="16"  y="320">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</text>
-            <text class="t d" x="160" y="320">&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;</text>
-            <text class="t m" x="464" y="320">  2:14 / 5:02</text>
-          </svg>
-        </div>
+        <canvas id="tui" style="display:block;width:100%;background:#161616;border-radius:0 0 8px 8px;"></canvas>
+        <script>
+        (function() {
+          const FONT_SIZE = 12;
+          const FONT = FONT_SIZE + 'px "DM Mono",monospace';
+          const PAD_X = 16, PAD_Y = 20, LINE_H = 19;
+          const A = '#64b4ff', D = '#2e2e2e', M = '#606060', W = '#f0f0f0';
+
+          // Each row is an array of [text, colour] segments drawn left-to-right.
+          // The canvas measures each segment's advance width so columns are exact.
+          const ROWS = [
+            [[' audium', A], ['  \u2014  terminal music player      [?] help  [f] file picker  [c] playlist  [q] quit', M]],
+            [['\u250c' + '\u2500'.repeat(25) + '\u252c' + '\u2500'.repeat(54) + '\u2510', D]],
+            [['│', D], [' Playlists               ', A], ['│', D], [' All Tracks                                           ', A], ['│', D]],
+            [['│                         │', D], ['  #    Title                                          ', M], ['│', D]],
+            [['│', D], [' > All Tracks (4)        ', A], ['│', D], ['    1  04 - Neon Arpeggio                             ', M], ['│', D]],
+            [['│', D], ['   Late Night (2)        ', M], ['│', D], ['    2  Drift                                          ', M], ['│', D]],
+            [['│', D], ['   Focus (2)             ', M], ['│', D], [' >  3  Weightless (feat. Macarena)                    ', A], ['│', D]],
+            [['│                         │', D], ['    4  The River Calls                                ', M], ['│', D]],
+            [['│                         │                                                      │', D]],
+            [['│                         \u251c' + '\u2500'.repeat(54) + '\u2524', D]],
+            [['│                         │', D], [' Queue                                                ', A], ['│', D]],
+            [['│                         │', D], ['    1  04 - Neon Arpeggio                             ', M], ['│', D]],
+            [['│                         │', D], ['    2  Drift                                          ', M], ['│', D]],
+            [['│                         │', D], [' >  3  Weightless (feat. Macarena)                    ', A], ['│', D]],
+            [['\u2514' + '\u2500'.repeat(25) + '\u2534' + '\u2500'.repeat(54) + '\u2518', D]],
+            [['⏸ ', A], ['Weightless (feat. Macarena)', W]],
+            [['█'.repeat(20), A], ['░'.repeat(41), D], ['  2:14 / 5:02', M]],
+          ];
+
+          function draw() {
+            const canvas = document.getElementById('tui');
+            const dpr = window.devicePixelRatio || 1;
+            const cssW = canvas.parentElement.clientWidth;
+            const cssH = PAD_Y * 2 + LINE_H * ROWS.length;
+            canvas.style.height = cssH + 'px';
+            canvas.width  = cssW * dpr;
+            canvas.height = cssH * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            ctx.font = FONT;
+            ROWS.forEach((segs, row) => {
+              let x = PAD_X;
+              const y = PAD_Y + row * LINE_H;
+              segs.forEach(([text, colour]) => {
+                ctx.fillStyle = colour;
+                ctx.fillText(text, x, y);
+                x += ctx.measureText(text).width;
+              });
+            });
+          }
+
+          // Draw after fonts load for accurate metrics.
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(draw);
+          } else {
+            window.addEventListener('load', draw);
+          }
+          window.addEventListener('resize', draw);
+        })();
+        </script>
       </div>
     </div>
   </div>

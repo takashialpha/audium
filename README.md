@@ -28,7 +28,7 @@
 │                         │  #    Title                                          │
 │ > All Tracks (4)        │     1  04 - Neon Arpeggio                            │
 │   Late Night (2)        │     2  Drift                                         │
-│   Focus (2)             │  >  3  Weightless (feat. Macarena)                   │
+│   Focus (3)             │  >  3  Weightless (feat. Macarena)                   │
 │                         │     4  The River Calls                               │
 │                         │                                                      │
 │                         ├──────────────────────────────────────────────────────┤
@@ -152,7 +152,9 @@ sudo pacman -S alsa-lib
 sudo dnf install alsa-lib-devel
 ```
 
-**macOS** and **Windows** have no extra dependencies.
+**macOS** has no extra dependencies.
+
+> **Windows:** audium compiles on Windows but is not an officially supported platform and has not been tested. Use at your own risk.
 
 ---
 
