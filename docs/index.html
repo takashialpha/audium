@@ -8,29 +8,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-
   <style>
-    /* ── Reset ─────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
 
-    /* ── Tokens ─────────────────────────────────────────────────── */
     :root {
-      --bg:        #0e0e0e;
-      --surface:   #161616;
-      --border:    #242424;
-      --accent:    #64b4ff;
-      --accent2:   #a78bfa;
-      --text:      #f0f0f0;
-      --muted:     #666;
-      --dimmed:    #999;
-      --mono:      'DM Mono', monospace;
-      --serif:     'Instrument Serif', Georgia, serif;
-      --radius:    4px;
-      --max:       900px;
+      --bg:      #0e0e0e;
+      --surface: #161616;
+      --border:  #242424;
+      --accent:  #64b4ff;
+      --accent2: #a78bfa;
+      --text:    #f0f0f0;
+      --muted:   #555;
+      --dimmed:  #999;
+      --mono:    'DM Mono', monospace;
+      --serif:   'Instrument Serif', Georgia, serif;
+      --radius:  4px;
+      --max:     900px;
     }
 
-    /* ── Base ────────────────────────────────────────────────────── */
     body {
       background: var(--bg);
       color: var(--text);
@@ -44,7 +40,6 @@
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
-    /* ── Noise overlay ───────────────────────────────────────────── */
     body::before {
       content: '';
       position: fixed;
@@ -55,387 +50,110 @@
       z-index: 1000;
     }
 
-    /* ── Layout ──────────────────────────────────────────────────── */
-    .wrap {
-      max-width: var(--max);
-      margin: 0 auto;
-      padding: 0 32px;
-    }
+    .wrap { max-width: var(--max); margin: 0 auto; padding: 0 32px; }
 
-    /* ── Nav ─────────────────────────────────────────────────────── */
+    /* Nav */
     nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
       border-bottom: 1px solid var(--border);
       background: rgba(14,14,14,0.88);
       backdrop-filter: blur(12px);
     }
-    nav .wrap {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 52px;
-    }
-    .nav-logo {
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--text);
-      letter-spacing: 0.04em;
-    }
+    nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 52px; }
+    .nav-logo { font-size: 15px; font-weight: 500; color: var(--text); letter-spacing: 0.04em; }
     .nav-logo span { color: var(--accent); }
-    .nav-links {
-      display: flex;
-      gap: 28px;
-      list-style: none;
-    }
-    .nav-links a {
-      color: var(--dimmed);
-      font-size: 12px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      transition: color 0.15s;
-    }
+    .nav-links { display: flex; gap: 28px; list-style: none; }
+    .nav-links a { color: var(--dimmed); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; transition: color 0.15s; }
     .nav-links a:hover { color: var(--text); text-decoration: none; }
 
-    /* ── Hero ─────────────────────────────────────────────────────── */
-    .hero {
-      padding: 160px 0 100px;
-      position: relative;
-    }
-
-    /* Faint horizontal scanlines */
+    /* Hero */
+    .hero { padding: 160px 0 100px; position: relative; }
     .hero::after {
       content: '';
-      position: absolute;
-      inset: 0;
-      background: repeating-linear-gradient(
-        to bottom,
-        transparent,
-        transparent 3px,
-        rgba(255,255,255,0.012) 3px,
-        rgba(255,255,255,0.012) 4px
-      );
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(to bottom, transparent, transparent 3px, rgba(255,255,255,0.012) 3px, rgba(255,255,255,0.012) 4px);
       pointer-events: none;
     }
 
-    .hero-eyebrow {
-      font-size: 11px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 20px;
-      opacity: 0;
-      animation: fade-up 0.6s 0.1s forwards;
-    }
+    .hero-eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 20px; opacity: 0; animation: fade-up 0.6s 0.1s forwards; }
+    .hero h1 { font-family: var(--serif); font-size: clamp(52px, 8vw, 88px); font-weight: 400; line-height: 1.0; letter-spacing: -0.02em; color: var(--text); opacity: 0; animation: fade-up 0.6s 0.2s forwards; }
+    .hero h1 em { font-style: italic; color: var(--accent); }
+    .hero-sub { margin-top: 28px; max-width: 520px; color: var(--dimmed); font-size: 14px; line-height: 1.8; opacity: 0; animation: fade-up 0.6s 0.35s forwards; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 44px; opacity: 0; animation: fade-up 0.6s 0.5s forwards; }
 
-    .hero h1 {
-      font-family: var(--serif);
-      font-size: clamp(52px, 8vw, 88px);
-      font-weight: 400;
-      line-height: 1.0;
-      letter-spacing: -0.02em;
-      color: var(--text);
-      opacity: 0;
-      animation: fade-up 0.6s 0.2s forwards;
-    }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: var(--radius); font-family: var(--mono); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: #90caff; text-decoration: none; }
+    .btn-ghost { background: transparent; color: var(--dimmed); border-color: var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--dimmed); text-decoration: none; }
 
-    .hero h1 em {
-      font-style: italic;
-      color: var(--accent);
-    }
+    /* Terminal */
+    .terminal-wrap { margin-top: 72px; opacity: 0; animation: fade-up 0.7s 0.65s forwards; }
+    .terminal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: 0 40px 80px rgba(0,0,0,0.5); }
+    .term-bar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: #111; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; }
+    .dot-r { background: #ff5f57; } .dot-y { background: #febc2e; } .dot-g { background: #28c840; }
+    .term-title { flex: 1; text-align: center; color: var(--muted); font-size: 11px; letter-spacing: 0.04em; }
 
-    .hero-sub {
-      margin-top: 28px;
-      max-width: 520px;
-      color: var(--dimmed);
-      font-size: 14px;
-      line-height: 1.8;
-      opacity: 0;
-      animation: fade-up 0.6s 0.35s forwards;
-    }
-
-    .hero-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 44px;
-      opacity: 0;
-      animation: fade-up 0.6s 0.5s forwards;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 20px;
-      border-radius: var(--radius);
+    /* TUI mockup — each row is a div; spans are purely for colour, no whitespace impact */
+    .tui {
+      padding: 14px 18px;
       font-family: var(--mono);
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      border: 1px solid transparent;
-      transition: all 0.15s;
-    }
-    .btn-primary {
-      background: var(--accent);
-      color: #000;
-    }
-    .btn-primary:hover {
-      background: #90caff;
-      text-decoration: none;
-    }
-    .btn-ghost {
-      background: transparent;
-      color: var(--dimmed);
-      border-color: var(--border);
-    }
-    .btn-ghost:hover {
-      color: var(--text);
-      border-color: var(--dimmed);
-      text-decoration: none;
-    }
-
-    /* ── Terminal mockup ─────────────────────────────────────────── */
-    .terminal-wrap {
-      margin-top: 72px;
-      opacity: 0;
-      animation: fade-up 0.7s 0.65s forwards;
-    }
-
-    .terminal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      font-size: 12.5px;
-      box-shadow: 0 40px 80px rgba(0,0,0,0.5);
-    }
-
-    .term-bar {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      background: #111;
-    }
-    .dot {
-      width: 11px; height: 11px;
-      border-radius: 50%;
-    }
-    .dot-r { background: #ff5f57; }
-    .dot-y { background: #febc2e; }
-    .dot-g { background: #28c840; }
-    .term-title {
-      flex: 1;
-      text-align: center;
-      color: var(--muted);
-      font-size: 11px;
-      letter-spacing: 0.04em;
-    }
-
-    .term-body {
-      padding: 0;
-      line-height: 1;
-    }
-
-    /* ASCII-art UI mockup */
-    .term-body pre {
-      padding: 20px 20px;
-      overflow-x: auto;
-      color: #b3b3b3;
       font-size: 11.5px;
-      line-height: 1.45;
+      line-height: 1.52;
       white-space: pre;
+      overflow-x: auto;
+      color: #555;
     }
+    .tui-row { display: block; }
+    .ca  { color: #64b4ff; }   /* accent */
+    .cw  { color: #f0f0f0; font-weight: 500; } /* white/bold */
+    .cd  { color: #383838; }   /* dim border */
+    .cm  { color: #666; }      /* muted content */
 
-    .c-accent  { color: var(--accent); }
-    .c-playing { color: var(--accent); font-weight: 500; }
-    .c-dim     { color: #444; }
-    .c-white   { color: #f0f0f0; font-weight: 500; }
-    .c-purple  { color: var(--accent2); }
+    /* Section */
+    .section { padding: 80px 0; border-top: 1px solid var(--border); }
+    .section-label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+    .section h2 { font-family: var(--serif); font-size: clamp(28px, 4vw, 42px); font-weight: 400; line-height: 1.15; margin-bottom: 40px; }
 
-    /* ── Install section ─────────────────────────────────────────── */
-    .section {
-      padding: 80px 0;
-      border-top: 1px solid var(--border);
-    }
-
-    .section-label {
-      font-size: 11px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 12px;
-    }
-
-    .section h2 {
-      font-family: var(--serif);
-      font-size: clamp(28px, 4vw, 42px);
-      font-weight: 400;
-      line-height: 1.15;
-      margin-bottom: 40px;
-    }
-
-    .install-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 16px;
-    }
-
-    .install-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-      transition: border-color 0.15s;
-    }
+    /* Install */
+    .install-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+    .install-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; transition: border-color 0.15s; }
     .install-card:hover { border-color: var(--accent); }
+    .install-card-title { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+    .install-card code { display: block; color: var(--accent); font-size: 12.5px; word-break: break-all; }
+    .install-card .comment { margin-top: 8px; color: var(--muted); font-size: 11px; }
 
-    .install-card-title {
-      font-size: 11px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 12px;
-    }
+    /* Features */
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .feature { background: var(--surface); padding: 32px 28px; }
+    .feature-icon { font-size: 22px; margin-bottom: 14px; display: block; }
+    .feature h3 { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+    .feature p { color: var(--dimmed); font-size: 12.5px; line-height: 1.75; }
 
-    .install-card code {
-      display: block;
-      color: var(--accent);
-      font-size: 12.5px;
-      word-break: break-all;
-    }
-
-    .install-card .comment {
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 11px;
-    }
-
-    /* ── Features ────────────────────────────────────────────────── */
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1px;
-      background: var(--border);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-
-    .feature {
-      background: var(--surface);
-      padding: 32px 28px;
-    }
-
-    .feature-icon {
-      font-size: 22px;
-      margin-bottom: 14px;
-      display: block;
-    }
-
-    .feature h3 {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-
-    .feature p {
-      color: var(--dimmed);
-      font-size: 12.5px;
-      line-height: 1.75;
-    }
-
-    /* ── Keybinds ────────────────────────────────────────────────── */
-    .keybind-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .keybind-table tr {
-      border-bottom: 1px solid var(--border);
-    }
+    /* Keybinds */
+    .keybind-table { width: 100%; border-collapse: collapse; }
+    .keybind-table tr { border-bottom: 1px solid var(--border); }
     .keybind-table tr:last-child { border-bottom: none; }
-    .keybind-table td {
-      padding: 10px 0;
-      font-size: 13px;
-      color: var(--dimmed);
-    }
-    .keybind-table td:first-child {
-      width: 160px;
-      padding-right: 24px;
-    }
-    .keybind-table td:first-child kbd {
-      display: inline-block;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      padding: 2px 8px;
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--accent);
-    }
+    .keybind-table td { padding: 10px 0; font-size: 13px; color: var(--dimmed); }
+    .keybind-table td:first-child { width: 160px; padding-right: 24px; }
+    .keybind-table td:first-child kbd { display: inline-block; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 2px 8px; font-family: var(--mono); font-size: 12px; color: var(--accent); }
 
-    /* ── Footer ──────────────────────────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 40px 0;
-    }
-    footer .wrap {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-    footer p {
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .footer-links {
-      display: flex;
-      gap: 20px;
-      list-style: none;
-    }
-    .footer-links a {
-      color: var(--muted);
-      font-size: 12px;
-    }
+    /* Footer */
+    footer { border-top: 1px solid var(--border); padding: 40px 0; }
+    footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    footer p { color: var(--muted); font-size: 12px; }
+    .footer-links { display: flex; gap: 20px; list-style: none; }
+    .footer-links a { color: var(--muted); font-size: 12px; }
     .footer-links a:hover { color: var(--dimmed); }
 
-    /* ── Animations ──────────────────────────────────────────────── */
-    @keyframes fade-up {
-      from { opacity: 0; transform: translateY(16px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+    @keyframes fade-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0; }
-    }
-
-    .cursor {
-      display: inline-block;
-      width: 7px;
-      height: 13px;
-      background: var(--accent);
-      vertical-align: middle;
-      animation: blink 1s step-end infinite;
-    }
-
-    /* ── Responsive ──────────────────────────────────────────────── */
-    @media (max-width: 600px) {
-      .wrap { padding: 0 20px; }
-      .hero { padding: 120px 0 64px; }
-      .nav-links { display: none; }
-    }
+    @media (max-width: 600px) { .wrap { padding: 0 20px; } .hero { padding: 120px 0 64px; } .nav-links { display: none; } }
   </style>
 </head>
 <body>
 
-<!-- ── Nav ──────────────────────────────────────────────────────── -->
 <nav>
   <div class="wrap">
     <span class="nav-logo">aud<span>i</span>um</span>
@@ -449,7 +167,6 @@
   </div>
 </nav>
 
-<!-- ── Hero ─────────────────────────────────────────────────────── -->
 <section class="hero">
   <div class="wrap">
     <p class="hero-eyebrow">v0.8.0 — Apache-2.0</p>
@@ -464,7 +181,6 @@
       <a class="btn btn-ghost" href="https://github.com/takashialpha/audium">View source →</a>
     </div>
 
-    <!-- Terminal mockup -->
     <div class="terminal-wrap">
       <div class="terminal">
         <div class="term-bar">
@@ -473,117 +189,77 @@
           <div class="dot dot-g"></div>
           <span class="term-title">audium</span>
         </div>
-        <div class="term-body">
-<pre> <span class="c-accent">audium</span>  —  terminal music player   <span class="c-dim">[?] help  [f] file picker  [c] new playlist  [q] quit</span>
-<span class="c-dim">┌──────────────────────────┬────────────────────────────────────────────────────┐</span>
-<span class="c-dim">│</span> <span class="c-accent"> Playlists </span>               <span class="c-dim">│</span> <span class="c-accent"> All Tracks </span>                                          <span class="c-dim">│</span>
-<span class="c-dim">│</span>                           <span class="c-dim">│</span>  <span class="c-dim">#     Title</span>                                          <span class="c-dim">│</span>
-<span class="c-dim">│</span>  <span class="c-accent">&gt; All Tracks (4)</span>          <span class="c-dim">│</span>    <span class="c-dim">1</span>  <span class="c-dim">04 - Neon Arpeggio</span>                               <span class="c-dim">│</span>
-<span class="c-dim">│</span>    Late Night (2)          <span class="c-dim">│</span>    <span class="c-dim">2</span>  <span class="c-dim">Drift</span>                                             <span class="c-dim">│</span>
-<span class="c-dim">│</span>    Focus (3)               <span class="c-dim">│</span>  <span class="c-accent">&gt;   3  Weightless (feat. Macarena)</span>                   <span class="c-dim">│</span>
-<span class="c-dim">│</span>                           <span class="c-dim">│</span>    <span class="c-dim">4</span>  <span class="c-dim">The River Calls</span>                                  <span class="c-dim">│</span>
-<span class="c-dim">│</span>                           <span class="c-dim">│</span>                                                      <span class="c-dim">│</span>
-<span class="c-dim">│</span>                           <span class="c-dim">├──────────────────────────────────────────────────────┤</span>
-<span class="c-dim">│</span>                           <span class="c-dim">│</span> <span class="c-accent"> Queue </span>                                               <span class="c-dim">│</span>
-<span class="c-dim">│</span>                           <span class="c-dim">│</span>    <span class="c-dim">1</span>  <span class="c-dim">04 - Neon Arpeggio</span>                               <span class="c-dim">│</span>
-<span class="c-dim">│</span>                           <span class="c-dim">│</span>    <span class="c-dim">2</span>  <span class="c-dim">Drift</span>                                             <span class="c-dim">│</span>
-<span class="c-dim">│</span>                           <span class="c-dim">│</span>  <span class="c-accent">&gt;   3  Weightless (feat. Macarena)</span>                   <span class="c-dim">│</span>
-<span class="c-dim">└──────────────────────────┴────────────────────────────────────────────────────┘</span>
-<span class="c-accent">▶</span> <span class="c-white">Weightless (feat. Macarena)</span>
-<span class="c-accent">████████████████████████</span>░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  <span class="c-dim">2:14 / 5:02</span></pre>
+        <div class="tui">
+<span class="tui-row"><span class="ca">audium</span><span class="cm">  —  terminal music player      [?] help  [f] file picker  [c] playlist  [q] quit</span></span>
+<span class="tui-row"><span class="cd">┌─────────────────────────┬──────────────────────────────────────────────────────┐</span></span>
+<span class="tui-row"><span class="cd">│</span><span class="ca"> Playlists               </span><span class="cd">│</span><span class="ca"> All Tracks                                           </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">│                         │</span><span class="cm">  #    Title                                           </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">│</span><span class="ca"> &gt; All Tracks (4)        </span><span class="cd">│</span><span class="cm">    1  04 - Neon Arpeggio                              </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">│</span><span class="cm">   Late Night (2)         </span><span class="cd">│</span><span class="cm">    2  Drift                                           </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">│</span><span class="cm">   Focus (3)              </span><span class="cd">│</span><span class="ca"> &gt;  3  Weightless (feat. Macarena)                     </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">│                         │</span><span class="cm">    4  The River Calls                                 </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">│                         │                                                      │</span></span>
+<span class="tui-row"><span class="cd">│                         ├──────────────────────────────────────────────────────┤</span></span>
+<span class="tui-row"><span class="cd">│                         │</span><span class="ca"> Queue                                                </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">│                         │</span><span class="cm">    1  04 - Neon Arpeggio                              </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">│                         │</span><span class="cm">    2  Drift                                           </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">│                         │</span><span class="ca"> &gt;  3  Weightless (feat. Macarena)                     </span><span class="cd">│</span></span>
+<span class="tui-row"><span class="cd">└─────────────────────────┴──────────────────────────────────────────────────────┘</span></span>
+<span class="tui-row"><span class="ca">⏸ </span><span class="cw">Weightless (feat. Macarena)</span></span>
+<span class="tui-row"><span class="ca">████████████████████</span><span class="cd">░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░</span><span class="cm">  2:14 / 5:02</span></span>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── Install ───────────────────────────────────────────────────── -->
 <section class="section" id="install">
   <div class="wrap">
     <p class="section-label">Installation</p>
     <h2>Pick your platform.</h2>
     <div class="install-grid">
-
       <div class="install-card">
         <p class="install-card-title">Cargo (all platforms)</p>
         <code>cargo install audium</code>
         <p class="comment"># requires Rust 1.85+</p>
       </div>
-
       <div class="install-card">
         <p class="install-card-title">Homebrew (macOS / Linux)</p>
         <code>brew tap takashialpha/audium</code>
         <code style="margin-top:6px">brew install audium</code>
       </div>
-
       <div class="install-card">
         <p class="install-card-title">AUR (Arch Linux)</p>
         <code>paru -S audium</code>
         <p class="comment"># or yay, or manually with makepkg</p>
       </div>
-
     </div>
-
     <p style="margin-top:28px; color: var(--muted); font-size:12px;">
-      Pre-built binaries for Linux, macOS (arm64 + x86_64), and Windows are attached
-      to every <a href="https://github.com/takashialpha/audium/releases">GitHub release</a>.
+      Pre-built binaries for Linux, macOS (arm64 + x86_64), and Windows are attached to every
+      <a href="https://github.com/takashialpha/audium/releases">GitHub release</a>.
     </p>
   </div>
 </section>
 
-<!-- ── Features ─────────────────────────────────────────────────── -->
 <section class="section" id="features">
   <div class="wrap">
     <p class="section-label">Features</p>
     <h2>Everything you need.<br><em style="font-style:italic; color: var(--accent);">Nothing you don't.</em></h2>
     <div class="features-grid" style="margin-top:40px;">
-
-      <div class="feature">
-        <span class="feature-icon">♪</span>
-        <h3>Format agnostic</h3>
-        <p>Plays MP3, FLAC, OGG, WAV, AAC, M4A, Opus, and more via Symphonia — no FFmpeg required.</p>
-      </div>
-
-      <div class="feature">
-        <span class="feature-icon">⌨</span>
-        <h3>Fully keyboard-driven</h3>
-        <p>Every action is a single keypress. Tab between panels, j/k to navigate, space to play.</p>
-      </div>
-
-      <div class="feature">
-        <span class="feature-icon">📂</span>
-        <h3>Built-in file picker</h3>
-        <p>Browse your filesystem without leaving audium. Filter shows only audio files automatically.</p>
-      </div>
-
-      <div class="feature">
-        <span class="feature-icon">🎵</span>
-        <h3>Playlists</h3>
-        <p>Create, rename, and delete playlists. The All Tracks view is always one keypress away.</p>
-      </div>
-
-      <div class="feature">
-        <span class="feature-icon">🔊</span>
-        <h3>Threaded audio</h3>
-        <p>Playback runs on a dedicated thread. Heavy filesystem I/O will never stutter your music.</p>
-      </div>
-
-      <div class="feature">
-        <span class="feature-icon">💾</span>
-        <h3>Persistent library</h3>
-        <p>Your library lives at <code style="color:var(--accent)">~/.audium/library.json</code>. Portable, readable, easy to back up.</p>
-      </div>
-
+      <div class="feature"><span class="feature-icon">♪</span><h3>Format agnostic</h3><p>Plays MP3, FLAC, OGG, WAV, AAC, M4A, Opus, and more via Symphonia — no FFmpeg required.</p></div>
+      <div class="feature"><span class="feature-icon">⌨</span><h3>Fully keyboard-driven</h3><p>Every action is a single keypress. Tab between panels, j/k to navigate, space to play.</p></div>
+      <div class="feature"><span class="feature-icon">📂</span><h3>Built-in file picker</h3><p>Browse your filesystem without leaving audium. Only audio files are shown.</p></div>
+      <div class="feature"><span class="feature-icon">🎵</span><h3>Playlists</h3><p>Create, rename, and delete playlists. The All Tracks view is always one keypress away.</p></div>
+      <div class="feature"><span class="feature-icon">🔊</span><h3>Threaded audio</h3><p>Playback runs on a dedicated thread. Heavy filesystem I/O will never stutter your music.</p></div>
+      <div class="feature"><span class="feature-icon">💾</span><h3>Persistent library</h3><p>Your library lives at <code style="color:var(--accent)">~/.audium/library.json</code>. Portable, readable, easy to back up.</p></div>
     </div>
   </div>
 </section>
 
-<!-- ── Keybinds ──────────────────────────────────────────────────── -->
 <section class="section" id="keybinds">
   <div class="wrap">
     <p class="section-label">Keybindings</p>
     <h2>Muscle memory<br>over menus.</h2>
-
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 48px; margin-top: 40px;">
       <div>
         <p style="color:var(--muted); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:16px;">Playback</p>
@@ -595,7 +271,6 @@
           <tr><td><kbd>-</kbd></td><td>Volume down</td></tr>
         </table>
       </div>
-
       <div>
         <p style="color:var(--muted); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:16px;">Navigation</p>
         <table class="keybind-table">
@@ -606,9 +281,8 @@
           <tr><td><kbd>?</kbd></td><td>Help overlay</td></tr>
         </table>
       </div>
-
       <div>
-        <p style="color:var(--muted); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:16px;">Library & Queue</p>
+        <p style="color:var(--muted); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:16px;">Library &amp; Queue</p>
         <table class="keybind-table">
           <tr><td><kbd>f</kbd></td><td>Open file picker</td></tr>
           <tr><td><kbd>a</kbd></td><td>Add to queue</td></tr>
@@ -624,7 +298,6 @@
   </div>
 </section>
 
-<!-- ── Footer ────────────────────────────────────────────────────── -->
 <footer>
   <div class="wrap">
     <p>audium — <a href="https://github.com/takashialpha/audium/blob/main/LICENSE">Apache-2.0</a></p>

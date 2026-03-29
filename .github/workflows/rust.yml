@@ -34,11 +34,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install dependencies (macOS)
-      run: |
-        brew update
-        brew install jack pkg-config
-
     - name: Build
       run: cargo build --verbose
 
