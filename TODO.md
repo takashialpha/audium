@@ -2,8 +2,7 @@ always:
 - maintain AUR, Homebrew, crates.io (packaging);
 
 bugs to solve:
-- play/pause buttons are inverted(maybe because it's not
-being toggled correctly after playing song);
+- none yet :)
 	
 features to add:
 - (complexity: 8/10) add time-synced lyrics, with highlighting
@@ -14,7 +13,5 @@ the user and not by song metadata;
 it must be well integrated to the progress bar too;
 
 before 1.0.0:
-- make all stuff above;
 - test more;
 - make a fancy readme;
-- make website at docs/;

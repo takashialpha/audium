@@ -37,11 +37,12 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         ])
         .split(main_area);
 
+    // Show the action the user can take, not the current state —
+    // standard media player convention: ⏸ when playing (press to pause),
+    // ▶ when paused or idle (press to play).
     let is_paused = state.player.is_paused;
-    let is_playing = state.now_playing.is_some() && !is_paused;
-    let status = if is_playing {
-        "▶ "
-    } else if is_paused {
+    let has_track = state.now_playing.is_some();
+    let status = if has_track && !is_paused {
         "⏸ "
     } else {
         "▶ "
