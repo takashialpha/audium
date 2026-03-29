@@ -10,34 +10,31 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: arch
-          - os: macos-latest
-            target: macos
-
-    runs-on: ${{ matrix.os }}
-
-    container:
-      image: archlinux:latest
-      if: matrix.target == 'arch'
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
 
     steps:
     - uses: actions/checkout@v4
 
-    # Arch Linux setup
     - name: Install dependencies (Arch)
-      if: matrix.target == 'arch'
       run: |
         pacman -Syu --noconfirm
         pacman -S --noconfirm rust jack pkgconf alsa-lib
 
-    # macOS setup
+    - name: Build
+      run: cargo build --verbose
+
+    - name: Clippy
+      run: cargo clippy
+
+  macos:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
     - name: Install dependencies (macOS)
-      if: matrix.target == 'macos'
       run: |
         brew update
         brew install jack pkg-config
