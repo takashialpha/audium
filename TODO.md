@@ -13,4 +13,5 @@ it must be well integrated to the progress bar too.
 before 1.0.0:
 - make all stuff above;
 - test more;
-- make docs/fancy readme;
+- make a fancy readme;
+- make website at docs/;
