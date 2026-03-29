@@ -14,7 +14,6 @@
 [![crates.io](https://img.shields.io/crates/v/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://crates.io/crates/audium)
 [![AUR](https://img.shields.io/aur/version/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://aur.archlinux.org/packages/audium)
 [![License](https://img.shields.io/crates/l/audium?style=flat-square&color=64b4ff&labelColor=161616)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/takashialpha/audium/ci.yml?style=flat-square&color=64b4ff&labelColor=161616&label=ci)](https://github.com/takashialpha/audium/actions)
 
 [Website](https://audium.rs) · [Installation](#installation) · [Keybindings](#keybindings) · [Building](#building-from-source)
 
@@ -65,13 +64,6 @@ cargo install audium
 ```
 
 Requires Rust 1.85+. Installs the `audium` binary to `~/.cargo/bin/`.
-
-### Homebrew (macOS / Linux)
-
-```sh
-brew tap takashialpha/audium
-brew install audium
-```
 
 ### AUR (Arch Linux)
 

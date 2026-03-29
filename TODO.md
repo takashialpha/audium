@@ -1,5 +1,5 @@
 always:
-- maintain AUR, Homebrew, crates.io (packaging);
+- maintain AUR, crates.io (packaging);
 
 bugs to solve:
 - none yet :)
