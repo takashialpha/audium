@@ -4,20 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>audium — terminal music player</title>
-  <meta name="description" content="A fast, keyboard-driven music player that lives in your terminal. No Electron. No cloud. Just audio." />
+  <meta name="description" content="A keyboard-driven music player that lives in your terminal. No Electron. No cloud. Just audio." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
-
     :root {
       --bg:      #0e0e0e;
       --surface: #161616;
       --border:  #242424;
       --accent:  #64b4ff;
-      --accent2: #a78bfa;
       --text:    #f0f0f0;
       --muted:   #555;
       --dimmed:  #999;
@@ -26,130 +24,67 @@
       --radius:  4px;
       --max:     900px;
     }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: 14px;
-      line-height: 1.7;
-      -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
-    }
-
+    body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; line-height: 1.7; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-      opacity: 0.025;
-      pointer-events: none;
-      z-index: 1000;
-    }
-
+    body::before { content:''; position:fixed; inset:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E"); opacity:0.025; pointer-events:none; z-index:1000; }
     .wrap { max-width: var(--max); margin: 0 auto; padding: 0 32px; }
-
-    /* Nav */
-    nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      border-bottom: 1px solid var(--border);
-      background: rgba(14,14,14,0.88);
-      backdrop-filter: blur(12px);
-    }
-    nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 52px; }
-    .nav-logo { font-size: 15px; font-weight: 500; color: var(--text); letter-spacing: 0.04em; }
-    .nav-logo span { color: var(--accent); }
-    .nav-links { display: flex; gap: 28px; list-style: none; }
-    .nav-links a { color: var(--dimmed); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; transition: color 0.15s; }
-    .nav-links a:hover { color: var(--text); text-decoration: none; }
-
-    /* Hero */
-    .hero { padding: 160px 0 100px; position: relative; }
-    .hero::after {
-      content: '';
-      position: absolute; inset: 0;
-      background: repeating-linear-gradient(to bottom, transparent, transparent 3px, rgba(255,255,255,0.012) 3px, rgba(255,255,255,0.012) 4px);
-      pointer-events: none;
-    }
-
-    .hero-eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 20px; opacity: 0; animation: fade-up 0.6s 0.1s forwards; }
-    .hero h1 { font-family: var(--serif); font-size: clamp(52px, 8vw, 88px); font-weight: 400; line-height: 1.0; letter-spacing: -0.02em; color: var(--text); opacity: 0; animation: fade-up 0.6s 0.2s forwards; }
-    .hero h1 em { font-style: italic; color: var(--accent); }
-    .hero-sub { margin-top: 28px; max-width: 520px; color: var(--dimmed); font-size: 14px; line-height: 1.8; opacity: 0; animation: fade-up 0.6s 0.35s forwards; }
-    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 44px; opacity: 0; animation: fade-up 0.6s 0.5s forwards; }
-
-    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: var(--radius); font-family: var(--mono); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; }
-    .btn-primary { background: var(--accent); color: #000; }
-    .btn-primary:hover { background: #90caff; text-decoration: none; }
-    .btn-ghost { background: transparent; color: var(--dimmed); border-color: var(--border); }
-    .btn-ghost:hover { color: var(--text); border-color: var(--dimmed); text-decoration: none; }
-
-    /* Terminal */
-    .terminal-wrap { margin-top: 72px; opacity: 0; animation: fade-up 0.7s 0.65s forwards; }
-    .terminal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: 0 40px 80px rgba(0,0,0,0.5); }
-    .term-bar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: #111; }
-    .dot { width: 11px; height: 11px; border-radius: 50%; }
-    .dot-r { background: #ff5f57; } .dot-y { background: #febc2e; } .dot-g { background: #28c840; }
-    .term-title { flex: 1; text-align: center; color: var(--muted); font-size: 11px; letter-spacing: 0.04em; }
-
-    /* TUI mockup — each row is a div; spans are purely for colour, no whitespace impact */
-    .tui {
-      padding: 14px 18px;
-      font-family: var(--mono);
-      font-size: 11.5px;
-      line-height: 1.52;
-      white-space: pre;
-      overflow-x: auto;
-      color: #555;
-    }
-    .tui-row { display: block; }
-    .ca  { color: #64b4ff; }   /* accent */
-    .cw  { color: #f0f0f0; font-weight: 500; } /* white/bold */
-    .cd  { color: #383838; }   /* dim border */
-    .cm  { color: #666; }      /* muted content */
-
-    /* Section */
-    .section { padding: 80px 0; border-top: 1px solid var(--border); }
-    .section-label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
-    .section h2 { font-family: var(--serif); font-size: clamp(28px, 4vw, 42px); font-weight: 400; line-height: 1.15; margin-bottom: 40px; }
-
-    /* Install */
-    .install-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-    .install-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; transition: border-color 0.15s; }
-    .install-card:hover { border-color: var(--accent); }
-    .install-card-title { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
-    .install-card code { display: block; color: var(--accent); font-size: 12.5px; word-break: break-all; }
-    .install-card .comment { margin-top: 8px; color: var(--muted); font-size: 11px; }
-
-    /* Features */
-    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-    .feature { background: var(--surface); padding: 32px 28px; }
-    .feature-icon { font-size: 22px; margin-bottom: 14px; display: block; }
-    .feature h3 { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
-    .feature p { color: var(--dimmed); font-size: 12.5px; line-height: 1.75; }
-
-    /* Keybinds */
-    .keybind-table { width: 100%; border-collapse: collapse; }
-    .keybind-table tr { border-bottom: 1px solid var(--border); }
-    .keybind-table tr:last-child { border-bottom: none; }
-    .keybind-table td { padding: 10px 0; font-size: 13px; color: var(--dimmed); }
-    .keybind-table td:first-child { width: 160px; padding-right: 24px; }
-    .keybind-table td:first-child kbd { display: inline-block; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 2px 8px; font-family: var(--mono); font-size: 12px; color: var(--accent); }
-
-    /* Footer */
-    footer { border-top: 1px solid var(--border); padding: 40px 0; }
-    footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
-    footer p { color: var(--muted); font-size: 12px; }
-    .footer-links { display: flex; gap: 20px; list-style: none; }
-    .footer-links a { color: var(--muted); font-size: 12px; }
-    .footer-links a:hover { color: var(--dimmed); }
-
-    @keyframes fade-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-
-    @media (max-width: 600px) { .wrap { padding: 0 20px; } .hero { padding: 120px 0 64px; } .nav-links { display: none; } }
+    nav { position:fixed; top:0; left:0; right:0; z-index:100; border-bottom:1px solid var(--border); background:rgba(14,14,14,0.88); backdrop-filter:blur(12px); }
+    nav .wrap { display:flex; align-items:center; justify-content:space-between; height:52px; }
+    .nav-logo { font-size:15px; font-weight:500; color:var(--text); letter-spacing:0.04em; }
+    .nav-logo span { color:var(--accent); }
+    .nav-links { display:flex; gap:28px; list-style:none; }
+    .nav-links a { color:var(--dimmed); font-size:12px; letter-spacing:0.06em; text-transform:uppercase; transition:color 0.15s; }
+    .nav-links a:hover { color:var(--text); text-decoration:none; }
+    .hero { padding:160px 0 100px; position:relative; }
+    .hero::after { content:''; position:absolute; inset:0; background:repeating-linear-gradient(to bottom,transparent,transparent 3px,rgba(255,255,255,0.012) 3px,rgba(255,255,255,0.012) 4px); pointer-events:none; }
+    .hero-eyebrow { font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); margin-bottom:20px; opacity:0; animation:fade-up 0.6s 0.1s forwards; }
+    .hero h1 { font-family:var(--serif); font-size:clamp(52px,8vw,88px); font-weight:400; line-height:1.0; letter-spacing:-0.02em; color:var(--text); opacity:0; animation:fade-up 0.6s 0.2s forwards; }
+    .hero h1 em { font-style:italic; color:var(--accent); }
+    .hero-sub { margin-top:28px; max-width:520px; color:var(--dimmed); font-size:14px; line-height:1.8; opacity:0; animation:fade-up 0.6s 0.35s forwards; }
+    .hero-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:44px; opacity:0; animation:fade-up 0.6s 0.5s forwards; }
+    .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border-radius:var(--radius); font-family:var(--mono); font-size:13px; font-weight:500; cursor:pointer; border:1px solid transparent; transition:all 0.15s; }
+    .btn-primary { background:var(--accent); color:#000; }
+    .btn-primary:hover { background:#90caff; text-decoration:none; }
+    .btn-ghost { background:transparent; color:var(--dimmed); border-color:var(--border); }
+    .btn-ghost:hover { color:var(--text); border-color:var(--dimmed); text-decoration:none; }
+    .terminal-wrap { margin-top:72px; opacity:0; animation:fade-up 0.7s 0.65s forwards; }
+    .terminal { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; box-shadow:0 40px 80px rgba(0,0,0,0.5); }
+    .term-bar { display:flex; align-items:center; gap:7px; padding:12px 16px; border-bottom:1px solid var(--border); background:#111; }
+    .dot { width:11px; height:11px; border-radius:50%; }
+    .dot-r { background:#ff5f57; } .dot-y { background:#febc2e; } .dot-g { background:#28c840; }
+    .term-title { flex:1; text-align:center; color:var(--muted); font-size:11px; letter-spacing:0.04em; }
+    /* SVG mockup container */
+    .tui-svg { display:block; width:100%; overflow-x:auto; padding:0; }
+    .tui-svg svg { display:block; font-family:'DM Mono',monospace; }
+    .section { padding:80px 0; border-top:1px solid var(--border); }
+    .section-label { font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+    .section h2 { font-family:var(--serif); font-size:clamp(28px,4vw,42px); font-weight:400; line-height:1.15; margin-bottom:40px; }
+    .install-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
+    .install-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; transition:border-color 0.15s; }
+    .install-card:hover { border-color:var(--accent); }
+    .install-card-title { font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+    .install-card code { display:block; color:var(--accent); font-size:12.5px; word-break:break-all; }
+    .install-card .comment { margin-top:8px; color:var(--muted); font-size:11px; }
+    .features-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .feature { background:var(--surface); padding:32px 28px; }
+    .feature-icon { font-size:22px; margin-bottom:14px; display:block; }
+    .feature h3 { font-size:14px; font-weight:500; color:var(--text); margin-bottom:8px; }
+    .feature p { color:var(--dimmed); font-size:12.5px; line-height:1.75; }
+    .keybind-table { width:100%; border-collapse:collapse; }
+    .keybind-table tr { border-bottom:1px solid var(--border); }
+    .keybind-table tr:last-child { border-bottom:none; }
+    .keybind-table td { padding:10px 0; font-size:13px; color:var(--dimmed); }
+    .keybind-table td:first-child { width:160px; padding-right:24px; }
+    .keybind-table td:first-child kbd { display:inline-block; background:var(--surface); border:1px solid var(--border); border-radius:3px; padding:2px 8px; font-family:var(--mono); font-size:12px; color:var(--accent); }
+    footer { border-top:1px solid var(--border); padding:40px 0; }
+    footer .wrap { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
+    footer p { color:var(--muted); font-size:12px; }
+    .footer-links { display:flex; gap:20px; list-style:none; }
+    .footer-links a { color:var(--muted); font-size:12px; }
+    .footer-links a:hover { color:var(--dimmed); }
+    @keyframes fade-up { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    @media (max-width:600px) { .wrap { padding:0 20px; } .hero { padding:120px 0 64px; } .nav-links { display:none; } }
   </style>
 </head>
 <body>
@@ -169,7 +104,7 @@
 
 <section class="hero">
   <div class="wrap">
-    <p class="hero-eyebrow">v0.8.0 — Apache-2.0</p>
+    <p class="hero-eyebrow">Apache-2.0 — available on crates.io &amp; AUR</p>
     <h1>Music that lives<br>in your <em>terminal.</em></h1>
     <p class="hero-sub">
       audium is a keyboard-driven music player for people who live in the terminal.
@@ -189,24 +124,86 @@
           <div class="dot dot-g"></div>
           <span class="term-title">audium</span>
         </div>
-        <div class="tui">
-<span class="tui-row"><span class="ca">audium</span><span class="cm">  —  terminal music player      [?] help  [f] file picker  [c] playlist  [q] quit</span></span>
-<span class="tui-row"><span class="cd">┌─────────────────────────┬──────────────────────────────────────────────────────┐</span></span>
-<span class="tui-row"><span class="cd">│</span><span class="ca"> Playlists               </span><span class="cd">│</span><span class="ca"> All Tracks                                           </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">│                         │</span><span class="cm">  #    Title                                           </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">│</span><span class="ca"> &gt; All Tracks (4)        </span><span class="cd">│</span><span class="cm">    1  04 - Neon Arpeggio                              </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">│</span><span class="cm">   Late Night (2)         </span><span class="cd">│</span><span class="cm">    2  Drift                                           </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">│</span><span class="cm">   Focus (2)              </span><span class="cd">│</span><span class="ca"> &gt;  3  Weightless (feat. Macarena)                     </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">│                         │</span><span class="cm">    4  The River Calls                                 </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">│                         │                                                      │</span></span>
-<span class="tui-row"><span class="cd">│                         ├──────────────────────────────────────────────────────┤</span></span>
-<span class="tui-row"><span class="cd">│                         │</span><span class="ca"> Queue                                                </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">│                         │</span><span class="cm">    1  04 - Neon Arpeggio                              </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">│                         │</span><span class="cm">    2  Drift                                           </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">│                         │</span><span class="ca"> &gt;  3  Weightless (feat. Macarena)                     </span><span class="cd">│</span></span>
-<span class="tui-row"><span class="cd">└─────────────────────────┴──────────────────────────────────────────────────────┘</span></span>
-<span class="tui-row"><span class="ca">⏸ </span><span class="cw">Weightless (feat. Macarena)</span></span>
-<span class="tui-row"><span class="ca">████████████████████</span><span class="cd">░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░</span><span class="cm">  2:14 / 5:02</span></span>
+        <!-- SVG mockup: ch=7.22px, line-height=18px, pad=16px top/left -->
+        <div class="tui-svg">
+          <svg viewBox="0 0 610 330" xmlns="http://www.w3.org/2000/svg"
+               style="background:#161616; width:100%; height:auto;">
+            <defs>
+              <style>
+                .t { font-family:'DM Mono',monospace; font-size:11px; }
+                .a { fill:#64b4ff; }
+                .d { fill:#2e2e2e; }
+                .m { fill:#606060; }
+                .w { fill:#f0f0f0; font-weight:600; }
+              </style>
+            </defs>
+            <!-- row 0: topbar -->
+            <text class="t a" x="16" y="28">audium</text>
+            <text class="t m" x="59" y="28">  —  terminal music player      [?] help  [f] file picker  [c] playlist  [q] quit</text>
+            <!-- row 1: top border -->
+            <text class="t d" x="16" y="50">&#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;</text>
+            <!-- row 2: Playlists | All Tracks -->
+            <text class="t d"  x="16"  y="68">&#x2502;</text>
+            <text class="t a"  x="23"  y="68"> Playlists               </text>
+            <text class="t d"  x="204" y="68">&#x2502;</text>
+            <text class="t a"  x="211" y="68"> All Tracks                                           </text>
+            <text class="t d"  x="594" y="68">&#x2502;</text>
+            <!-- row 3: col headers -->
+            <text class="t d"  x="16"  y="86">&#x2502;                         &#x2502;</text>
+            <text class="t m"  x="211" y="86">  #    Title                                          </text>
+            <text class="t d"  x="594" y="86">&#x2502;</text>
+            <!-- row 4 -->
+            <text class="t d"  x="16"  y="104">&#x2502;</text>
+            <text class="t a"  x="23"  y="104"> &gt; All Tracks (4)        </text>
+            <text class="t d"  x="204" y="104">&#x2502;</text>
+            <text class="t m"  x="211" y="104">    1  04 - Neon Arpeggio                             </text>
+            <text class="t d"  x="594" y="104">&#x2502;</text>
+            <!-- row 5 -->
+            <text class="t d"  x="16"  y="122">&#x2502;</text>
+            <text class="t m"  x="23"  y="122">   Late Night (2)         </text>
+            <text class="t d"  x="204" y="122">&#x2502;</text>
+            <text class="t m"  x="211" y="122">    2  Drift                                          </text>
+            <text class="t d"  x="594" y="122">&#x2502;</text>
+            <!-- row 6 -->
+            <text class="t d"  x="16"  y="140">&#x2502;</text>
+            <text class="t m"  x="23"  y="140">   Focus (2)              </text>
+            <text class="t d"  x="204" y="140">&#x2502;</text>
+            <text class="t a"  x="211" y="140"> &gt;  3  Weightless (feat. Macarena)                    </text>
+            <text class="t d"  x="594" y="140">&#x2502;</text>
+            <!-- row 7 -->
+            <text class="t d"  x="16"  y="158">&#x2502;                         &#x2502;</text>
+            <text class="t m"  x="211" y="158">    4  The River Calls                                </text>
+            <text class="t d"  x="594" y="158">&#x2502;</text>
+            <!-- row 8: blank -->
+            <text class="t d"  x="16"  y="176">&#x2502;                         &#x2502;                                                      &#x2502;</text>
+            <!-- row 9: mid separator -->
+            <text class="t d"  x="16"  y="194">&#x2502;                         &#x251C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2524;</text>
+            <!-- row 10: Queue header -->
+            <text class="t d"  x="16"  y="212">&#x2502;                         &#x2502;</text>
+            <text class="t a"  x="211" y="212"> Queue                                                </text>
+            <text class="t d"  x="594" y="212">&#x2502;</text>
+            <!-- row 11 -->
+            <text class="t d"  x="16"  y="230">&#x2502;                         &#x2502;</text>
+            <text class="t m"  x="211" y="230">    1  04 - Neon Arpeggio                             </text>
+            <text class="t d"  x="594" y="230">&#x2502;</text>
+            <!-- row 12 -->
+            <text class="t d"  x="16"  y="248">&#x2502;                         &#x2502;</text>
+            <text class="t m"  x="211" y="248">    2  Drift                                          </text>
+            <text class="t d"  x="594" y="248">&#x2502;</text>
+            <!-- row 13 -->
+            <text class="t d"  x="16"  y="266">&#x2502;                         &#x2502;</text>
+            <text class="t a"  x="211" y="266"> &gt;  3  Weightless (feat. Macarena)                    </text>
+            <text class="t d"  x="594" y="266">&#x2502;</text>
+            <!-- row 14: bottom border -->
+            <text class="t d" x="16" y="284">&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;</text>
+            <!-- row 15: player -->
+            <text class="t a" x="16" y="302">&#x23F8; </text>
+            <text class="t w" x="30" y="302">Weightless (feat. Macarena)</text>
+            <!-- row 16: progress -->
+            <text class="t a" x="16"  y="320">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</text>
+            <text class="t d" x="160" y="320">&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;&#x2591;</text>
+            <text class="t m" x="464" y="320">  2:14 / 5:02</text>
+          </svg>
         </div>
       </div>
     </div>
@@ -229,24 +226,20 @@
         <p class="comment"># or yay, or manually with makepkg</p>
       </div>
     </div>
-    <p style="margin-top:28px; color: var(--muted); font-size:12px;">
-      Pre-built binaries for Linux, macOS (arm64 + x86_64), and Windows are attached to every
-      <a href="https://github.com/takashialpha/audium/releases">GitHub release</a>.
-    </p>
   </div>
 </section>
 
 <section class="section" id="features">
   <div class="wrap">
     <p class="section-label">Features</p>
-    <h2>Everything you need.<br><em style="font-style:italic; color: var(--accent);">Nothing you don't.</em></h2>
+    <h2>Everything you need.<br><em style="font-style:italic;color:var(--accent);">Nothing you don't.</em></h2>
     <div class="features-grid" style="margin-top:40px;">
       <div class="feature"><span class="feature-icon">♪</span><h3>Format agnostic</h3><p>Plays MP3, FLAC, OGG, WAV, AAC, M4A, Opus, and more via Symphonia — no FFmpeg required.</p></div>
       <div class="feature"><span class="feature-icon">⌨</span><h3>Fully keyboard-driven</h3><p>Every action is a single keypress. Tab between panels, j/k to navigate, space to play.</p></div>
       <div class="feature"><span class="feature-icon">📂</span><h3>Built-in file picker</h3><p>Browse your filesystem without leaving audium. Only audio files are shown.</p></div>
       <div class="feature"><span class="feature-icon">🎵</span><h3>Playlists</h3><p>Create, rename, and delete playlists. The All Tracks view is always one keypress away.</p></div>
-      <div class="feature"><span class="feature-icon">🔊</span><h3>Threaded audio</h3><p>Playback runs on a dedicated thread. Heavy filesystem I/O will never stutter your music.</p></div>
-      <div class="feature"><span class="feature-icon">💾</span><h3>Persistent library</h3><p>Your library lives at <code style="color:var(--accent)">~/.audium/library.json</code>. Portable, readable, easy to back up.</p></div>
+      <div class="feature"><span class="feature-icon">🔊</span><h3>Threaded audio</h3><p>Playback runs on a dedicated thread. Heavy I/O will never stutter your music.</p></div>
+      <div class="feature"><span class="feature-icon">💾</span><h3>Persistent library</h3><p>Stored at <code style="color:var(--accent)">~/.audium/library.json</code>. Plain JSON, portable, easy to back up.</p></div>
     </div>
   </div>
 </section>
@@ -255,9 +248,9 @@
   <div class="wrap">
     <p class="section-label">Keybindings</p>
     <h2>Muscle memory<br>over menus.</h2>
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 48px; margin-top: 40px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:48px;margin-top:40px;">
       <div>
-        <p style="color:var(--muted); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:16px;">Playback</p>
+        <p style="color:var(--muted);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">Playback</p>
         <table class="keybind-table">
           <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
           <tr><td><kbd>n</kbd></td><td>Next track</td></tr>
@@ -267,7 +260,7 @@
         </table>
       </div>
       <div>
-        <p style="color:var(--muted); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:16px;">Navigation</p>
+        <p style="color:var(--muted);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">Navigation</p>
         <table class="keybind-table">
           <tr><td><kbd>Tab</kbd></td><td>Cycle panel focus</td></tr>
           <tr><td><kbd>j</kbd> / <kbd>↓</kbd></td><td>Move down</td></tr>
@@ -277,7 +270,7 @@
         </table>
       </div>
       <div>
-        <p style="color:var(--muted); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:16px;">Library &amp; Queue</p>
+        <p style="color:var(--muted);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">Library &amp; Queue</p>
         <table class="keybind-table">
           <tr><td><kbd>f</kbd></td><td>Open file picker</td></tr>
           <tr><td><kbd>a</kbd></td><td>Add to queue</td></tr>
