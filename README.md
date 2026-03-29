@@ -28,7 +28,7 @@
 │                         │  #    Title                                          │
 │ > All Tracks (4)        │     1  04 - Neon Arpeggio                            │
 │   Late Night (2)        │     2  Drift                                         │
-│   Focus (3)             │  >  3  Weightless (feat. Macarena)                   │
+│   Focus (2)             │  >  3  Weightless (feat. Macarena)                   │
 │                         │     4  The River Calls                               │
 │                         │                                                      │
 │                         ├──────────────────────────────────────────────────────┤

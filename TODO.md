@@ -14,4 +14,4 @@ it must be well integrated to the progress bar too;
 
 before 1.0.0:
 - test more;
-- make a fancy readme;
+- add one of these features;
