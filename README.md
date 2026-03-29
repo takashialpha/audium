@@ -15,7 +15,7 @@
 [![AUR](https://img.shields.io/aur/version/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://aur.archlinux.org/packages/audium)
 [![License](https://img.shields.io/crates/l/audium?style=flat-square&color=64b4ff&labelColor=161616)](LICENSE)
 
-[Website](https://audium.rs) · [Installation](#installation) · [Keybindings](#keybindings) · [Building](#building-from-source)
+[Website](https://takashialpha.github.io/audium) · [Installation](#installation) · [Keybindings](#keybindings) · [Building](#building-from-source)
 
 </div>
 
@@ -28,7 +28,7 @@
 │                         │  #    Title                                          │
 │ > All Tracks (4)        │     1  04 - Neon Arpeggio                            │
 │   Late Night (2)        │     2  Drift                                         │
-│   Focus (3)             │  >  3  Weightless (feat. Macarena)                   │
+│   Focus (2)             │  >  3  Weightless (feat. Macarena)                   │
 │                         │     4  The River Calls                               │
 │                         │                                                      │
 │                         ├──────────────────────────────────────────────────────┤
