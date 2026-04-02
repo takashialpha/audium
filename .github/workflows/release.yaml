@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # Linux x86_64 (Arch Linux compatible)
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            artifact_name: audium-x86_64-unknown-linux-gnu
+            archive_name: audium-${{ github.ref_name }}-x86_64-linux.tar.gz
+
+          # macOS Apple Silicon
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: audium-aarch64-apple-darwin
+            archive_name: audium-${{ github.ref_name }}-aarch64-macos.tar.gz
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux build dependencies (alsa-lib)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare and compress binary
+        run: |
+          mkdir -p artifacts
+          cp target/${{ matrix.target }}/release/audium artifacts/${{ matrix.artifact_name }}
+          chmod +x artifacts/${{ matrix.artifact_name }}
+
+          # Create compressed archive with clean name
+          cd artifacts
+          tar -czf ${{ matrix.archive_name }} ${{ matrix.artifact_name }}
+          ls -lh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/${{ matrix.archive_name }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all built archives
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create draft GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Audium ${{ github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            artifacts/audium-x86_64-unknown-linux-gnu/audium-${{ github.ref_name }}-x86_64-linux.tar.gz
+            artifacts/audium-aarch64-apple-darwin/audium-${{ github.ref_name }}-aarch64-macos.tar.gz
