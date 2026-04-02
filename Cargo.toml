@@ -12,6 +12,7 @@ anyhow = "1.0"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.29"
 dirs-next = "2"
+rand = "0.10"
 ratatui = "0.30"
 rodio = { version = "0.22", features = ["symphonia-all"] }
 serde = { version = "1", features = ["derive"] }

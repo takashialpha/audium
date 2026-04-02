@@ -4,6 +4,7 @@ mod filepicker;
 mod library;
 mod modal;
 mod player;
+mod settings;
 mod ui;
 
 use anyhow::Result;

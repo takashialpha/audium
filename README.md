@@ -125,9 +125,11 @@ audium stores your library at `~/.audium/library.json` and your music at `~/.aud
 | `a`  | Add selected track to queue         |
 | `p`  | Add selected track to a playlist    |
 | `c`  | Create new playlist                 |
+| `z`  | Shuffle playlist into queue         |
 | `d`  | Remove selected item                |
 | `r`  | Rename selected track or playlist   |
 | `x`  | Remove selected item from queue     |
+| `s`  | Open settings                       |
 
 ---
 
@@ -168,6 +170,13 @@ sudo dnf install alsa-lib-devel
 ```
 
 `library.json` is human-readable. You can edit it directly if needed, though audium will re-validate it on next launch.
+
+---
+
+## Roadmap
+
+- [ ] Time-synced lyrics with highlighting
+- [ ] More — see [issues](https://github.com/takashialpha/audium/issues)
 
 ---
 

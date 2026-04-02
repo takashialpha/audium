@@ -73,7 +73,7 @@ fn render_top_bar(frame: &mut Frame, area: ratatui::layout::Rect) {
             Style::default().fg(Colors::TEXT_DIM),
         ),
         Span::styled(
-            " [?] help  [f] file picker  [c] new playlist  [q] quit ",
+            " [?] help  [f] file picker  [c] new playlist  [s] settings  [q] quit ",
             Style::default().fg(Colors::SUBTLE),
         ),
     ];

@@ -1,5 +1,1 @@
-# Ignores target directory for compiled testing
 /target
-
-# Ignore Cargo.lock for github
-Cargo.lock
