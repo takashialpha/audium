@@ -62,7 +62,7 @@
 ```sh
 cargo install audium
 ```
-On Linux, Requires ALSA development headers to build and ALSA to run.
+On Linux, Requires ALSA development headers to build and ALSA to run. (see how to install below on this README)
 Requires Rust 1.85+ (MSRV). Installs the `audium` binary to `~/.cargo/bin/`.
 
 ### AUR (Arch Linux)
@@ -142,22 +142,22 @@ cargo build --release
 # binary is at ./target/release/audium
 ```
 
-**Linux** requires ALSA development headers:
+**Linux** requires ALSA and its development headers:
 
 ```sh
 # Debian / Ubuntu
-sudo apt install libasound2-dev
+sudo apt install alsa-base alsa-utils libasound2-dev
 
 # Arch
-sudo pacman -S alsa-lib
+sudo pacman -S alsa-utils alsa-lib
 
 # Fedora
-sudo dnf install alsa-lib-devel
+sudo dnf install alsa-utils alsa-lib-devel
 ```
 
 **macOS** has no extra dependencies.
 
-> **Windows:** audium compiles on Windows but is not an officially supported platform and has not been tested.
+> **Windows:** audium compiles on Windows (no additional dependencies) but is not an officially supported platform and has not been tested.
 
 ---
 

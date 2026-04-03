@@ -1,5 +1,7 @@
 dev notes:
-Check 3 clippy warnings and fix them (all allow dead_code or unused.. were removed, update all codebase);
+- fix 3 clippy warnings and fix them (all allow dead_code or unused.. were removed, update all codebase);
+- try showing non-fatal errors in pop-ups instead of eprintln!'s since it's a ratatui app;
+- complete the above and feature no. 5 before v1 (stable);
 
 bugs to solve:
 - None yet!
