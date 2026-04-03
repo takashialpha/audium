@@ -58,7 +58,7 @@ jobs:
           ls -lh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: artifacts/${{ matrix.archive_name }}
@@ -69,12 +69,12 @@ jobs:
 
     steps:
       - name: Download all built archives
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
       - name: Create draft GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.6.1
         with:
           tag_name: ${{ github.ref_name }}
           name: Audium ${{ github.ref_name }}
