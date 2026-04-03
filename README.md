@@ -61,10 +61,8 @@
 
 ```sh
 cargo install audium
-# On Linux, that requires alsa-lib to run
-# (pre-installed by most Linux distros) and alsa-lib-devel (Dev. headers for alsa)
 ```
-
+On Linux, Requires ALSA development headers to build and ALSA to run.
 Requires Rust 1.85+ (MSRV). Installs the `audium` binary to `~/.cargo/bin/`.
 
 ### AUR (Arch Linux)
