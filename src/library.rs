@@ -273,7 +273,6 @@ impl Library {
     }
 
     /// Removes a track from a playlist.
-    #[allow(dead_code)]
     pub fn playlist_remove_track(
         &mut self,
         playlist_id: PlaylistId,

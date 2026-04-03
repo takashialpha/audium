@@ -525,14 +525,12 @@ impl AppState {
         let vol_pct = (self.settings.default_volume * 100.0).round() as u32;
         self.modal = Some(Modal::Settings {
             cursor: 0,
-            editing: false,
-            input: TextInput::default(),
             volume_pct: vol_pct,
             seek_secs: self.settings.seek_step_secs,
         });
     }
 
-    /// `s` — prompt to shuffle the active playlist into the queue.
+    /// `z` — prompt to shuffle the active playlist into the queue.
     fn action_shuffle_playlist(&mut self) {
         if let Some(pl) = self.library.playlist(self.active_playlist) {
             if pl.tracks.is_empty() {
@@ -617,6 +615,9 @@ impl AppState {
             } => {
                 self.settings.set_default_volume(volume_pct as f32 / 100.0);
                 self.settings.set_seek_step_secs(seek_secs);
+                // seek_step_secs is read at seek-time so it takes effect
+                // immediately. default_volume is startup-only; the live player
+                // volume is intentionally left unchanged.
                 let _ = self.settings.save();
             }
 
@@ -676,9 +677,7 @@ pub fn run(cli: Cli) -> Result<()> {
         None
     };
 
-    let mut player = spawn_audio_thread()?;
-    // Apply the saved default volume before handing the handle to AppState.
-    player.set_volume(settings.default_volume);
+    let player = spawn_audio_thread(settings.default_volume)?; // no need to be mutable by now
 
     let mut state = AppState::new(library, player, settings);
 

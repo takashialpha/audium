@@ -30,8 +30,7 @@ pub enum PlayerCommand {
 }
 
 /// Events sent from the audio thread back to the UI thread.
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug)] // Error and DurationResolved are never being read, implement them for the features in TODO.md;
 pub enum PlayerEvent {
     /// The decoder resolved a total duration for the just-started track.
     DurationResolved(Duration),
@@ -43,10 +42,9 @@ pub enum PlayerEvent {
 
 // ── Volume constants ───────────────────────────────────────────────────────
 
-const VOLUME_STEP: f32 = 0.1;
+const VOLUME_STEP: f32 = 0.01;
 const VOLUME_MIN: f32 = 0.0;
 const VOLUME_MAX: f32 = 1.0;
-const VOLUME_INIT: f32 = 0.7;
 
 // ── Handle (UI-side) ───────────────────────────────────────────────────────
 
@@ -132,7 +130,11 @@ impl Drop for PlayerHandle {
 // ── Audio thread ───────────────────────────────────────────────────────────
 
 /// Spawns the audio thread and returns a `PlayerHandle` for the UI thread.
-pub fn spawn_audio_thread() -> Result<PlayerHandle> {
+/// `default_volume` comes from `Settings` so both the handle shadow and the
+/// audio thread start at the user's saved value — no post-init correction needed.
+pub fn spawn_audio_thread(default_volume: f32) -> Result<PlayerHandle> {
+    let volume = default_volume.clamp(VOLUME_MIN, VOLUME_MAX);
+
     let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
     let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
 
@@ -144,28 +146,26 @@ pub fn spawn_audio_thread() -> Result<PlayerHandle> {
 
     thread::Builder::new()
         .name("audium-audio".into())
-        .spawn(move || audio_thread_main(sink, cmd_rx, event_tx))?;
+        .spawn(move || audio_thread_main(sink, cmd_rx, event_tx, volume))?;
 
     Ok(PlayerHandle {
         cmd_tx,
         event_rx,
-        volume: VOLUME_INIT,
+        volume,
         is_paused: false,
     })
 }
 
-/// Entry point for the audio thread.  Loops forever processing commands until
-/// `PlayerCommand::Quit` is received or the sender is dropped.
+/// Entry point for the audio thread.
 fn audio_thread_main(
     sink: MixerDeviceSink,
     cmd_rx: Receiver<PlayerCommand>,
     event_tx: Sender<PlayerEvent>,
+    default_volume: f32,
 ) {
     let player = Player::connect_new(sink.mixer());
-    player.set_volume(VOLUME_INIT);
+    player.set_volume(default_volume);
 
-    // Whether the last track was stopped explicitly (as opposed to finishing
-    // naturally). We use this to suppress spurious `TrackFinished` events.
     let mut stopped_explicitly = false;
 
     loop {
@@ -182,14 +182,10 @@ fn audio_thread_main(
 
         // --- Check for natural track completion ---------------------------
         if !stopped_explicitly && player.empty() {
-            // `empty()` stays true perpetually after playback ends, so we
-            // gate this on having something that *was* playing.  We flip the
-            // flag here so we only fire the event once per track.
-            stopped_explicitly = true; // reuse flag to suppress duplicates
+            stopped_explicitly = true;
             let _ = event_tx.send(PlayerEvent::TrackFinished);
         }
 
-        // Sleep briefly to avoid busy-spinning.
         thread::sleep(Duration::from_millis(20));
     }
 }
@@ -201,8 +197,6 @@ fn handle_command(player: &Player, cmd: PlayerCommand, stopped: &mut bool) {
             *stopped = false;
             match File::open(&path) {
                 Err(e) => {
-                    // We can't send the event here without the tx — callers
-                    // should handle errors via the Error event.  For now, log.
                     eprintln!("audium-audio: failed to open {:?}: {e}", path);
                 }
                 Ok(file) => match Decoder::try_from(file) {
@@ -229,8 +223,6 @@ fn handle_command(player: &Player, cmd: PlayerCommand, stopped: &mut bool) {
                 Ok(file) => match Decoder::try_from(file) {
                     Err(e) => eprintln!("audium-audio: seek: failed to decode {:?}: {e}", path),
                     Ok(mut source) => {
-                        // try_seek is a best-effort: formats that don't
-                        // support it (rare) will just restart from 0.
                         let _ = source.try_seek(position);
                         player.append(source);
                         if paused {

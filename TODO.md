@@ -1,10 +1,9 @@
-always:
-- maintain AUR, crates.io (packaging);
+dev notes:
+Check 3 clippy warnings and fix them (all allow dead_code or unused.. were removed, update all codebase);
 
 bugs to solve:
-- fix settings menu: it should change default volume or seeking
-seconds/percentage idk(even more stuff maybe);
-	
+- None yet!
+
 features to add:
 - 1 (complexity: 8/10) add time-synced lyrics, with highlighting
 or "typewriter" animation(might me more complicated), using a bind for them, and
@@ -12,7 +11,7 @@ they always show it for the current playing song. the lyrics are supposed to be 
 the user;
 - 2 (complexity: 7/10) add fields like author/album..more that are meant to be filled by the user,
 not by metadata, this way it's possible to filter by it without
-breaking the philosophy of "it's your library";
+breaking the philosophy of "it's your library" (should affect library.json);
 - 3 (complexity: 5/10; after 2) add filtering by the fields added in the previous feature;
 - 4 (complexity: 8.5/10) add the possibility of pulling audio from yt videos;
 - 5 (complexity: 5/10) add modes like loop/not looping, so at the end of the queue songs

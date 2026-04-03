@@ -41,7 +41,6 @@ impl TextInput {
         if self.cursor == 0 {
             return;
         }
-        // Step back one char boundary.
         let mut new_cursor = self.cursor - 1;
         while !self.value.is_char_boundary(new_cursor) {
             new_cursor -= 1;
@@ -91,14 +90,12 @@ pub enum Modal {
 
     /// Confirm before a destructive removal.
     ConfirmRemove {
-        /// Human-readable description shown in the prompt.
         description: String,
         target: RemoveTarget,
     },
 
     /// Rename a track (library) or a playlist.
     Rename {
-        /// "Track" | "Playlist"
         kind: String,
         id: u64,
         input: TextInput,
@@ -111,7 +108,6 @@ pub enum Modal {
     AddToPlaylist {
         track_id: TrackId,
         track_name: String,
-        /// (id, name) pairs for every user playlist.
         choices: Vec<(PlaylistId, String)>,
         cursor: usize,
     },
@@ -126,13 +122,11 @@ pub enum Modal {
     },
 
     /// Settings menu.
+    /// Left/Right adjust the focused field; Esc/q saves and closes.
     Settings {
         /// Which row the cursor is on (0 = volume, 1 = seek step).
         cursor: usize,
-        /// Editing state for the currently selected field, if active.
-        editing: bool,
-        input: TextInput,
-        /// Live copy of current values for display.
+        /// Live copy of current values, mutated in place as the user adjusts.
         volume_pct: u32, // 0–100
         seek_secs: u64,
     },
@@ -140,17 +134,13 @@ pub enum Modal {
 
 /// Outcome returned from `Modal::handle_key`.
 pub enum ModalOutcome {
-    /// Modal handled the key; no further processing needed.
     Consumed,
-    /// User confirmed.  Inner value carries semantic data for `AppState`.
     Confirm(ModalConfirm),
-    /// User dismissed (Esc / q).
     Dismissed,
 }
 
 /// What `AppState` needs to act on when a modal is confirmed.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum ModalConfirm {
     Remove(RemoveTarget),
     Rename {
@@ -172,20 +162,18 @@ pub enum ModalConfirm {
     ShufflePlaylist {
         playlist_id: PlaylistId,
     },
-    /// Nothing to act on (e.g. TrackAdded notification just dismissed).
     None,
 }
 
 // ── Input handling ─────────────────────────────────────────────────────────
 
 impl Modal {
-    /// Returns the outcome of handling a keypress for this modal.
     pub fn handle_key(&mut self, code: KeyCode) -> ModalOutcome {
         match self {
             // ── Informational: any key dismisses ─────────────────────────
             Modal::TrackAdded { .. } | Modal::Help => ModalOutcome::Dismissed,
 
-            // ── Shuffle confirmation ───────────────────────────────────────
+            // ── Shuffle confirmation ──────────────────────────────────────
             Modal::ShufflePlaylist { playlist_id, .. } => match code {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     ModalOutcome::Confirm(ModalConfirm::ShufflePlaylist {
@@ -199,74 +187,45 @@ impl Modal {
             },
 
             // ── Settings ──────────────────────────────────────────────────
+            // Left/Right increment or decrement the focused field in place.
+            // Esc/q saves immediately — no separate confirm step.
             Modal::Settings {
                 cursor,
-                editing,
-                input,
                 volume_pct,
                 seek_secs,
-            } => {
-                if *editing {
-                    match code {
-                        KeyCode::Enter => {
-                            // Commit the edited value.
-                            if let Ok(n) = input.value.trim().parse::<u64>() {
-                                if *cursor == 0 {
-                                    *volume_pct = (n as u32).clamp(0, 100);
-                                } else {
-                                    *seek_secs = n.clamp(1, 120);
-                                }
-                            }
-                            *editing = false;
-                            *input = TextInput::default();
-                            ModalOutcome::Consumed
-                        }
-                        KeyCode::Esc => {
-                            *editing = false;
-                            *input = TextInput::default();
-                            ModalOutcome::Consumed
-                        }
-                        KeyCode::Char(c) if c.is_ascii_digit() => {
-                            input.push(c);
-                            ModalOutcome::Consumed
-                        }
-                        KeyCode::Backspace => {
-                            input.backspace();
-                            ModalOutcome::Consumed
-                        }
-                        _ => ModalOutcome::Consumed,
-                    }
-                } else {
-                    match code {
-                        KeyCode::Char('j') | KeyCode::Down => {
-                            *cursor = (*cursor + 1).min(1);
-                            ModalOutcome::Consumed
-                        }
-                        KeyCode::Char('k') | KeyCode::Up => {
-                            *cursor = cursor.saturating_sub(1);
-                            ModalOutcome::Consumed
-                        }
-                        KeyCode::Enter => {
-                            // Start editing the selected field.
-                            let prefill = if *cursor == 0 {
-                                volume_pct.to_string()
-                            } else {
-                                seek_secs.to_string()
-                            };
-                            *input = TextInput::with_value(prefill);
-                            *editing = true;
-                            ModalOutcome::Consumed
-                        }
-                        KeyCode::Esc | KeyCode::Char('q') => {
-                            ModalOutcome::Confirm(ModalConfirm::SaveSettings {
-                                volume_pct: *volume_pct,
-                                seek_secs: *seek_secs,
-                            })
-                        }
-                        _ => ModalOutcome::Consumed,
-                    }
+            } => match code {
+                KeyCode::Char('j') | KeyCode::Down => {
+                    *cursor = (*cursor + 1).min(1);
+                    ModalOutcome::Consumed
                 }
-            }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    *cursor = cursor.saturating_sub(1);
+                    ModalOutcome::Consumed
+                }
+                KeyCode::Left => {
+                    if *cursor == 0 {
+                        *volume_pct = volume_pct.saturating_sub(1);
+                    } else {
+                        *seek_secs = seek_secs.saturating_sub(1).max(1);
+                    }
+                    ModalOutcome::Consumed
+                }
+                KeyCode::Right => {
+                    if *cursor == 0 {
+                        *volume_pct = (*volume_pct + 1).min(100);
+                    } else {
+                        *seek_secs = (*seek_secs + 1).min(120);
+                    }
+                    ModalOutcome::Consumed
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    ModalOutcome::Confirm(ModalConfirm::SaveSettings {
+                        volume_pct: *volume_pct,
+                        seek_secs: *seek_secs,
+                    })
+                }
+                _ => ModalOutcome::Consumed,
+            },
 
             // ── Confirm/cancel ────────────────────────────────────────────
             Modal::ConfirmRemove { target, .. } => match code {
@@ -376,7 +335,6 @@ impl Modal {
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 
-/// Renders `modal` as a centered overlay on top of whatever was drawn already.
 pub fn render_modal(frame: &mut Frame, modal: &Modal) {
     match modal {
         Modal::TrackAdded { name } => {
@@ -406,12 +364,10 @@ pub fn render_modal(frame: &mut Frame, modal: &Modal) {
         }
         Modal::Settings {
             cursor,
-            editing,
-            input,
             volume_pct,
             seek_secs,
         } => {
-            render_settings(frame, *cursor, *editing, input, *volume_pct, *seek_secs);
+            render_settings(frame, *cursor, *volume_pct, *seek_secs);
         }
         Modal::ShufflePlaylist { playlist_name, .. } => {
             render_confirm(
@@ -427,7 +383,6 @@ pub fn render_modal(frame: &mut Frame, modal: &Modal) {
 
 // ── Overlay helpers ────────────────────────────────────────────────────────
 
-/// Returns a centred `Rect` that is `width` × `height` within `area`.
 fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     let x = area.x + area.width.saturating_sub(width) / 2;
     let y = area.y + area.height.saturating_sub(height) / 2;
@@ -517,7 +472,6 @@ fn render_text_input(frame: &mut Frame, title: &str, input: &TextInput) {
         rows[0],
     );
 
-    // Input field with a fake cursor drawn as a block character.
     let before = &input.value[..input.cursor];
     let after = &input.value[input.cursor..];
     let spans = vec![
@@ -554,10 +508,10 @@ fn render_playlist_picker(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // subtitle
-            Constraint::Length(1), // spacer
-            Constraint::Min(0),    // list
-            Constraint::Length(1), // hint
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
         ])
         .split(inner);
 
@@ -619,16 +573,13 @@ fn render_help(frame: &mut Frame) {
     frame.render_widget(block, rect);
 
     let bindings: &[(&str, &str)] = &[
-        // Global
         ("q", "Quit"),
         ("Tab", "Cycle panel focus"),
         ("?", "Toggle this help"),
         ("", ""),
-        // Navigation
         ("j / ↓", "Move cursor down"),
         ("k / ↑", "Move cursor up"),
         ("", ""),
-        // Playback
         ("Space", "Play / Pause"),
         ("n", "Next track"),
         ("N", "Previous track"),
@@ -636,22 +587,18 @@ fn render_help(frame: &mut Frame) {
         ("+ / =", "Volume up"),
         ("-", "Volume down"),
         ("", ""),
-        // Library actions
         ("Enter", "Play selected track"),
         ("a", "Add track to queue"),
         ("p", "Add track to playlist"),
         ("d", "Remove track from library"),
         ("r", "Rename track / playlist"),
         ("", ""),
-        // Playlist / queue
         ("c", "Create new playlist"),
         ("z", "Shuffle playlist into queue"),
         ("x", "Remove item from queue"),
         ("", ""),
-        // File picker
         ("f", "Open file picker"),
         ("", ""),
-        // Settings
         ("s", "Open settings"),
     ];
 
@@ -672,16 +619,12 @@ fn render_help(frame: &mut Frame) {
     frame.render_widget(Paragraph::new(items), inner);
 }
 
-fn render_settings(
-    frame: &mut Frame,
-    cursor: usize,
-    editing: bool,
-    input: &TextInput,
-    volume_pct: u32,
-    seek_secs: u64,
-) {
+// ── Settings rendering ─────────────────────────────────────────────────────
+
+fn render_settings(frame: &mut Frame, cursor: usize, volume_pct: u32, seek_secs: u64) {
     let area = frame.area();
-    let rect = centered_rect(52, 14, area);
+    // Height: border(2) + hint(1) + gap(1) + vol_row(3) + gap(1) + seek_row(3) = 11
+    let rect = centered_rect(54, 11, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Settings");
@@ -691,62 +634,52 @@ fn render_settings(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // hint top
+            Constraint::Length(1), // top hint
             Constraint::Length(1), // spacer
-            Constraint::Length(2), // volume row
+            Constraint::Length(3), // volume row
             Constraint::Length(1), // spacer
-            Constraint::Length(2), // seek row
+            Constraint::Length(3), // seek row
             Constraint::Min(0),    // padding
-            Constraint::Length(2), // hint bottom (wraps to 2)
         ])
         .split(inner);
 
+    // Top hint
     frame.render_widget(
         Paragraph::new(Span::styled(
-            "j/k select  Enter edit/confirm  Esc save & close",
+            "j/k  select     ← →  adjust     Esc  close",
             Style::default().fg(SUBTLE),
-        )),
+        ))
+        .alignment(Alignment::Center),
         rows[0],
     );
 
+    // Volume row
     render_settings_row(
         frame,
         rows[2],
         "Default volume",
-        &format!("{}%", volume_pct),
         cursor == 0,
-        editing,
-        input,
+        volume_bar(volume_pct),
     );
 
+    // Seek row
     render_settings_row(
         frame,
         rows[4],
-        "Seek step (seconds)",
-        &format!("{}s", seek_secs),
+        "Seek step",
         cursor == 1,
-        editing,
-        input,
-    );
-
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            "Volume applies on next launch. Seek step applies immediately.",
-            Style::default().fg(SUBTLE),
-        ))
-        .wrap(ratatui::widgets::Wrap { trim: true }),
-        rows[6],
+        seek_display(seek_secs),
     );
 }
 
-fn render_settings_row(
+/// Renders a single settings row inside a plain border.
+/// `value_line` is the pre-built `Line` shown on the right side.
+fn render_settings_row<'a>(
     frame: &mut Frame,
     area: Rect,
-    label: &str,
-    value: &str,
+    label: &'a str,
     selected: bool,
-    active_edit: bool,
-    edit_input: &TextInput,
+    value_line: Line<'a>,
 ) {
     let border_col = if selected { ACCENT } else { SUBTLE };
     let label_col = if selected { TEXT } else { TEXT_DIM };
@@ -760,7 +693,7 @@ fn render_settings_row(
 
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Min(0), Constraint::Length(18)])
+        .constraints([Constraint::Min(0), Constraint::Length(22)])
         .split(row_inner);
 
     frame.render_widget(
@@ -768,24 +701,37 @@ fn render_settings_row(
         cols[0],
     );
 
-    if active_edit && selected {
-        let before = &edit_input.value[..edit_input.cursor];
-        let after = &edit_input.value[edit_input.cursor..];
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(before.to_string(), Style::default().fg(TEXT)),
-                Span::styled("█", Style::default().fg(ACCENT)),
-                Span::styled(after.to_string(), Style::default().fg(TEXT)),
-            ])),
-            cols[1],
-        );
-    } else {
-        frame.render_widget(
-            Paragraph::new(Span::styled(
-                value,
-                Style::default().fg(if selected { ACCENT } else { TEXT_DIM }),
-            )),
-            cols[1],
-        );
-    }
+    frame.render_widget(
+        Paragraph::new(value_line).alignment(Alignment::Right),
+        cols[1],
+    );
+}
+
+/// Builds a compact volume bar: `◀ ████████░░ 80% ▶`
+/// Total width fits comfortably in the 22-char value column.
+fn volume_bar(pct: u32) -> Line<'static> {
+    let filled = (pct / 10) as usize; // 0–10 blocks
+    let empty = 10usize.saturating_sub(filled);
+    let bar: String = "█".repeat(filled) + &"░".repeat(empty);
+    Line::from(vec![
+        Span::styled("◀ ", Style::default().fg(SUBTLE)),
+        Span::styled(bar, Style::default().fg(ACCENT)),
+        Span::styled(
+            format!(" {:>3}%", pct),
+            Style::default().fg(TEXT).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" ▶", Style::default().fg(SUBTLE)),
+    ])
+}
+
+/// Builds the seek display: `◀  5s ▶`
+fn seek_display(secs: u64) -> Line<'static> {
+    Line::from(vec![
+        Span::styled("◀  ", Style::default().fg(SUBTLE)),
+        Span::styled(
+            format!("{}s", secs),
+            Style::default().fg(TEXT).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("  ▶", Style::default().fg(SUBTLE)),
+    ])
 }

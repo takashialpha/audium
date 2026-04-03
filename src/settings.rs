@@ -1,8 +1,7 @@
+use crate::library::Library;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
-
-use crate::library::Library;
 
 /// Persistent user preferences stored at `~/.audium/settings.json`.
 ///
@@ -12,7 +11,6 @@ use crate::library::Library;
 pub struct Settings {
     /// Initial volume applied when audium starts (0.0 – 1.0).
     pub default_volume: f32,
-
     /// How many seconds ← / → seek by.
     pub seek_step_secs: u64,
 }
@@ -21,7 +19,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             default_volume: 0.7,
-            seek_step_secs: 5,
+            seek_step_secs: 1,
         }
     }
 }
@@ -62,7 +60,6 @@ impl Settings {
     }
 
     pub fn set_seek_step_secs(&mut self, s: u64) {
-        // Clamp to a sensible range: 1 – 120 seconds.
         self.seek_step_secs = s.clamp(1, 120);
     }
 }
