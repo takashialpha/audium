@@ -61,9 +61,11 @@
 
 ```sh
 cargo install audium
+# On Linux, that requires alsa-lib to run
+# (pre-installed by most Linux distros) and alsa-lib-devel (Dev. headers for alsa)
 ```
 
-Requires Rust 1.85+. Installs the `audium` binary to `~/.cargo/bin/`.
+Requires Rust 1.85+ (MSRV). Installs the `audium` binary to `~/.cargo/bin/`.
 
 ### AUR (Arch Linux)
 
@@ -157,7 +159,7 @@ sudo dnf install alsa-lib-devel
 
 **macOS** has no extra dependencies.
 
-> **Windows:** audium compiles on Windows but is not an officially supported platform and has not been tested. Use at your own risk.
+> **Windows:** audium compiles on Windows but is not an officially supported platform and has not been tested.
 
 ---
 
@@ -170,13 +172,6 @@ sudo dnf install alsa-lib-devel
 ```
 
 `library.json` is human-readable. You can edit it directly if needed, though audium will re-validate it on next launch.
-
----
-
-## Roadmap
-
-- [ ] Time-synced lyrics with highlighting
-- [ ] More — see [issues](https://github.com/takashialpha/audium/issues)
 
 ---
 
