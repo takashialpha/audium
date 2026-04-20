@@ -1,6 +1,5 @@
 dev (notes):
-- try making audium popular: awesome lists like ratatui or tui, asciinema on readme,
-compare with termusic, more marketing stuff.
+- try making audium popular: asciinema on readme; more marketing stuff.
 
 rethinking on ux:
 - Add a menu instead of settings directly; that menu gives access to settings and a fancy about screen.

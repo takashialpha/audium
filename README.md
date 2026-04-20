@@ -14,6 +14,7 @@
 [![crates.io](https://img.shields.io/crates/v/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://crates.io/crates/audium)
 [![AUR](https://img.shields.io/aur/version/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://aur.archlinux.org/packages/audium)
 [![License](https://img.shields.io/crates/l/audium?style=flat-square&color=64b4ff&labelColor=161616)](LICENSE)
+[![Built With Ratatui](https://ratatui.rs/built-with-ratatui/badge.svg)](https://ratatui.rs/)
 
 [Website](https://takashialpha.github.io/audium) · [Installation](#installation) · [Keybindings](#keybindings) · [Building](#building-from-source)
 
@@ -62,10 +63,10 @@
 ### Cargo
 
 ```sh
-cargo install audium
+cargo install --locked audium
 ```
 
-Requires Rust 1.85+ (MSRV). Installs the `audium` binary to `~/.cargo/bin/`.
+Requires Rust 1.85+ (MSRV). Installs the `audium` binary to `~/.cargo/bin/`, so that must be in your path.
 
 On Linux, ALSA is required to run and its development headers are required to build — see [Building from source](#building-from-source) for distro-specific instructions.
 
