@@ -20,7 +20,7 @@ jobs:
     - name: Install dependencies (Arch)
       run: |
         pacman -Syu --noconfirm
-        pacman -S --noconfirm rust jack pkgconf alsa-lib
+        pacman -S --noconfirm jack pkgconf alsa-lib
 
     - name: Build
       run: cargo build --verbose
