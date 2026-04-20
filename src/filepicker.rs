@@ -95,8 +95,8 @@ impl FilePicker {
             bucket.push(DirEntry { name, path, is_dir });
         }
 
-        dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-        files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        dirs.sort_by_key(|a| a.name.to_lowercase());
+        files.sort_by_key(|a| a.name.to_lowercase());
 
         self.entries.extend(dirs);
         self.entries.extend(files);
@@ -135,10 +135,6 @@ impl FilePicker {
 
     // ── Key handling ─────────────────────────────────────────────────────
 
-    /// Handles a keypress.  Returns `Some(path)` if a file was confirmed,
-    /// `None` if the picker should stay open, and special-cases `Esc` by
-    /// returning a sentinel `None` while also setting `self.dismissed = true`.
-    /// Callers should check `self.dismissed`.
     pub fn handle_key(&mut self, code: KeyCode) -> FilePickerOutcome {
         match code {
             KeyCode::Char('j') | KeyCode::Down => {
