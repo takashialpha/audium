@@ -4,7 +4,7 @@ compare with termusic, more marketing stuff.
 
 rethinking on ux:
 - Add a menu instead of settings directly; that menu gives access to settings and a fancy about screen.
-- Review bindings to focus on a user-friendlier one.
+- 'd' to remove selected item and 'x' to remove it from the queue looks weird. why not 'd' for both cases?
 
 features to add (mostly major ones now):
 - 1 (complexity: 8/10) add time-synced lyrics, with highlighting
