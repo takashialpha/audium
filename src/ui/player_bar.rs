@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::layout::{Colors, format_duration};
-use crate::app::AppState;
+use crate::app::{AppState, LoopMode};
 
 pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     let outer = Block::default()
@@ -37,9 +37,6 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         ])
         .split(main_area);
 
-    // Show the action the user can take, not the current state —
-    // standard media player convention: ⏸ when playing (press to pause),
-    // ▶ when paused or idle (press to play).
     let is_paused = state.player.is_paused;
     let has_track = state.now_playing.is_some();
     let status = if has_track && !is_paused {
@@ -54,9 +51,22 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         .map(|t| t.name.as_str())
         .unwrap_or("-- Nothing playing --");
 
+    // Loop indicator label — empty string when off so the column collapses
+    // to zero width and takes no space.
+    let loop_label = match state.loop_mode {
+        LoopMode::Off => "",
+        LoopMode::Queue => " loop queue ",
+        LoopMode::Track => " loop track ",
+    };
+    let loop_width = loop_label.chars().count() as u16;
+
     let title_cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(3), Constraint::Min(0)])
+        .constraints([
+            Constraint::Length(3),          // status icon
+            Constraint::Min(0),             // track name
+            Constraint::Length(loop_width), // loop indicator
+        ])
         .split(rows[0]);
 
     frame.render_widget(
@@ -75,6 +85,12 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         ),
         title_cols[1],
     );
+    if !loop_label.is_empty() {
+        frame.render_widget(
+            Paragraph::new(loop_label).style(Style::default().fg(Colors::SUBTLE)),
+            title_cols[2],
+        );
+    }
 
     // Progress bar + time label.
     let (elapsed_str, total_str) = if state.now_playing.is_some() {

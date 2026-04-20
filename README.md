@@ -37,7 +37,7 @@
 │                         │     2  Drift                                         │
 │                         │  >  3  Weightless (feat. Macarena)                   │
 └─────────────────────────┴──────────────────────────────────────────────────────┘
-⏸  Weightless (feat. Macarena)
+⏸  Weightless (feat. Macarena)                                        loop queue
 ████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  2:14 / 5:02
 ```
 
@@ -45,13 +45,15 @@
 
 ## Features
 
-- **Keyboard-driven** — every action is one key. Mouse optional.
+- **Keyboard-driven** — every action is one key. No mouse required.
+- **It's your library** — your tracks are stored as plain JSON at `~/.audium/library.json`. Edit it by hand, back it up, move it anywhere. audium doesn't rename your files, doesn't embed metadata, and never phones home.
 - **Playlists** — create, rename, delete. *All Tracks* is always there.
+- **Loop modes** — off, loop queue, or loop track. Toggle with `l`.
 - **Built-in file picker** — import audio files without leaving the app.
-- **Threaded audio** — playback on its own thread; UI interaction never stutters playback.
-- **Persistent library** — stored at `~/.audium/library.json`. Plain JSON, easy to back up.
+- **Threaded audio** — playback runs on its own thread; the UI never stutters your music.
+- **System audio output** — audium plays through your default system output. Change the output device in your OS and audium follows — no in-app device switching, no surprises.
 - **Format agnostic** — MP3, FLAC, OGG, WAV, AAC, M4A, Opus, AIFF and more via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
-- **Tiny binary** — `~3 MB` stripped release build, no runtime dependencies on macOS.
+- **Tiny binary** — ~3 MB stripped release build. No runtime dependencies on macOS.
 
 ---
 
@@ -62,8 +64,10 @@
 ```sh
 cargo install audium
 ```
-On Linux, Requires ALSA development headers to build and ALSA to run. (see how to install below on this README)
+
 Requires Rust 1.85+ (MSRV). Installs the `audium` binary to `~/.cargo/bin/`.
+
+On Linux, ALSA is required to run and its development headers are required to build — see [Building from source](#building-from-source) for distro-specific instructions.
 
 ### AUR (Arch Linux)
 
@@ -108,6 +112,7 @@ audium stores your library at `~/.audium/library.json` and your music at `~/.aud
 | `←` / `→`   | Seek backward / forward  |
 | `+` / `=`   | Volume up                |
 | `-`          | Volume down              |
+| `l`          | Cycle loop mode          |
 
 ### Navigation
 
@@ -169,7 +174,19 @@ sudo dnf install alsa-utils alsa-lib-devel
 └── music/         # copies of all imported audio files
 ```
 
-`library.json` is human-readable. You can edit it directly if needed, though audium will re-validate it on next launch.
+`library.json` is human-readable and editable by hand. audium re-validates it on next launch, so feel free to reorganise playlists, fix track names, or move the file to another machine.
+
+---
+
+## Why audium?
+
+Alternatives like termusic and cmus are solid, but they come with tradeoffs: heavy dependency trees, FFmpeg requirements, daemon processes, or configuration formats that take longer to learn than the app itself. audium is different in a few concrete ways:
+
+- **No FFmpeg, no daemon** — one binary, zero background processes.
+- **Smaller and faster to build** — fewer dependencies means shorter compile times and a ~3 MB release binary.
+- **Cleaner UI** — built on ratatui with a layout designed for actual daily use, not just feature completeness.
+- **More modern codebase** — written in current Rust with edition 2024, Symphonia for decoding, and rodio for playback.
+- **Plain JSON library** — your data is always readable, portable, and yours.
 
 ---
 

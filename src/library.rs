@@ -272,18 +272,6 @@ impl Library {
         self.save()
     }
 
-    /// Removes a track from a playlist.
-    pub fn playlist_remove_track(
-        &mut self,
-        playlist_id: PlaylistId,
-        track_id: TrackId,
-    ) -> Result<()> {
-        if let Some(pl) = self.playlists.iter_mut().find(|p| p.id == playlist_id) {
-            pl.tracks.retain(|&id| id != track_id);
-        }
-        self.save()
-    }
-
     /// Returns a reference to a playlist by id.
     pub fn playlist(&self, id: PlaylistId) -> Option<&Playlist> {
         self.playlists.iter().find(|p| p.id == id)

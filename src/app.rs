@@ -14,6 +14,29 @@ use crate::{
     ui,
 };
 
+// - LoopMode -
+
+/// Playback loop mode, cycled with `l`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LoopMode {
+    #[default]
+    Off,
+    /// Restart from the first queue entry when the last track finishes.
+    Queue,
+    /// Replay the current track indefinitely.
+    Track,
+}
+
+impl LoopMode {
+    pub fn cycle(self) -> Self {
+        match self {
+            Self::Off => Self::Queue,
+            Self::Queue => Self::Track,
+            Self::Track => Self::Off,
+        }
+    }
+}
+
 // ── Focus ──────────────────────────────────────────────────────────────────
 
 /// Which panel currently owns keyboard focus.
@@ -67,7 +90,7 @@ pub struct AppState {
     // ── Overlay state ───────────────────────────────────────────────────
     pub modal: Option<Modal>,
     pub file_picker: Option<FilePicker>,
-
+    pub loop_mode: LoopMode,
     pub settings: Settings,
     pub should_quit: bool,
 }
@@ -89,6 +112,7 @@ impl AppState {
             track_duration: None,
             modal: None,
             file_picker: None,
+            loop_mode: LoopMode::Off,
             settings,
             should_quit: false,
         }
@@ -136,11 +160,29 @@ impl AppState {
     }
 
     pub fn play_next(&mut self) {
-        let next = self.now_playing.map(|i| i + 1).unwrap_or(0);
-        if next < self.queue.len() {
-            self.play_queue_index(next);
-        } else {
-            self.halt_playback();
+        match self.loop_mode {
+            LoopMode::Track => {
+                // Replay the same index; if now_playing is somehow None,
+                // fall back to starting from 0.
+                let idx = self.now_playing.unwrap_or(0);
+                self.play_queue_index(idx);
+            }
+            LoopMode::Queue => {
+                let next = self.now_playing.map(|i| i + 1).unwrap_or(0);
+                // Wrap around to the first track instead of halting.
+                let idx = if next < self.queue.len() { next } else { 0 };
+                if !self.queue.is_empty() {
+                    self.play_queue_index(idx);
+                }
+            }
+            LoopMode::Off => {
+                let next = self.now_playing.map(|i| i + 1).unwrap_or(0);
+                if next < self.queue.len() {
+                    self.play_queue_index(next);
+                } else {
+                    self.halt_playback();
+                }
+            }
         }
     }
 
@@ -177,14 +219,8 @@ impl AppState {
         for event in self.player.drain_events() {
             match event {
                 PlayerEvent::TrackFinished => self.play_next(),
-                PlayerEvent::DurationResolved(d) => {
-                    self.track_duration = Some(d);
-                }
                 PlayerEvent::Error(msg) => {
-                    // Surface as a transient notification modal.
-                    self.modal = Some(Modal::TrackAdded {
-                        name: format!("Error: {}", msg),
-                    });
+                    self.modal = Some(Modal::Notify { message: msg });
                 }
             }
         }
@@ -255,6 +291,7 @@ impl AppState {
             KeyCode::Char('c') => self.action_new_playlist(),
             KeyCode::Char('f') => self.action_open_filepicker(),
             KeyCode::Char('s') => self.action_open_settings(),
+            KeyCode::Char('l') => self.loop_mode = self.loop_mode.cycle(),
             KeyCode::Char('z') => self.action_shuffle_playlist(),
 
             _ => {}
@@ -547,8 +584,6 @@ impl AppState {
 
     fn apply_modal_confirm(&mut self, confirm: ModalConfirm) {
         match confirm {
-            ModalConfirm::None => {}
-
             ModalConfirm::Remove(target) => match target {
                 RemoveTarget::TrackFromQueue { queue_idx } => {
                     if queue_idx < self.queue.len() {
@@ -650,20 +685,19 @@ impl AppState {
         match self.library.add_file(path) {
             Ok((track, is_new)) => {
                 if is_new {
-                    self.modal = Some(Modal::TrackAdded {
-                        name: track.name.clone(),
+                    self.modal = Some(Modal::Notify {
+                        message: format!("\"{}\" added to library.", track.name),
                     });
                 }
             }
             Err(e) => {
-                self.modal = Some(Modal::TrackAdded {
-                    name: format!("Error importing file: {e}"),
+                self.modal = Some(Modal::Notify {
+                    message: format!("Error importing file: {e}"),
                 });
             }
         }
     }
 }
-
 // ── Entry point ────────────────────────────────────────────────────────────
 
 pub fn run(cli: Cli) -> Result<()> {

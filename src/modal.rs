@@ -85,8 +85,8 @@ pub enum RemoveTarget {
 
 #[derive(Debug, Clone)]
 pub enum Modal {
-    /// Brief notification: a track was added to the library.
-    TrackAdded { name: String },
+    /// Generic transient notification (track added, error surfaced, etc.).
+    Notify { message: String },
 
     /// Confirm before a destructive removal.
     ConfirmRemove {
@@ -162,7 +162,6 @@ pub enum ModalConfirm {
     ShufflePlaylist {
         playlist_id: PlaylistId,
     },
-    None,
 }
 
 // ── Input handling ─────────────────────────────────────────────────────────
@@ -171,7 +170,7 @@ impl Modal {
     pub fn handle_key(&mut self, code: KeyCode) -> ModalOutcome {
         match self {
             // ── Informational: any key dismisses ─────────────────────────
-            Modal::TrackAdded { .. } | Modal::Help => ModalOutcome::Dismissed,
+            Modal::Notify { .. } | Modal::Help => ModalOutcome::Dismissed,
 
             // ── Shuffle confirmation ──────────────────────────────────────
             Modal::ShufflePlaylist { playlist_id, .. } => match code {
@@ -337,12 +336,8 @@ impl Modal {
 
 pub fn render_modal(frame: &mut Frame, modal: &Modal) {
     match modal {
-        Modal::TrackAdded { name } => {
-            render_notification(
-                frame,
-                "Track Added",
-                &format!("\"{}\" added to library.", name),
-            );
+        Modal::Notify { message } => {
+            render_notification(frame, "Notice", message);
         }
         Modal::Help => render_help(frame),
         Modal::ConfirmRemove { description, .. } => {
@@ -565,7 +560,7 @@ fn render_playlist_picker(
 
 fn render_help(frame: &mut Frame) {
     let area = frame.area();
-    let rect = centered_rect(60, 34, area);
+    let rect = centered_rect(60, 36, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Help — Keybindings");
@@ -586,6 +581,7 @@ fn render_help(frame: &mut Frame) {
         ("← / →", "Seek backward / forward"),
         ("+ / =", "Volume up"),
         ("-", "Volume down"),
+        ("l", "Cycle loop mode"),
         ("", ""),
         ("Enter", "Play selected track"),
         ("a", "Add track to queue"),

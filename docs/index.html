@@ -74,6 +74,11 @@
     .keybind-table td { padding:10px 0; font-size:13px; color:var(--dimmed); }
     .keybind-table td:first-child { width:160px; padding-right:24px; }
     .keybind-table td:first-child kbd { display:inline-block; background:var(--surface); border:1px solid var(--border); border-radius:3px; padding:2px 8px; font-family:var(--mono); font-size:12px; color:var(--accent); }
+    .why-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:24px; margin-top:40px; }
+    .why-item { border-left:2px solid var(--border); padding-left:20px; transition:border-color 0.15s; }
+    .why-item:hover { border-color:var(--accent); }
+    .why-item h3 { font-size:13px; font-weight:500; color:var(--text); margin-bottom:6px; }
+    .why-item p { color:var(--dimmed); font-size:12.5px; line-height:1.75; }
     footer { border-top:1px solid var(--border); padding:40px 0; }
     footer .wrap { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
     footer p { color:var(--muted); font-size:12px; }
@@ -92,6 +97,7 @@
     <ul class="nav-links">
       <li><a href="#install">Install</a></li>
       <li><a href="#features">Features</a></li>
+      <li><a href="#why">Why audium</a></li>
       <li><a href="#keybinds">Keybinds</a></li>
       <li><a href="https://github.com/takashialpha/audium">GitHub</a></li>
       <li><a href="https://crates.io/crates/audium">crates.io</a></li>
@@ -105,8 +111,8 @@
     <h1>Music that lives<br>in your <em>terminal.</em></h1>
     <p class="hero-sub">
       audium is a keyboard-driven music player for people who live in the terminal.
-      No Electron. No cloud sync. No background daemons.
-      Just your files, a queue, and a progress bar.
+      No Electron. No cloud sync. No background daemons. No FFmpeg.
+      Your files, your library, your rules.
     </p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#install">Get started</a>
@@ -129,8 +135,6 @@
           const PAD_X = 16, PAD_Y = 20, LINE_H = 19;
           const A = '#64b4ff', D = '#2e2e2e', M = '#606060', W = '#f0f0f0';
 
-          // Each row is an array of [text, colour] segments drawn left-to-right.
-          // The canvas measures each segment's advance width so columns are exact.
           const ROWS = [
             [[' audium', A], ['  \u2014  terminal music player      [?] help  [f] file picker  [c] playlist  [q] quit', M]],
             [['\u250c' + '\u2500'.repeat(25) + '\u252c' + '\u2500'.repeat(54) + '\u2510', D]],
@@ -147,8 +151,8 @@
             [['│                         │', D], ['    2  Drift                                          ', M], ['│', D]],
             [['│                         │', D], [' >  3  Weightless (feat. Macarena)                    ', A], ['│', D]],
             [['\u2514' + '\u2500'.repeat(25) + '\u2534' + '\u2500'.repeat(54) + '\u2518', D]],
-            [['⏸ ', A], ['Weightless (feat. Macarena)', W]],
-            [['█'.repeat(20), A], ['░'.repeat(41), D], ['  2:14 / 5:02', M]],
+            [['⏸ ', A], ['Weightless (feat. Macarena)', W], ['                                           loop queue', M]],
+            [['█'.repeat(20), A], ['░'.repeat(39), D], ['  2:14 / 5:02', M]],
           ];
 
           function draw() {
@@ -173,7 +177,6 @@
             });
           }
 
-          // Draw after fonts load for accurate metrics.
           if (document.fonts && document.fonts.ready) {
             document.fonts.ready.then(draw);
           } else {
@@ -203,6 +206,7 @@
         <p class="comment"># or yay, or manually with makepkg</p>
       </div>
     </div>
+    <p style="margin-top:20px;color:var(--muted);font-size:12.5px;">Linux requires ALSA to run and its development headers to build. See the <a href="https://github.com/takashialpha/audium#building-from-source">README</a> for distro-specific instructions. macOS and Windows have no extra dependencies.</p>
   </div>
 </section>
 
@@ -211,12 +215,74 @@
     <p class="section-label">Features</p>
     <h2>Everything you need.<br><em style="font-style:italic;color:var(--accent);">Nothing you don't.</em></h2>
     <div class="features-grid" style="margin-top:40px;">
-      <div class="feature"><span class="feature-icon">♪</span><h3>Format agnostic</h3><p>Plays MP3, FLAC, OGG, WAV, AAC, M4A, Opus, and more via Symphonia — no FFmpeg required.</p></div>
-      <div class="feature"><span class="feature-icon">⌨</span><h3>Fully keyboard-driven</h3><p>Every action is a single keypress. Tab between panels, j/k to navigate, space to play.</p></div>
-      <div class="feature"><span class="feature-icon">📂</span><h3>Built-in file picker</h3><p>Browse your filesystem without leaving audium. Only audio files are shown.</p></div>
-      <div class="feature"><span class="feature-icon">🎵</span><h3>Playlists</h3><p>Create, rename, and delete playlists. The All Tracks view is always one keypress away.</p></div>
-      <div class="feature"><span class="feature-icon">🔊</span><h3>Threaded audio</h3><p>Playback runs on a dedicated thread. Heavy I/O will never stutter your music.</p></div>
-      <div class="feature"><span class="feature-icon">💾</span><h3>Persistent library</h3><p>Stored at <code style="color:var(--accent)">~/.audium/library.json</code>. Plain JSON, portable, easy to back up.</p></div>
+      <div class="feature">
+        <span class="feature-icon">♪</span>
+        <h3>Format agnostic</h3>
+        <p>Plays MP3, FLAC, OGG, WAV, AAC, M4A, Opus, AIFF and more via Symphonia — no FFmpeg required.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">⌨</span>
+        <h3>Fully keyboard-driven</h3>
+        <p>Every action is a single keypress. Tab between panels, j/k to navigate, space to play.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">📂</span>
+        <h3>Built-in file picker</h3>
+        <p>Browse your filesystem and import audio without ever leaving the app.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">🎵</span>
+        <h3>Playlists &amp; loop modes</h3>
+        <p>Create, rename, and delete playlists. Loop a single track or the whole queue — toggle with <code style="color:var(--accent)">l</code>.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">🔊</span>
+        <h3>Threaded audio</h3>
+        <p>Playback runs on a dedicated thread. UI interactions will never stutter your music.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">💾</span>
+        <h3>It's your library</h3>
+        <p>Stored at <code style="color:var(--accent)">~/.audium/library.json</code> — plain JSON, human-readable, editable by hand. audium doesn't rename your files, doesn't embed metadata, and never phones home.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="why">
+  <div class="wrap">
+    <p class="section-label">Why audium</p>
+    <h2>Lighter. Simpler.<br><em style="font-style:italic;color:var(--accent);">Actually yours.</em></h2>
+    <p style="color:var(--dimmed);font-size:13.5px;max-width:600px;line-height:1.85;">
+      Alternatives like termusic ship with heavy dependency trees, FFmpeg requirements, daemon processes,
+      or config formats that take longer to learn than the app itself.
+      audium takes a different approach.
+    </p>
+    <div class="why-grid">
+      <div class="why-item">
+        <h3>No FFmpeg, no daemon</h3>
+        <p>One binary. Zero background processes. Symphonia handles every format natively in-process.</p>
+      </div>
+      <div class="why-item">
+        <h3>Smaller and faster to build</h3>
+        <p>Fewer dependencies means shorter compile times and a ~3 MB release binary with no runtime surprises.</p>
+      </div>
+      <div class="why-item">
+        <h3>Cleaner UI</h3>
+        <p>Built on ratatui with a layout designed for daily use — not just feature completeness. Panels, queue, progress bar, volume: everything visible at once.</p>
+      </div>
+      <div class="why-item">
+        <h3>Modern codebase</h3>
+        <p>Written in Rust edition 2024. No unsafe, no global state, no legacy baggage.</p>
+      </div>
+      <div class="why-item">
+        <h3>Plain data, no lock-in</h3>
+        <p>Your library is a JSON file you can read, edit, back up, or move between machines freely. audium is a tool, not a platform.</p>
+      </div>
+      <div class="why-item">
+        <h3>System audio, done right</h3>
+        <p>audium plays through your default system output. Switch devices at the OS level and it follows — no in-app device picker that fights your setup.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -235,6 +301,7 @@
           <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Seek backward / forward</td></tr>
           <tr><td><kbd>+</kbd> / <kbd>=</kbd></td><td>Volume up</td></tr>
           <tr><td><kbd>-</kbd></td><td>Volume down</td></tr>
+          <tr><td><kbd>l</kbd></td><td>Cycle loop mode</td></tr>
         </table>
       </div>
       <div>

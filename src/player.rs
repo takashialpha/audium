@@ -30,10 +30,8 @@ pub enum PlayerCommand {
 }
 
 /// Events sent from the audio thread back to the UI thread.
-#[derive(Debug)] // Error and DurationResolved are never being read, implement them for the features in TODO.md;
+#[derive(Debug)]
 pub enum PlayerEvent {
-    /// The decoder resolved a total duration for the just-started track.
-    DurationResolved(Duration),
     /// Playback of the current track finished naturally (not via Stop).
     TrackFinished,
     /// A file could not be opened / decoded; carries a human-readable reason.
@@ -173,7 +171,7 @@ fn audio_thread_main(
         loop {
             match cmd_rx.try_recv() {
                 Ok(cmd) => {
-                    handle_command(&player, cmd, &mut stopped_explicitly);
+                    handle_command(&player, cmd, &mut stopped_explicitly, &event_tx);
                 }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => return,
@@ -190,18 +188,29 @@ fn audio_thread_main(
     }
 }
 
-fn handle_command(player: &Player, cmd: PlayerCommand, stopped: &mut bool) {
+fn handle_command(
+    player: &Player,
+    cmd: PlayerCommand,
+    stopped: &mut bool,
+    event_tx: &Sender<PlayerEvent>,
+) {
     match cmd {
         PlayerCommand::Play(path) => {
             player.stop();
             *stopped = false;
             match File::open(&path) {
                 Err(e) => {
-                    eprintln!("audium-audio: failed to open {:?}: {e}", path);
+                    let _ = event_tx.send(PlayerEvent::Error(format!(
+                        "Could not open \"{}\": {e}",
+                        path.display()
+                    )));
                 }
                 Ok(file) => match Decoder::try_from(file) {
                     Err(e) => {
-                        eprintln!("audium-audio: failed to decode {:?}: {e}", path);
+                        let _ = event_tx.send(PlayerEvent::Error(format!(
+                            "Could not decode \"{}\": {e}",
+                            path.display()
+                        )));
                     }
                     Ok(source) => {
                         player.append(source);
@@ -219,9 +228,19 @@ fn handle_command(player: &Player, cmd: PlayerCommand, stopped: &mut bool) {
             player.stop();
             *stopped = false;
             match File::open(&path) {
-                Err(e) => eprintln!("audium-audio: seek: failed to open {:?}: {e}", path),
+                Err(e) => {
+                    let _ = event_tx.send(PlayerEvent::Error(format!(
+                        "Seek failed — could not open \"{}\": {e}",
+                        path.display()
+                    )));
+                }
                 Ok(file) => match Decoder::try_from(file) {
-                    Err(e) => eprintln!("audium-audio: seek: failed to decode {:?}: {e}", path),
+                    Err(e) => {
+                        let _ = event_tx.send(PlayerEvent::Error(format!(
+                            "Seek failed — could not decode \"{}\": {e}",
+                            path.display()
+                        )));
+                    }
                     Ok(mut source) => {
                         let _ = source.try_seek(position);
                         player.append(source);
