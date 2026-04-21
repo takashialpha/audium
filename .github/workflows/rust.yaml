@@ -23,7 +23,7 @@ jobs:
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
 
-    # pacman -S --noconfirm rust jack pkgconf alsa-lib     
+    # if arch linux: pacman -S --noconfirm alsa-lib     
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
       run: |
