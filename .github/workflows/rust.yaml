@@ -2,40 +2,39 @@ name: Rust
 
 on:
   push:
-    branches: ["main"]
   pull_request:
-    branches: ["main"]
+  workflow_dispatch: 
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  arch:
-    runs-on: ubuntu-latest
-    container: archlinux:latest
+  test:
+    name: Build, Test, Clippy
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        toolchain: [stable]         
 
     steps:
     - uses: actions/checkout@v5
 
-    - name: Install dependencies (Arch)
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+
+    # if arch linux: pacman -S --noconfirm alsa-lib     
+    - name: Install Linux Dependencies
+      if: runner.os == 'Linux'
       run: |
-        pacman -Syu --noconfirm
-        pacman -S --noconfirm rust jack pkgconf alsa-lib
+        sudo apt-get update
+        sudo apt-get install -y libasound2-dev
 
     - name: Build
       run: cargo build --verbose
 
-    - name: Clippy
-      run: cargo clippy
-
-  macos:
-    runs-on: macos-latest
-
-    steps:
-    - uses: actions/checkout@v5
-
-    - name: Build
-      run: cargo build --verbose
+    - name: Run Tests
+      run: cargo test --verbose
 
     - name: Clippy
       run: cargo clippy
