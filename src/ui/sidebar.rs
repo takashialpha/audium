@@ -5,13 +5,14 @@ use ratatui::{
     widgets::{List, ListItem, ListState},
 };
 
-use super::layout::{Colors, styled_block, truncate};
+use super::layout::{styled_block, truncate};
 use crate::app::{AppState, Focus};
 
 pub fn render_sidebar(frame: &mut Frame, state: &AppState, area: Rect) {
     let focused = state.focus == Focus::Sidebar;
+    let t = &state.theme;
 
-    let block = styled_block(" Playlists ", focused).style(Style::default().bg(Colors::SIDEBAR_BG));
+    let block = styled_block(" Playlists ", focused, t).style(t.apply_sidebar_bg(Style::default()));
 
     let items: Vec<ListItem> = state
         .library
@@ -22,17 +23,13 @@ pub fn render_sidebar(frame: &mut Frame, state: &AppState, area: Rect) {
             let is_active = pl.id == state.active_playlist;
 
             let style = if is_active && focused {
-                Style::default()
-                    .fg(Colors::ACCENT)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(t.accent).add_modifier(Modifier::BOLD)
             } else if i == state.sidebar_cursor && focused {
-                Style::default()
-                    .fg(Colors::TEXT)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(t.text).add_modifier(Modifier::BOLD)
             } else if is_active {
-                Style::default().fg(Colors::ACCENT)
+                Style::default().fg(t.accent)
             } else {
-                Style::default().fg(Colors::TEXT_DIM)
+                Style::default().fg(t.text_dim)
             };
 
             let count = pl.tracks.len();
@@ -49,8 +46,8 @@ pub fn render_sidebar(frame: &mut Frame, state: &AppState, area: Rect) {
             .block(block)
             .highlight_style(
                 Style::default()
-                    .fg(Colors::TEXT)
-                    .bg(Colors::PANEL_BG)
+                    .fg(t.text)
+                    .bg(t.panel_bg)
                     .add_modifier(Modifier::BOLD),
             )
             .highlight_symbol("> "),

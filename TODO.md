@@ -1,17 +1,16 @@
-dev (notes):
-- try making audium popular: asciinema on readme; more marketing stuff.
+# audium — TODO
 
-rethinking on ux:
-- Add a menu instead of settings directly; that menu gives access to settings and a fancy about screen.
-- 'd' to remove selected item and 'x' to remove it from the queue looks weird. why not 'd' for both cases?
+## growth
+- asciinema recording on the README
 
-features to add (mostly major ones now):
-- 1 (complexity: 8/10) add time-synced lyrics, with highlighting
-or "typewriter" animation(might me more complicated), using a bind for them, and
-they always show it for the current playing song. the lyrics are supposed to be added by
-the user;
-- 2 (complexity: 7/10) add fields like author/album..more that are meant to be filled by the user,
-not by metadata, this way it's possible to filter by it without
-breaking the philosophy of "it's your library" (gonna affect library.json); after that, add filtering by the fields added in the previous feature;
-- 3 (complexity: 8.5/10) add the possibility of pulling audio from yt videos;
-- 4 (complexity: 6/10) changing ascent color/ transparency if supported on settings;
+### planned (priority order)
+- **fields** (complexity 7/10) — let users attach author, album, and other
+  custom fields to tracks. stored in library.json. not pulled from metadata —
+  the user fills them in. prerequisite for filtering.
+- **filtering** (complexity 5/10, after fields) — filter the tracklist by the
+  custom fields added above.
+- **lyrics** (complexity 8/10) — time-synced lyrics added by the user,
+  shown in a dedicated panel or overlay for the current track. highlight or
+  typewriter animation. toggled with a keybind.
+- **yt audio** (complexity 8.5/10) — pull audio from a youtube url directly
+  into the library. on hold: a contributor is working on this.

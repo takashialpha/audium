@@ -8,37 +8,33 @@ pub mod tracklist;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph},
 };
 
 use crate::app::AppState;
 
-pub use layout::Colors;
-
-/// Top-bar height in rows.
 const TOP_BAR_HEIGHT: u16 = 1;
 
 pub fn render(frame: &mut Frame, state: &AppState) {
     let area = frame.area();
 
-    // Background fill.
     frame.render_widget(
-        Block::default().style(Style::default().bg(Colors::BG)),
+        Block::default().style(state.theme.apply_bg(Style::default())),
         area,
     );
 
     let vertical = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(TOP_BAR_HEIGHT), // top bar
-            Constraint::Min(0),                 // body
-            Constraint::Length(5),              // player bar
+            Constraint::Length(TOP_BAR_HEIGHT),
+            Constraint::Min(0),
+            Constraint::Length(5),
         ])
         .split(area);
 
-    render_top_bar(frame, vertical[0]);
+    render_top_bar(frame, vertical[0], state);
 
     let body_area = vertical[1];
     let horizontal = Layout::default()
@@ -55,30 +51,27 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     tracklist::render_tracklist(frame, state, content_split[0]);
     queue::render_queue(frame, state, content_split[1]);
     player_bar::render_player_bar(frame, state, vertical[2]);
-
-    // Overlay layer (modal or file picker) — rendered last so it sits on top.
     overlay::render_overlay(frame, state);
 }
 
-fn render_top_bar(frame: &mut Frame, area: ratatui::layout::Rect) {
+fn render_top_bar(frame: &mut Frame, area: ratatui::layout::Rect, state: &AppState) {
+    let t = &state.theme;
     let spans = vec![
         Span::styled(
             " audium ",
-            Style::default()
-                .fg(Colors::ACCENT)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             "  —  terminal music player  ",
-            Style::default().fg(Colors::TEXT_DIM),
+            Style::default().fg(t.text_dim),
         ),
         Span::styled(
-            " [?] help  [f] file picker  [c] new playlist  [s] settings  [q] quit ",
-            Style::default().fg(Colors::SUBTLE),
+            " [?] help  [f] file picker  [c] new playlist  [m] menu  [q] quit ",
+            Style::default().fg(t.subtle),
         ),
     ];
     frame.render_widget(
-        Paragraph::new(Line::from(spans)).style(Style::default().bg(Color::Rgb(14, 14, 14))),
+        Paragraph::new(Line::from(spans)).style(t.apply_bg(Style::default())),
         area,
     );
 }

@@ -5,17 +5,18 @@ use ratatui::{
     widgets::{List, ListItem, ListState, Paragraph},
 };
 
-use super::layout::{Colors, styled_block, truncate};
+use super::layout::{styled_block, truncate};
 use crate::app::{AppState, Focus};
 
 pub fn render_queue(frame: &mut Frame, state: &AppState, area: Rect) {
     let focused = state.focus == Focus::Queue;
-    let block = styled_block(" Queue ", focused).style(Style::default().bg(Colors::PANEL_BG));
+    let t = &state.theme;
+    let block = styled_block(" Queue ", focused, t).style(t.apply_panel_bg(Style::default()));
 
     if state.queue.is_empty() {
         frame.render_widget(
             Paragraph::new("  No tracks in queue.  Enter to play, 'a' to add.")
-                .style(Style::default().fg(Colors::SUBTLE))
+                .style(Style::default().fg(t.subtle))
                 .block(block),
             area,
         );
@@ -26,18 +27,16 @@ pub fn render_queue(frame: &mut Frame, state: &AppState, area: Rect) {
         .queue
         .iter()
         .enumerate()
-        .map(|(i, t)| {
+        .map(|(i, track)| {
             let is_current = state.now_playing == Some(i);
             let style = if is_current {
                 Style::default()
-                    .fg(Colors::NOW_PLAYING)
+                    .fg(t.now_playing)
                     .add_modifier(Modifier::BOLD)
             } else if i == state.queue_cursor && focused {
-                Style::default()
-                    .fg(Colors::TEXT)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(t.text).add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Colors::TEXT_DIM)
+                Style::default().fg(t.text_dim)
             };
 
             let prefix = if is_current { "> " } else { "  " };
@@ -45,7 +44,7 @@ pub fn render_queue(frame: &mut Frame, state: &AppState, area: Rect) {
                 "{}{:<3} {}",
                 prefix,
                 i + 1,
-                truncate(&t.name, area.width as usize - 8)
+                truncate(&track.name, area.width as usize - 8)
             );
             ListItem::new(label).style(style)
         })
@@ -61,8 +60,8 @@ pub fn render_queue(frame: &mut Frame, state: &AppState, area: Rect) {
     frame.render_stateful_widget(
         List::new(items).block(block).highlight_style(
             Style::default()
-                .fg(Colors::TEXT)
-                .bg(Colors::PANEL_BG)
+                .fg(t.text)
+                .bg(t.panel_bg)
                 .add_modifier(Modifier::BOLD),
         ),
         area,

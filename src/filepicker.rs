@@ -2,7 +2,7 @@ use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState},
 };
@@ -11,12 +11,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const BG: Color = Color::Rgb(18, 18, 18);
-const ACCENT: Color = Color::Rgb(100, 180, 255);
-const SUBTLE: Color = Color::Rgb(80, 80, 80);
-const TEXT: Color = Color::White;
-const TEXT_DIM: Color = Color::Rgb(179, 179, 179);
-const DIR_COL: Color = Color::Rgb(255, 210, 100);
+use crate::ui::layout::Theme;
 
 /// A file extension is considered audio if it is one of these.
 const AUDIO_EXTS: &[&str] = &[
@@ -48,7 +43,6 @@ pub struct FilePicker {
 }
 
 impl FilePicker {
-    /// Opens the picker at `start_dir` (falls back to home, then `/`).
     pub fn new(start_dir: impl Into<PathBuf>) -> Self {
         let dir = start_dir.into();
         let mut picker = Self {
@@ -60,12 +54,10 @@ impl FilePicker {
         picker
     }
 
-    /// Reloads directory entries for `current_dir`.
     pub fn refresh(&mut self) {
         self.entries.clear();
         self.cursor = 0;
 
-        // ".." parent entry (unless we are at filesystem root).
         if self.current_dir.parent().is_some() {
             self.entries.push(DirEntry {
                 name: "..".into(),
@@ -88,7 +80,7 @@ impl FilePicker {
             let is_dir = path.is_dir();
 
             if !is_dir && !is_audio(&path) {
-                continue; // hide non-audio files
+                continue;
             }
 
             let bucket = if is_dir { &mut dirs } else { &mut files };
@@ -102,8 +94,6 @@ impl FilePicker {
         self.entries.extend(files);
     }
 
-    // ── Cursor movement ──────────────────────────────────────────────────
-
     pub fn move_down(&mut self) {
         if !self.entries.is_empty() {
             self.cursor = (self.cursor + 1).min(self.entries.len() - 1);
@@ -114,14 +104,10 @@ impl FilePicker {
         self.cursor = self.cursor.saturating_sub(1);
     }
 
-    // ── Selection ────────────────────────────────────────────────────────
-
-    /// Returns the selected entry, if any.
     pub fn selected(&self) -> Option<&DirEntry> {
         self.entries.get(self.cursor)
     }
 
-    /// Navigates into the selected directory.  Returns `true` if successful.
     pub fn enter_dir(&mut self) -> bool {
         if let Some(entry) = self.selected()
             && entry.is_dir
@@ -132,8 +118,6 @@ impl FilePicker {
         }
         false
     }
-
-    // ── Key handling ─────────────────────────────────────────────────────
 
     pub fn handle_key(&mut self, code: KeyCode) -> FilePickerOutcome {
         match code {
@@ -171,7 +155,7 @@ pub enum FilePickerOutcome {
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 
-pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker) {
+pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker, theme: &Theme) {
     let area = frame.area();
     let width = area.width.min(70);
     let height = area.height.saturating_sub(4).min(30);
@@ -191,13 +175,12 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker) {
         .title_alignment(Alignment::Left)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(ACCENT))
-        .style(Style::default().bg(BG));
+        .border_style(Style::default().fg(theme.accent))
+        .style(theme.apply_bg(Style::default()));
 
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
-    // Reserve the last row for the hint line.
     let list_height = inner.height.saturating_sub(1);
     let list_rect = Rect {
         height: list_height,
@@ -216,10 +199,12 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker) {
             let (icon, style) = if e.is_dir {
                 (
                     "▶ ",
-                    Style::default().fg(DIR_COL).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(theme.dir_col)
+                        .add_modifier(Modifier::BOLD),
                 )
             } else {
-                ("♪ ", Style::default().fg(TEXT_DIM))
+                ("♪ ", Style::default().fg(theme.text_dim))
             };
             ListItem::new(Line::from(vec![
                 Span::styled(icon, style),
@@ -235,8 +220,8 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker) {
         List::new(items)
             .highlight_style(
                 Style::default()
-                    .fg(TEXT)
-                    .bg(Color::Rgb(40, 40, 40))
+                    .fg(theme.text)
+                    .bg(theme.panel_bg)
                     .add_modifier(Modifier::BOLD),
             )
             .highlight_symbol(""),
@@ -247,7 +232,7 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker) {
     frame.render_widget(
         ratatui::widgets::Paragraph::new(Span::styled(
             "[Enter] open/select  [j/k] navigate  [Esc] cancel",
-            Style::default().fg(SUBTLE),
+            Style::default().fg(theme.subtle),
         )),
         hint_rect,
     );

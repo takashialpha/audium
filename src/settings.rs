@@ -13,6 +13,11 @@ pub struct Settings {
     pub default_volume: f32,
     /// How many seconds ← / → seek by.
     pub seek_step_secs: u64,
+    /// Name of the active theme.  Must match one of the built-in theme names;
+    /// unknown values fall back to "dark" silently on load.
+    pub theme_name: String,
+    /// Whether background transparency is enabled.
+    pub transparent: bool,
 }
 
 impl Default for Settings {
@@ -20,6 +25,8 @@ impl Default for Settings {
         Self {
             default_volume: 0.7,
             seek_step_secs: 1,
+            theme_name: "dark".to_string(),
+            transparent: false,
         }
     }
 }
@@ -61,5 +68,9 @@ impl Settings {
 
     pub fn set_seek_step_secs(&mut self, s: u64) {
         self.seek_step_secs = s.clamp(1, 120);
+    }
+
+    pub fn set_theme(&mut self, name: &str) {
+        self.theme_name = name.to_string();
     }
 }

@@ -12,6 +12,7 @@ use crate::{
     player::{PlayerEvent, PlayerHandle, resolve_duration, spawn_audio_thread},
     settings::Settings,
     ui,
+    ui::layout::{Theme, theme_by_name},
 };
 
 // - LoopMode -
@@ -91,12 +92,14 @@ pub struct AppState {
     pub modal: Option<Modal>,
     pub file_picker: Option<FilePicker>,
     pub loop_mode: LoopMode,
+    pub theme: Theme,
     pub settings: Settings,
     pub should_quit: bool,
 }
 
 impl AppState {
     pub fn new(library: Library, player: PlayerHandle, settings: Settings) -> Self {
+        let theme = theme_by_name(&settings.theme_name).clone();
         Self {
             library,
             player,
@@ -113,6 +116,7 @@ impl AppState {
             modal: None,
             file_picker: None,
             loop_mode: LoopMode::Off,
+            theme,
             settings,
             should_quit: false,
         }
@@ -255,7 +259,9 @@ impl AppState {
                     return;
                 }
                 ModalOutcome::Confirm(c) => {
-                    self.modal = None;
+                    if !matches!(c, ModalConfirm::PreviewTheme { .. }) {
+                        self.modal = None;
+                    }
                     self.apply_modal_confirm(c);
                     return;
                 }
@@ -287,10 +293,9 @@ impl AppState {
             KeyCode::Char('p') => self.action_add_to_playlist(),
             KeyCode::Char('d') => self.action_remove(),
             KeyCode::Char('r') => self.action_rename(),
-            KeyCode::Char('x') => self.action_remove_from_queue(),
             KeyCode::Char('c') => self.action_new_playlist(),
             KeyCode::Char('f') => self.action_open_filepicker(),
-            KeyCode::Char('s') => self.action_open_settings(),
+            KeyCode::Char('m') => self.action_open_menu(),
             KeyCode::Char('l') => self.loop_mode = self.loop_mode.cycle(),
             KeyCode::Char('z') => self.action_shuffle_playlist(),
 
@@ -536,17 +541,6 @@ impl AppState {
         }
     }
 
-    fn action_remove_from_queue(&mut self) {
-        if self.queue_cursor < self.queue.len() {
-            self.modal = Some(Modal::ConfirmRemove {
-                description: "Remove this track from the queue?".into(),
-                target: RemoveTarget::TrackFromQueue {
-                    queue_idx: self.queue_cursor,
-                },
-            });
-        }
-    }
-
     fn action_new_playlist(&mut self) {
         self.modal = Some(Modal::NewPlaylist {
             input: TextInput::default(),
@@ -558,13 +552,27 @@ impl AppState {
         self.file_picker = Some(FilePicker::new(start));
     }
 
-    fn action_open_settings(&mut self) {
+    fn action_open_menu(&mut self) {
+        self.modal = Some(Modal::Menu { cursor: 0 });
+    }
+
+    fn open_settings(&mut self) {
         let vol_pct = (self.settings.default_volume * 100.0).round() as u32;
+        let preview_theme_idx = crate::ui::layout::themes()
+            .iter()
+            .position(|t| t.name == self.settings.theme_name.as_str())
+            .unwrap_or(0);
         self.modal = Some(Modal::Settings {
             cursor: 0,
             volume_pct: vol_pct,
             seek_secs: self.settings.seek_step_secs,
+            preview_theme_idx,
+            transparent: self.settings.transparent,
         });
+    }
+
+    fn open_about(&mut self) {
+        self.modal = Some(Modal::About);
     }
 
     /// `z` — prompt to shuffle the active playlist into the queue.
@@ -595,10 +603,12 @@ impl AppState {
                                 self.halt_playback();
                             }
                         }
+
                         self.queue_cursor =
                             self.queue_cursor.min(self.queue.len().saturating_sub(1));
                     }
                 }
+
                 RemoveTarget::TrackFromLibrary { track_id } => {
                     let _ = self.library.remove_track(track_id);
                     let before_len = self.queue.len();
@@ -610,6 +620,7 @@ impl AppState {
                         .tracklist_cursor
                         .min(self.active_tracks().len().saturating_sub(1));
                 }
+
                 RemoveTarget::Playlist { playlist_id } => {
                     let _ = self.library.delete_playlist(playlist_id);
                     self.sidebar_cursor = self
@@ -644,16 +655,42 @@ impl AppState {
                 let _ = self.library.playlist_add_track(playlist_id, track_id);
             }
 
+            ModalConfirm::OpenSettings => {
+                self.open_settings();
+            }
+
+            ModalConfirm::OpenAbout => {
+                self.open_about();
+            }
+
+            ModalConfirm::Quit => {
+                self.should_quit = true;
+            }
+
             ModalConfirm::SaveSettings {
                 volume_pct,
                 seek_secs,
+                theme_name,
+                transparent,
             } => {
                 self.settings.set_default_volume(volume_pct as f32 / 100.0);
                 self.settings.set_seek_step_secs(seek_secs);
-                // seek_step_secs is read at seek-time so it takes effect
-                // immediately. default_volume is startup-only; the live player
-                // volume is intentionally left unchanged.
+                self.settings.set_theme(&theme_name);
+                self.settings.transparent = transparent;
+                // Apply theme and transparency live.
+                let mut t = theme_by_name(&theme_name).clone();
+                t.transparent = transparent;
+                self.theme = t;
                 let _ = self.settings.save();
+            }
+
+            ModalConfirm::PreviewTheme {
+                theme_name,
+                transparent,
+            } => {
+                let mut t = theme_by_name(&theme_name).clone();
+                t.transparent = transparent;
+                self.theme = t;
             }
 
             ModalConfirm::ShufflePlaylist { playlist_id } => {

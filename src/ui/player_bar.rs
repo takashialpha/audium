@@ -1,20 +1,22 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use super::layout::{Colors, format_duration};
+use super::layout::{Theme, format_duration};
 use crate::app::{AppState, LoopMode};
 
 pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
+    let t = &state.theme;
+
     let outer = Block::default()
         .borders(Borders::TOP)
         .border_type(BorderType::Plain)
-        .border_style(Style::default().fg(Colors::SUBTLE))
-        .style(Style::default().bg(Colors::BG));
+        .border_style(Style::default().fg(t.subtle))
+        .style(t.apply_bg(Style::default()));
 
     let inner_area = outer.inner(area);
     frame.render_widget(outer, area);
@@ -48,11 +50,9 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     let title = state
         .now_playing
         .and_then(|i| state.queue.get(i))
-        .map(|t| t.name.as_str())
+        .map(|tr| tr.name.as_str())
         .unwrap_or("-- Nothing playing --");
 
-    // Loop indicator label — empty string when off so the column collapses
-    // to zero width and takes no space.
     let loop_label = match state.loop_mode {
         LoopMode::Off => "",
         LoopMode::Queue => " loop queue ",
@@ -63,31 +63,23 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     let title_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(3),          // status icon
-            Constraint::Min(0),             // track name
-            Constraint::Length(loop_width), // loop indicator
+            Constraint::Length(3),
+            Constraint::Min(0),
+            Constraint::Length(loop_width),
         ])
         .split(rows[0]);
 
     frame.render_widget(
-        Paragraph::new(status).style(
-            Style::default()
-                .fg(Colors::ACCENT)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Paragraph::new(status).style(Style::default().fg(t.accent).add_modifier(Modifier::BOLD)),
         title_cols[0],
     );
     frame.render_widget(
-        Paragraph::new(title).style(
-            Style::default()
-                .fg(Colors::TEXT)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Paragraph::new(title).style(Style::default().fg(t.text).add_modifier(Modifier::BOLD)),
         title_cols[1],
     );
     if !loop_label.is_empty() {
         frame.render_widget(
-            Paragraph::new(loop_label).style(Style::default().fg(Colors::SUBTLE)),
+            Paragraph::new(loop_label).style(Style::default().fg(t.subtle)),
             title_cols[2],
         );
     }
@@ -95,11 +87,11 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     // Progress bar + time label.
     let (elapsed_str, total_str) = if state.now_playing.is_some() {
         let e = format_duration(state.elapsed().as_secs());
-        let t = state
+        let d = state
             .track_duration
             .map(|d| format_duration(d.as_secs()))
             .unwrap_or_else(|| "-:--".to_string());
-        (e, t)
+        (e, d)
     } else {
         ("0:00".to_string(), "-:--".to_string())
     };
@@ -112,11 +104,11 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         .split(rows[1]);
 
     frame.render_widget(
-        thumb_bar(progress_cols[0].width as usize, state.progress_ratio()),
+        thumb_bar(progress_cols[0].width as usize, state.progress_ratio(), t),
         progress_cols[0],
     );
     frame.render_widget(
-        Paragraph::new(time_label).style(Style::default().fg(Colors::TEXT_DIM)),
+        Paragraph::new(time_label).style(Style::default().fg(t.text_dim)),
         progress_cols[1],
     );
 
@@ -131,18 +123,18 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     for _ in 0..empty {
         vol_lines.push(Line::from(Span::styled(
             " ░░░ ",
-            Style::default().fg(Color::Rgb(50, 50, 50)),
+            Style::default().fg(t.vol_empty),
         )));
     }
     for _ in 0..filled {
         vol_lines.push(Line::from(Span::styled(
             " ▓▓▓ ",
-            Style::default().fg(Colors::ACCENT),
+            Style::default().fg(t.accent),
         )));
     }
     vol_lines.push(Line::from(Span::styled(
         format!("{:>4}%", vol_pct),
-        Style::default().fg(Colors::TEXT_DIM),
+        Style::default().fg(t.text_dim),
     )));
 
     frame.render_widget(
@@ -150,16 +142,16 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
             .block(
                 Block::default()
                     .borders(Borders::LEFT)
-                    .border_style(Style::default().fg(Colors::SUBTLE)),
+                    .border_style(Style::default().fg(t.subtle)),
             )
-            .style(Style::default().bg(Colors::BG)),
+            .style(t.apply_bg(Style::default())),
         vol_area,
     );
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-fn thumb_bar(width: usize, ratio: f64) -> Paragraph<'static> {
+fn thumb_bar(width: usize, ratio: f64, t: &Theme) -> Paragraph<'static> {
     if width == 0 {
         return Paragraph::new("");
     }
@@ -168,23 +160,25 @@ fn thumb_bar(width: usize, ratio: f64) -> Paragraph<'static> {
     let filled = filled.min(width);
     let remaining = width.saturating_sub(filled);
 
+    let accent = t.accent;
+    let text = t.text;
+    let subtle = t.subtle;
+
     let mut spans: Vec<Span> = Vec::with_capacity(width + 1);
     if filled > 0 {
         spans.push(Span::styled(
             "█".repeat(filled.saturating_sub(1)),
-            Style::default().fg(Colors::ACCENT),
+            Style::default().fg(accent),
         ));
         spans.push(Span::styled(
             "█",
-            Style::default()
-                .fg(Colors::TEXT)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(text).add_modifier(Modifier::BOLD),
         ));
     }
     if remaining > 0 {
         spans.push(Span::styled(
             "░".repeat(remaining),
-            Style::default().fg(Colors::SUBTLE),
+            Style::default().fg(subtle),
         ));
     }
     Paragraph::new(Line::from(spans))
