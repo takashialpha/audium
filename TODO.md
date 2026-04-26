@@ -15,9 +15,10 @@
 - **yt audio** (complexity 8.5/10) — pull audio from a youtube url directly
   into the library. on hold: a contributor is working on this.
 
-### dev notes
+### notes
 - pop-up after filepicker might be buggy if the filename is too long. limit
 chars so it doesn't overflow the pop-up char size.
 - 'features' section in the web page misses 2 squares in the 3x3 grid: better
 to add more features to have more content to put in there;
-- transparency isn't changing live like theme, also isn't applied in startup;
+- transparency isn't changing live like the theme, also isn't being applied in startup;
+- use the gif in the web page too.
