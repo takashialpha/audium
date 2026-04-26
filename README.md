@@ -19,9 +19,7 @@
 
 </div>
 
----
-[![asciicast](https://asciinema.org/a/ATytXSANNkWWM4MF.svg)](https://asciinema.org/a/ATytXSANNkWWM4MF?autoplay=1&loop=1)
----
+![demo](./docs/demo.gif)
 
 ## Features
 
