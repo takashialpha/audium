@@ -1,8 +1,5 @@
 # audium — TODO
 
-## growth
-- asciinema recording on the README
-
 ### planned (priority order)
 - **fields** (complexity 7/10) — let users attach author, album, and other
   custom fields to tracks. stored in library.json. not pulled from metadata —
@@ -23,3 +20,4 @@
 chars so it doesn't overflow the pop-up char size.
 - 'features' section in the web page misses 2 squares in the 3x3 grid: better
 to add more features to have more content to put in there;
+- transparency isn't changing live like theme, also isn't applied in startup;
