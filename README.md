@@ -20,7 +20,7 @@
 </div>
 
 ---
-[![asciicast](https://asciinema.org/a/ATytXSANNkWWM4MF.svg)](https://asciinema.org/a/ATytXSANNkWWM4MF)
+[![asciicast](https://asciinema.org/a/ATytXSANNkWWM4MF.svg)](https://asciinema.org/a/ATytXSANNkWWM4MF?autoplay=1&loop=1)
 ---
 
 ## Features
