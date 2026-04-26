@@ -21,4 +21,5 @@
 ### dev notes
 - pop-up after filepicker might be buggy if the filename is too long. limit
 chars so it doesn't overflow the pop-up char size.
-- review the README and the web page before a the next release (v1.1.0 maybe?).
+- 'features' section in the web page misses 2 squares in the 3x3 grid: better
+to add more features to have more content to put in there;
