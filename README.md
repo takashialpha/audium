@@ -20,27 +20,7 @@
 </div>
 
 ---
-
-```
- audium  —  terminal music player      [?] help  [f] file picker  [c] playlist  [m] menu  [q] quit
-┌─────────────────────────┬──────────────────────────────────────────────────────┐
-│ Playlists               │ All Tracks                                           │
-│                         │  #    Title                                          │
-│ > All Tracks (4)        │     1  04 - Neon Arpeggio                            │
-│   Late Night (2)        │     2  Drift                                         │
-│   Focus (2)             │  >  3  Weightless (feat. Macarena)                   │
-│                         │     4  The River Calls                               │
-│                         │                                                      │
-│                         ├──────────────────────────────────────────────────────┤
-│                         │ Queue                                                │
-│                         │     1  04 - Neon Arpeggio                            │
-│                         │     2  Drift                                         │
-│                         │  >  3  Weightless (feat. Macarena)                   │
-└─────────────────────────┴──────────────────────────────────────────────────────┘
-⏸  Weightless (feat. Macarena)                                        loop queue
-████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  2:14 / 5:02
-```
-
+[![asciicast](https://asciinema.org/a/ATytXSANNkWWM4MF.svg)](https://asciinema.org/a/ATytXSANNkWWM4MF)
 ---
 
 ## Features
