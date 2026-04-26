@@ -14,7 +14,6 @@
 [![crates.io](https://img.shields.io/crates/v/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://crates.io/crates/audium)
 [![AUR](https://img.shields.io/aur/version/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://aur.archlinux.org/packages/audium)
 [![License](https://img.shields.io/crates/l/audium?style=flat-square&color=64b4ff&labelColor=161616)](LICENSE)
-[![Built With Ratatui](https://ratatui.rs/built-with-ratatui/badge.svg)](https://ratatui.rs/)
 
 [Website](https://takashialpha.github.io/audium) · [Installation](#installation) · [Keybindings](#keybindings) · [Building](#building-from-source)
 
@@ -23,7 +22,7 @@
 ---
 
 ```
- audium  —  terminal music player      [?] help  [f] file picker  [c] playlist  [q] quit
+ audium  —  terminal music player      [?] help  [f] file picker  [c] playlist  [m] menu  [q] quit
 ┌─────────────────────────┬──────────────────────────────────────────────────────┐
 │ Playlists               │ All Tracks                                           │
 │                         │  #    Title                                          │
@@ -48,6 +47,7 @@
 
 - **Keyboard-driven** — every action is one key. No mouse required.
 - **It's your library** — your tracks are stored as plain JSON at `~/.audium/library.json`. Edit it by hand, back it up, move it anywhere. audium doesn't rename your files, doesn't embed metadata, and never phones home.
+- **Themes** — 15 built-in themes (dark, light, nord, gruvbox, catppuccin, rosé pine, dracula, tokyo night, and more). Switch live from the settings menu with instant preview. Transparency support for composited terminals.
 - **Playlists** — create, rename, delete. *All Tracks* is always there.
 - **Loop modes** — off, loop queue, or loop track. Toggle with `l`.
 - **Built-in file picker** — import audio files without leaving the app.
@@ -63,10 +63,10 @@
 ### Cargo
 
 ```sh
-cargo install --locked audium
+cargo install audium
 ```
 
-Requires Rust 1.85+ (MSRV). Installs the `audium` binary to `~/.cargo/bin/`, so that must be in your path.
+Requires Rust 1.85+ (MSRV). Installs the `audium` binary to `~/.cargo/bin/`.
 
 On Linux, ALSA is required to run and its development headers are required to build — see [Building from source](#building-from-source) for distro-specific instructions.
 
@@ -134,8 +134,7 @@ audium stores your library at `~/.audium/library.json` and your music at `~/.aud
 | `z`  | Shuffle playlist into queue         |
 | `d`  | Remove selected item                |
 | `r`  | Rename selected track or playlist   |
-| `x`  | Remove selected item from queue     |
-| `s`  | Open settings                       |
+| `m`  | Open menu                           |
 
 ---
 
@@ -172,6 +171,7 @@ sudo dnf install alsa-utils alsa-lib-devel
 ```
 ~/.audium/
 ├── library.json   # track registry + playlists
+├── settings.json  # user preferences (volume, theme, seek step)
 └── music/         # copies of all imported audio files
 ```
 
