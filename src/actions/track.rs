@@ -1,22 +1,36 @@
+use std::fmt::format;
 use std::process::Command;
+use rusty_ytdl::Video;
+use crate::library::Library;
 
-// Use the Command tool to call "yt-dlp" (Until the rust crate is fixed..... )
-// Rust "yt-dlp" is having an error so a temporary fix..... lol
-// Need to have installed "yt-dlp"
-// Run this command........... "sudo pacman -S yt-dlp ffmpeg"
-pub fn download_audio(url: &str) {
-    let output = Command::new("yt-dlp")
+pub async fn download_audio_with_binary(url: &str) -> Result<(), String> {
+    let video = Video::new(url).expect("Error creating video instance");
+    let video_title = video.get_info().await.expect("Error getting video title").video_details.title;
+    let mut output_template = Library::music_dir()
+        .expect("music_dir should always be present in data directory");
+    output_template.push(video_title);
+    output_template.set_extension("mp3");
+
+    // --- Build the command USING: Command TO access "yt-dlp" Needs to be installed --
+    // RUN: sudo pacman -S yt-dlp ffmpeg -- to isntall these 2 tools.........
+    let mut child = Command::new("yt-dlp")
         .args([
-            "-x",
+            "-x", // "-x" to Extract audio
             "--audio-format", "mp3",
-            "--audio-quality", "0",
-            "-o", "/home/aeon/Music/%(title)s.%(ext)s",
-            url
+            "--audio-quality", "0",      // 0 is the best (VBR)
+            "-o", output_template.to_str().unwrap(),
+            url,
         ])
-        .output(); // .spawn() is better for async, .output() blocks
+        .spawn()                         // .spawn() runs it in the background!
+        .map_err(|e| format!("Failed to start yt-dlp: {}", e))?;
 
-    match output {
-        Ok(o) if o.status.success() => println!("Success! Check ~/Music"),
-        _ => eprintln!("Binary download failed. Is yt-dlp installed?"),
+    // 3. Wait for it to finish (or just let it run if you want async)
+    let status = child.wait()
+        .map_err(|e| format!("Error waiting for yt-dlp: {}", e))?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err("yt-dlp exited with an error. Check the URL or your internet.".to_string())
     }
 }

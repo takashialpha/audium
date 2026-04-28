@@ -266,6 +266,7 @@ pub struct AppState {
             match code {
                 KeyCode::Char('q') => self.should_quit = true,
                 KeyCode::Char('?') => self.modal = Some(Modal::Help),
+                KeyCode::Char('o') => self.modal = Some(Modal::Downloader {url: TextInput::default()}) ,
 
                 // Playback
                 KeyCode::Char(' ') => self.action_toggle_play(),
@@ -535,6 +536,7 @@ pub struct AppState {
                 }
             }
         }
+
 
         fn action_remove_from_queue(&mut self) {
             if self.queue_cursor < self.queue.len() {

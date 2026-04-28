@@ -1,4 +1,5 @@
 use crossterm::event::KeyCode;
+use rand::RngExt;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -6,7 +7,8 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
-
+use ratatui::prelude::Stylize;
+use crate::actions::download_audio_with_binary;
 use crate::library::{PlaylistId, TrackId};
 
 // ── Colour palette (kept in sync with ui/) ─────────────────────────────────
@@ -130,6 +132,12 @@ pub enum Modal {
         volume_pct: u32, // 0–100
         seek_secs: u64,
     },
+
+
+    // Downloader for YouTube
+    Downloader {
+        url: TextInput,
+    }
 }
 
 /// Outcome returned from `Modal::handle_key`.
@@ -328,6 +336,19 @@ impl Modal {
                 KeyCode::Esc | KeyCode::Char('q') => ModalOutcome::Dismissed,
                 _ => ModalOutcome::Consumed,
             },
+
+            Modal::Downloader { url } => match code {
+                KeyCode::Esc => ModalOutcome::Dismissed,
+                KeyCode::Backspace => {url.backspace(); ModalOutcome::Consumed},
+                KeyCode::Left => { url.move_left(); ModalOutcome::Consumed },
+                KeyCode::Right => { url.move_right(); ModalOutcome::Consumed },
+                keycode => {
+                    match keycode.as_char() {
+                        Some(c) => {url.push(c); ModalOutcome::Consumed},
+                        None => ModalOutcome::Consumed,
+                    }
+                },
+            }
         }
     }
 }
@@ -372,7 +393,8 @@ pub fn render_modal(frame: &mut Frame, modal: &Modal) {
                     playlist_name
                 ),
             );
-        }
+        },
+        Modal::Downloader { url } => render_downloader(frame, url)
     }
 }
 
@@ -594,6 +616,7 @@ fn render_help(frame: &mut Frame) {
         ("x", "Remove item from queue"),
         ("", ""),
         ("f", "Open file picker"),
+        ("o", "Open YouTube Downloader"),
         ("", ""),
         ("s", "Open settings"),
     ];
@@ -668,6 +691,11 @@ fn render_settings(frame: &mut Frame, cursor: usize, volume_pct: u32, seek_secs:
     );
 }
 
+// --- Downloader renderer ----------------------------------------
+fn render_downloader(frame: &mut Frame, input: &TextInput) {
+    render_text_input(frame, "Enter YouTube URL to Download", &input);
+}
+
 /// Renders a single settings row inside a plain border.
 /// `value_line` is the pre-built `Line` shown on the right side.
 fn render_settings_row<'a>(
@@ -702,6 +730,7 @@ fn render_settings_row<'a>(
         cols[1],
     );
 }
+
 
 /// Builds a compact volume bar: `◀ ████████░░ 80% ▶`
 /// Total width fits comfortably in the 22-char value column.
