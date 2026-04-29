@@ -266,7 +266,7 @@ pub struct AppState {
             match code {
                 KeyCode::Char('q') => self.should_quit = true,
                 KeyCode::Char('?') => self.modal = Some(Modal::Help),
-                KeyCode::Char('o') => self.modal = Some(Modal::Downloader {url: TextInput::default()}) ,
+                KeyCode::Char('o') => self.modal = Some(Modal::Downloader {url: TextInput::default(), download_event: None}),
 
                 // Playback
                 KeyCode::Char(' ') => self.action_toggle_play(),

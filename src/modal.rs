@@ -1,5 +1,6 @@
+use crate::actions::download_audio_with_binary;
+use crate::library::{PlaylistId, TrackId};
 use crossterm::event::KeyCode;
-use rand::RngExt;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -7,9 +8,9 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
-use ratatui::prelude::Stylize;
-use crate::actions::download_audio_with_binary;
-use crate::library::{PlaylistId, TrackId};
+use tokio::macros::support::maybe_done;
+use tokio::spawn;
+use tokio::sync::mpsc::{channel, unbounded_channel, UnboundedReceiver};
 
 // ── Colour palette (kept in sync with ui/) ─────────────────────────────────
 const BG: Color = Color::Rgb(18, 18, 18);
@@ -133,11 +134,11 @@ pub enum Modal {
         seek_secs: u64,
     },
 
-
     // Downloader for YouTube
     Downloader {
         url: TextInput,
-    }
+        download_event: Option<DownloadEvent>,
+    },
 }
 
 /// Outcome returned from `Modal::handle_key`.
@@ -170,6 +171,18 @@ pub enum ModalConfirm {
     ShufflePlaylist {
         playlist_id: PlaylistId,
     },
+    DownloadYoutube {
+        rx: UnboundedReceiver<DownloadEvent>,
+    },
+}
+
+// -- Download Event to communicate between the download thread adn ui........
+#[derive(Debug, Clone)]
+pub enum DownloadEvent {
+    Title(String),
+    Progress(f64),
+    Finished,
+    Error(String),
 }
 
 // ── Input handling ─────────────────────────────────────────────────────────
@@ -337,17 +350,62 @@ impl Modal {
                 _ => ModalOutcome::Consumed,
             },
 
-            Modal::Downloader { url } => match code {
-                KeyCode::Esc => ModalOutcome::Dismissed,
-                KeyCode::Backspace => {url.backspace(); ModalOutcome::Consumed},
-                KeyCode::Left => { url.move_left(); ModalOutcome::Consumed },
-                KeyCode::Right => { url.move_right(); ModalOutcome::Consumed },
-                keycode => {
-                    match keycode.as_char() {
-                        Some(c) => {url.push(c); ModalOutcome::Consumed},
-                        None => ModalOutcome::Consumed,
+            Modal::Downloader {
+                url,
+                download_event,
+                ..
+            } => {
+                // Handle Active/Finished Download Events first
+                if let Some(event) = download_event {
+                    match event {
+                        // If it's an Error or Finished, any key (except maybe arrows) should dismiss
+                        DownloadEvent::Error(_) | DownloadEvent::Finished => {
+                            return ModalOutcome::Dismissed;
+                        }
+                        // While downloading (Progress), ignore all keys so the user can't mess up the URL
+                        DownloadEvent::Progress(_) => {
+                            // If they hit Esc, maybe let them cancel? Otherwise, consume.
+                            // if code == KeyCode::Esc { return ModalOutcome::Dismissed; }
+                            return ModalOutcome::Consumed;
+                        }
+                        _ => {}
                     }
-                },
+                }
+
+                // 2. Normal Typing Logic (only reached if download_event is None)
+                match code {
+                    KeyCode::Esc => ModalOutcome::Dismissed,
+                    KeyCode::Enter => {
+                        let url = url.value.trim().to_string().as_str();
+                        if url.is_empty() {
+                            return ModalOutcome::Dismissed;
+                        }
+                        let (tx, rx) = unbounded_channel();
+                        spawn(async {
+                            download_audio_with_binary(url, tx).await;
+                        });
+                        ModalOutcome::Confirm(ModalConfirm::DownloadYoutube {
+                            rx,
+                        })
+                    }
+                    KeyCode::Backspace => {
+                        url.backspace();
+                        ModalOutcome::Consumed
+                    }
+                    KeyCode::Left => {
+                        url.move_left();
+                        ModalOutcome::Consumed
+                    }
+                    KeyCode::Right => {
+                        url.move_right();
+                        ModalOutcome::Consumed
+                    }
+                    KeyCode::Char(c) => {
+                        url.push(c);
+                        ModalOutcome::Consumed
+                    }
+                    _ => ModalOutcome::Consumed,
+                }
             }
         }
     }
@@ -365,10 +423,10 @@ pub fn render_modal(frame: &mut Frame, modal: &Modal) {
             render_confirm(frame, description);
         }
         Modal::Rename { kind, input, .. } => {
-            render_text_input(frame, &format!("Rename {}", kind), input);
+            render_text_input(frame, &format!("Rename {}", kind), input, "Enter Name: ");
         }
         Modal::NewPlaylist { input } => {
-            render_text_input(frame, "New Playlist", input);
+            render_text_input(frame, "New Playlist", input, "Enter Name: ");
         }
         Modal::AddToPlaylist {
             track_name,
@@ -393,8 +451,11 @@ pub fn render_modal(frame: &mut Frame, modal: &Modal) {
                     playlist_name
                 ),
             );
-        },
-        Modal::Downloader { url } => render_downloader(frame, url)
+        }
+        Modal::Downloader {
+            url,
+            download_event,
+        } => render_downloader(frame, url, download_event),
     }
 }
 
@@ -434,8 +495,8 @@ fn render_notification(frame: &mut Frame, title: &str, message: &str) {
                 Style::default().fg(TEXT_DIM),
             )),
         ])
-        .alignment(Alignment::Center)
-        .block(modal_block(title)),
+            .alignment(Alignment::Center)
+            .block(modal_block(title)),
         rect,
     );
 }
@@ -459,14 +520,14 @@ fn render_confirm(frame: &mut Frame, description: &str) {
                 Span::styled(" cancel", Style::default().fg(TEXT_DIM)),
             ]),
         ])
-        .alignment(Alignment::Center)
-        .wrap(Wrap { trim: true })
-        .block(modal_block("Confirm")),
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true })
+            .block(modal_block("Confirm")),
         rect,
     );
 }
 
-fn render_text_input(frame: &mut Frame, title: &str, input: &TextInput) {
+fn render_text_input(frame: &mut Frame, title: &str, input: &TextInput, label: &str) {
     let area = frame.area();
     let rect = centered_rect(52, 7, area);
     frame.render_widget(Clear, rect);
@@ -485,7 +546,7 @@ fn render_text_input(frame: &mut Frame, title: &str, input: &TextInput) {
         .split(inner);
 
     frame.render_widget(
-        Paragraph::new(Span::styled("Enter name:", Style::default().fg(TEXT_DIM))),
+        Paragraph::new(Span::styled(label, Style::default().fg(TEXT_DIM))),
         rows[0],
     );
 
@@ -668,7 +729,7 @@ fn render_settings(frame: &mut Frame, cursor: usize, volume_pct: u32, seek_secs:
             "j/k  select     ← →  adjust     Esc  close",
             Style::default().fg(SUBTLE),
         ))
-        .alignment(Alignment::Center),
+            .alignment(Alignment::Center),
         rows[0],
     );
 
@@ -692,8 +753,62 @@ fn render_settings(frame: &mut Frame, cursor: usize, volume_pct: u32, seek_secs:
 }
 
 // --- Downloader renderer ----------------------------------------
-fn render_downloader(frame: &mut Frame, input: &TextInput) {
-    render_text_input(frame, "Enter YouTube URL to Download", &input);
+fn render_downloader(frame: &mut Frame, input: &TextInput, download_event: &Option<DownloadEvent>) {
+    let area = frame.area();
+    let rect = centered_rect(52, 7, area);
+
+    match download_event {
+        Some(event) => {
+            frame.render_widget(Clear, rect); // Clear the area behind the modal
+            let block = modal_block("YouTube Downloader");
+            let inner = block.inner(rect);
+            frame.render_widget(block, rect);
+
+            match event {
+                DownloadEvent::Title(title) => {
+                    let text = vec![
+                        Line::from(Span::styled("Fetching Metadata...", Style::default().fg(TEXT_DIM))),
+                        Line::from(Span::styled(title, Style::default().fg(ACCENT).add_modifier(Modifier::BOLD))),
+                    ];
+                    frame.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner);
+                }
+                DownloadEvent::Progress(pct) => {
+                    // Ratatui Gauge for the download percentage
+                    let gauge = ratatui::widgets::Gauge::default()
+                        .block(Block::default().title(" Downloading... ").title_alignment(Alignment::Center))
+                        .gauge_style(Style::default().fg(ACCENT).bg(BG))
+                        .percent(*pct as u16)
+                        .label(format!("{:.1}%", pct));
+                    frame.render_widget(gauge, inner);
+                }
+                DownloadEvent::Finished => {
+                    let text = vec![
+                        Line::from(""),
+                        Line::from(Span::styled("SUCCESS", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD))),
+                        Line::from(Span::styled("Press any key to dismiss", Style::default().fg(TEXT_DIM))),
+                    ];
+                    frame.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner);
+                }
+                DownloadEvent::Error(err) => {
+                    let text = vec![
+                        Line::from(Span::styled("FAILED", Style::default().fg(DANGER).add_modifier(Modifier::BOLD))),
+                        Line::from(Span::styled(err, Style::default().fg(TEXT))),
+                        Line::from(Span::styled("Press any key to try again", Style::default().fg(TEXT_DIM))),
+                    ];
+                    frame.render_widget(Paragraph::new(text).alignment(Alignment::Center).wrap(Wrap { trim: true }), inner);
+                }
+            }
+        }
+        None => {
+            // No event yet? Show the standard URL input box
+            render_text_input(
+                frame,
+                "YouTube Downloader",
+                input,
+                "Enter YouTube URL:",
+            );
+        }
+    }
 }
 
 /// Renders a single settings row inside a plain border.
@@ -730,7 +845,6 @@ fn render_settings_row<'a>(
         cols[1],
     );
 }
-
 
 /// Builds a compact volume bar: `◀ ████████░░ 80% ▶`
 /// Total width fits comfortably in the 22-char value column.

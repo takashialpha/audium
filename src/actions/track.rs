@@ -1,36 +1,55 @@
-use std::fmt::format;
-use std::process::Command;
+use tokio::process::Command;
+use std::process::Stdio;
+use tokio::io::{BufReader, AsyncBufReadExt};
+use tokio::sync::mpsc::UnboundedSender;
 use rusty_ytdl::Video;
 use crate::library::Library;
+use crate::modal::DownloadEvent;
 
-pub async fn download_audio_with_binary(url: &str) -> Result<(), String> {
-    let video = Video::new(url).expect("Error creating video instance");
-    let video_title = video.get_info().await.expect("Error getting video title").video_details.title;
-    let mut output_template = Library::music_dir()
-        .expect("music_dir should always be present in data directory");
-    output_template.push(video_title);
+pub async fn download_audio_with_binary(
+    url: &str,
+    tx: UnboundedSender<DownloadEvent>
+) {
+    // Fetch video metadata to update UI with the song title
+    let video = Video::new(url).map_err(|e| e.to_string())?;
+    let info = video.get_info().await.map_err(|e| e.to_string())?;
+    let video_title = info.video_details.title;
+
+    let _ = tx.send(DownloadEvent::Title(video_title.clone()));
+
+    // Construct the file path in the local music directory
+    let mut output_template = Library::music_dir().expect("Music directory not found");
+    output_template.push(&video_title);
     output_template.set_extension("mp3");
 
-    // --- Build the command USING: Command TO access "yt-dlp" Needs to be installed --
-    // RUN: sudo pacman -S yt-dlp ffmpeg -- to isntall these 2 tools.........
+    // Spawn yt-dlp as an async child process
     let mut child = Command::new("yt-dlp")
         .args([
-            "-x", // "-x" to Extract audio
-            "--audio-format", "mp3",
-            "--audio-quality", "0",      // 0 is the best (VBR)
+            "-x",                       // Extract audio only
+            "--audio-format", "mp3",    // Convert to mp3
+            "--newline",                // Force progress updates on new lines
             "-o", output_template.to_str().unwrap(),
             url,
         ])
-        .spawn()                         // .spawn() runs it in the background!
-        .map_err(|e| format!("Failed to start yt-dlp: {}", e))?;
+        .stdout(Stdio::piped())         // Capture output to parse progress
+        .spawn()
+        .map_err(|e| format!("Process start failed: {}", e))?;
 
-    // 3. Wait for it to finish (or just let it run if you want async)
-    let status = child.wait()
-        .map_err(|e| format!("Error waiting for yt-dlp: {}", e))?;
+    let stdout = child.stdout.take().ok_or("Stdout capture failed")?;
+    let mut reader = BufReader::new(stdout).lines();
 
-    if status.success() {
-        Ok(())
-    } else {
-        Err("yt-dlp exited with an error. Check the URL or your internet.".to_string())
+    // Line-by-line parser for yt-dlp terminal output
+    while let Ok(Some(line)) = reader.next_line().await {
+        if line.contains('%') {
+            // Locate the percentage string in the output line
+            if let Some(pct_str) = line.split_whitespace().find(|s| s.contains('%')) {
+                if let Ok(p) = pct_str.replace('%', "").parse::<f64>() {
+                    let _ = tx.send(DownloadEvent::Progress(p));
+                }
+            }
+        }
     }
+
+    // Await process completion without blocking the TUI event loop
+    let status = child.wait().await.map_err(|e| e.to_string())?;
 }
