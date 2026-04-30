@@ -56,7 +56,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     queue::render_queue(frame, state, content_split[1]);
     player_bar::render_player_bar(frame, state, vertical[2]);
 
-    // Overlay layer (modal or file picker) — rendered last so it sits on top.
+    // Overlay layer (modal or file picker or downloader) — rendered last so it sits on top.
     overlay::render_overlay(frame, state);
 }
 

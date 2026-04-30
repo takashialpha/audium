@@ -6,13 +6,11 @@ mod modal;
 mod player;
 mod settings;
 mod ui;
-mod actions;
+pub mod downloader;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
-
-use crate::actions::download_audio_with_binary;
 
 #[tokio::main]
 async fn main() -> Result<()> {

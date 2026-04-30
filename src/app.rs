@@ -3,7 +3,6 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use rand::seq::SliceRandom;
 use ratatui::DefaultTerminal;
 use std::time::{Duration, Instant};
-
 use crate::{
     cli::Cli,
     filepicker::{FilePicker, FilePickerOutcome},
@@ -13,6 +12,7 @@ use crate::{
     settings::Settings,
     ui,
 };
+use crate::downloader::{DownloadHandler, DownloaderOutcome};
 
 // - LoopMode -
 
@@ -90,6 +90,7 @@ pub struct AppState {
     // ── Overlay state ───────────────────────────────────────────────────
     pub modal: Option<Modal>,
     pub file_picker: Option<FilePicker>,
+    pub downloader: Option<DownloadHandler>,
     pub loop_mode: LoopMode,
     pub settings: Settings,
     pub should_quit: bool,
@@ -112,6 +113,7 @@ pub struct AppState {
                 track_duration: None,
                 modal: None,
                 file_picker: None,
+                downloader: None,
                 loop_mode: LoopMode::Off,
                 settings,
                 should_quit: false,
@@ -246,6 +248,17 @@ pub struct AppState {
                 }
             }
 
+            // Downloader key handler
+            if let Some(downloader) = &mut self.downloader {
+                match downloader.handle_key(code) {
+                    DownloaderOutcome::Dismissed => self.downloader = None,
+                    DownloaderOutcome::Continue => return,
+                    DownloaderOutcome::StartDownload(url) => {
+
+                    }
+                }
+            }
+
             // ── Modal intercepts next ─────────────────────────────────────
             if let Some(modal) = &mut self.modal {
                 match modal.handle_key(code) {
@@ -266,7 +279,7 @@ pub struct AppState {
             match code {
                 KeyCode::Char('q') => self.should_quit = true,
                 KeyCode::Char('?') => self.modal = Some(Modal::Help),
-                KeyCode::Char('o') => self.modal = Some(Modal::Downloader {url: TextInput::default(), download_event: None}),
+                KeyCode::Char('o') => self.downloader = self.action_open_downloader(),
 
                 // Playback
                 KeyCode::Char(' ') => self.action_toggle_play(),
@@ -569,6 +582,10 @@ pub struct AppState {
             });
         }
 
+        fn action_open_downloader(&mut self) -> Option<DownloadHandler> {
+            Some(DownloadHandler::new())
+        }
+
         /// `z` — prompt to shuffle the active playlist into the queue.
         fn action_shuffle_playlist(&mut self) {
             if let Some(pl) = self.library.playlist(self.active_playlist) {
@@ -677,7 +694,7 @@ pub struct AppState {
                     self.queue = tracks;
                     self.queue_cursor = 0;
                     self.play_queue_index(0);
-                }
+                },
             }
         }
 
@@ -698,6 +715,10 @@ pub struct AppState {
                     });
                 }
             }
+        }
+        // YT downloader
+        fn start_youtube_downloader(&mut self, url: String) {
+            
         }
     }
 // ── Entry point ────────────────────────────────────────────────────────────
@@ -721,7 +742,6 @@ pub fn run(cli: Cli) -> Result<()> {
         state.enqueue(track);
         state.play_queue_index(0);
     }
-
     let terminal = ratatui::init();
     let result = event_loop(terminal, &mut state);
     ratatui::restore();
