@@ -12,9 +12,9 @@ use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use rand::seq::SliceRandom;
 use ratatui::DefaultTerminal;
+use std::sync::mpsc;
+use std::thread::spawn;
 use std::time::{Duration, Instant};
-use tokio::spawn;
-use tokio::sync::mpsc::unbounded_channel;
 
 // - LoopMode -
 
@@ -234,9 +234,11 @@ impl AppState {
         if let Some(handler) = &mut self.downloader {
             if let Some(rx) = &mut handler.rx {
                 while let Ok(mut event) = rx.try_recv() {
-
                     // Check if this is the "Finished" event with a path
-                    if let DownloadEvent::Finished { ref mut path_buf, .. } = event {
+                    if let DownloadEvent::Finished {
+                        ref mut path_buf, ..
+                    } = event
+                    {
                         // .take() extracts the path and leaves None in its place
                         if let Some(p) = path_buf.take() {
                             path_to_add = Some(p);
@@ -744,14 +746,13 @@ impl AppState {
     }
     // YT downloader
     fn spawn_downloader(&mut self, url: String) {
-        let (tx, rx) = unbounded_channel::<DownloadEvent>();
+        let (tx, rx) = mpsc::channel::<DownloadEvent>();
 
         if let Some(d) = &mut self.downloader {
             d.init_event(rx);
         }
-        // Spawn the manifest_audio
-        spawn(async move {
-            manifest_audio(url, tx).await;
+        spawn(move || {
+            manifest_audio(url, tx);
         });
     }
 }

@@ -7,12 +7,10 @@ use ratatui::prelude::Style;
 use ratatui::prelude::*;
 use ratatui::style::Color;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Gauge, Paragraph, Wrap};
-use rusty_ytdl::Video;
+use rusty_ytdl;
+use rusty_ytdl::{VideoQuality, VideoSearchOptions};
 use std::path::PathBuf;
-use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use std::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub enum DownloadEvent {
@@ -31,7 +29,7 @@ pub enum DownloadEvent {
 pub struct DownloadHandler {
     pub url: TextInput,
     pub title: Option<String>,
-    pub rx: Option<UnboundedReceiver<DownloadEvent>>,
+    pub rx: Option<mpsc::Receiver<DownloadEvent>>,
     pub event: DownloadEvent,
     pub should_close: bool,
 }
@@ -47,7 +45,7 @@ impl DownloadHandler {
         }
     }
 
-    pub fn init_event(&mut self, rx: UnboundedReceiver<DownloadEvent>) {
+    pub fn init_event(&mut self, rx: mpsc::Receiver<DownloadEvent>) {
         self.rx = Some(rx);
         self.event = DownloadEvent::Downloading {
             title: "Starting...".to_string(),
@@ -163,91 +161,63 @@ pub fn render_downloader(frame: &mut Frame, download_handler: &DownloadHandler) 
         }
     }
 }
+pub fn manifest_audio(url: String, tx: mpsc::Sender<DownloadEvent>) {
+    // Determine where the music goes
+    let music_dir = match Library::music_dir() {
+        Ok(p) => p,
+        Err(err) => {
+            let _ = tx.send(DownloadEvent::Error(err.to_string()));
+            return;
+        }
+    };
 
-pub async fn manifest_audio(url: String, tx: UnboundedSender<DownloadEvent>) {
-    // Fetch metadata - Send error to UI if YouTube link is dead
-    let video = match Video::new(url.clone()) {
+    // Configure for high-quality audio only
+    let options = rusty_ytdl::VideoOptions {
+        quality: rusty_ytdl::VideoQuality::HighestAudio,
+        filter: rusty_ytdl::VideoSearchOptions::Audio,
+        ..Default::default()
+    };
+
+    // Initialize the blocking downloader
+    let video = match rusty_ytdl::blocking::Video::new_with_options(&url, options) {
         Ok(v) => v,
         Err(e) => {
-            let _ = tx.send(DownloadEvent::Error(format!("Video init failed: {}", e)));
+            let _ = tx.send(DownloadEvent::Error(e.to_string()));
             return;
         }
     };
 
-    let info = match video.get_info().await {
-        Ok(i) => i,
-        Err(e) => {
-            let _ = tx.send(DownloadEvent::Error(format!(
-                "Metadata fetch failed: {}",
-                e
-            )));
+    // Fetch video title and signal start to UI
+    let title = match video.get_info() {
+        Ok(i) => {
+            let t = i.video_details.title.clone();
+            let _ = tx.send(DownloadEvent::Downloading {
+                title: t.clone(),
+                progress: 0.0,
+            });
+            t
+        }
+        Err(err) => {
+            let _ = tx.send(DownloadEvent::Error(err.to_string()));
             return;
         }
     };
 
-    let video_title = info.video_details.title;
+    // Sanitize title and build final filesystem path
+    let safe_title = title.replace(['/', '\\', '?'], "_");
+    let mut file_path = music_dir.join(&safe_title);
+    file_path.set_extension("mp3");
 
-    // Initial state: Title found, progress 0
-    let _ = tx.send(DownloadEvent::Downloading {
-        title: video_title.clone(),
-        progress: 0.0,
-    });
-
-    // 2. Setup File Path
-    let mut output_template = Library::music_dir().expect("Music directory not found");
-    output_template.push(&video_title);
-    output_template.set_extension("mp3");
-
-    // 3. Spawn yt-dlp
-    let mut child = match Command::new("yt-dlp")
-        .args([
-            "-x",
-            "--audio-format",
-            "mp3",
-            "--newline",
-            "-o",
-            output_template.to_str().unwrap(),
-            &url,
-        ])
-        .stdout(Stdio::piped())
-        .spawn()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            let _ = tx.send(DownloadEvent::Error(format!("yt-dlp start failed: {}", e)));
-            return;
-        }
-    };
-
-    let stdout = child.stdout.take().expect("Stdout capture failed");
-    let mut reader = BufReader::new(stdout).lines();
-
-    // 4. Parse Progress
-    while let Ok(Some(line)) = reader.next_line().await {
-        if line.contains('%') {
-            if let Some(pct_str) = line.split_whitespace().find(|s| s.contains('%')) {
-                if let Ok(p) = pct_str.replace('%', "").parse::<f64>() {
-                    let _ = tx.send(DownloadEvent::Downloading {
-                        title: video_title.clone(),
-                        progress: p,
-                    });
-                }
-            }
-        }
-    }
-
-    // 5. Finalize
-    match child.wait().await {
-        Ok(status) if status.success() => {
+    // Execute blocking download in background thread
+    match video.download(&file_path) {
+        Ok(_) => {
             let _ = tx.send(DownloadEvent::Finished {
-                title: video_title,
-                path_buf: Some(output_template),
+                title,
+                path_buf: Some(file_path),
             });
         }
-        _ => {
-            let _ = tx.send(DownloadEvent::Error(
-                "yt-dlp finished with errors".to_string(),
-            ));
+        Err(err) => {
+            let _ = tx.send(DownloadEvent::Error(format!("Download failed: {}", err)));
         }
     }
 }
