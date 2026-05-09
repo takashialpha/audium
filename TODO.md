@@ -22,3 +22,4 @@ chars so it doesn't overflow the pop-up char size.
 to add more features to have more content to put in there;
 - transparency isn't changing live like the theme, also isn't being applied in startup;
 - use the gif in the web page too.
+- merge that TODO with the readme; while also making it smaller.
