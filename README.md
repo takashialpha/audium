@@ -167,15 +167,22 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 - **More modern codebase** — written in current Rust with edition 2024, Symphonia for decoding, and rodio for playback.
 - **Plain JSON library** — your data is always readable, portable, and yours.
 
----
+## TODO
+
+- custom track fields (author, album, tags, etc.) stored in `library.json`
+- filtering by custom fields
+- playback speed presets (`0.5×` → `2×`)
+- user-provided synced lyrics with overlay/panel support
+- YouTube audio import (WIP by contributor)
+
+## Notes
+
+- truncate long filenames in filepicker popups
+- add more feature cards to the website grid
+- make transparency update live + apply on startup
+- use the GIF on the website too
 
 ## Contributing
 
 Issues and pull requests are welcome.
 Please open an issue before starting work on a large change.
-
----
-
-## License
-
-[Apache-2.0](LICENSE) © takashialpha
