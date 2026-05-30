@@ -130,15 +130,11 @@ impl Library {
             .with_context(|| "parsing library.json — the file may be corrupted")?;
 
         // Remove tracks whose files no longer exist.
-        let before: std::collections::HashSet<TrackId> = lib.tracks.iter().map(|t| t.id).collect();
-        lib.tracks.retain(|t| t.path.exists());
-        let after: std::collections::HashSet<TrackId> = lib.tracks.iter().map(|t| t.id).collect();
-
-        let removed: std::collections::HashSet<TrackId> =
-            before.difference(&after).copied().collect();
-
+        let mut removed = std::collections::HashSet::new();
+        lib.tracks.retain(|t| {
+            if t.path.exists() { true } else { removed.insert(t.id); false }
+        });
         if !removed.is_empty() {
-            // Purge removed ids from every playlist.
             for pl in &mut lib.playlists {
                 pl.tracks.retain(|id| !removed.contains(id));
             }

@@ -188,6 +188,14 @@ fn audio_thread_main(
     }
 }
 
+// Opens and decodes an audio file; returns the source or a human-readable error.
+fn open_source(path: &std::path::Path) -> Result<Decoder<std::io::BufReader<File>>> {
+    let file = File::open(path)
+        .with_context(|| format!("could not open \"{}\"", path.display()))?;
+    Decoder::try_from(file)
+        .map_err(|e| anyhow::Error::msg(format!("could not decode \"{}\": {e}", path.display())))
+}
+
 fn handle_command(
     player: &Player,
     cmd: PlayerCommand,
@@ -197,26 +205,19 @@ fn handle_command(
     match cmd {
         PlayerCommand::Play(path) => {
             player.stop();
-            *stopped = false;
-            match File::open(&path) {
-                Err(e) => {
-                    let _ = event_tx.send(PlayerEvent::Error(format!(
-                        "Could not open \"{}\": {e}",
-                        path.display()
-                    )));
+            match open_source(&path) {
+                Ok(source) => {
+                    *stopped = false;
+                    player.append(source);
+                    player.play();
                 }
-                Ok(file) => match Decoder::try_from(file) {
-                    Err(e) => {
-                        let _ = event_tx.send(PlayerEvent::Error(format!(
-                            "Could not decode \"{}\": {e}",
-                            path.display()
-                        )));
-                    }
-                    Ok(source) => {
-                        player.append(source);
-                        player.play();
-                    }
-                },
+                Err(e) => {
+                    // Keep stopped=true so the audio loop does not fire a
+                    // spurious TrackFinished (which would cause auto-advance
+                    // into an infinite error loop if all tracks are broken).
+                    *stopped = true;
+                    let _ = event_tx.send(PlayerEvent::Error(e.to_string()));
+                }
             }
         }
 
@@ -226,31 +227,23 @@ fn handle_command(
             paused,
         } => {
             player.stop();
-            *stopped = false;
-            match File::open(&path) {
-                Err(e) => {
-                    let _ = event_tx.send(PlayerEvent::Error(format!(
-                        "Seek failed — could not open \"{}\": {e}",
-                        path.display()
-                    )));
+            match open_source(&path) {
+                Ok(mut source) => {
+                    *stopped = false;
+                    let _ = source.try_seek(position);
+                    player.append(source);
+                    if paused {
+                        player.pause();
+                    } else {
+                        player.play();
+                    }
                 }
-                Ok(file) => match Decoder::try_from(file) {
-                    Err(e) => {
-                        let _ = event_tx.send(PlayerEvent::Error(format!(
-                            "Seek failed — could not decode \"{}\": {e}",
-                            path.display()
-                        )));
-                    }
-                    Ok(mut source) => {
-                        let _ = source.try_seek(position);
-                        player.append(source);
-                        if paused {
-                            player.pause();
-                        } else {
-                            player.play();
-                        }
-                    }
-                },
+                Err(e) => {
+                    *stopped = true;
+                    let _ = event_tx.send(PlayerEvent::Error(
+                        format!("Seek failed — {e}"),
+                    ));
+                }
             }
         }
 

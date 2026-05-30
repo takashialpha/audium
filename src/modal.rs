@@ -162,6 +162,45 @@ pub enum ModalConfirm {
     Quit,
 }
 
+// ── Text-input key helper ──────────────────────────────────────────────────
+
+enum TextInputResult {
+    Consumed,
+    Dismissed,
+    Submitted(String),
+}
+
+fn handle_text_key(input: &mut TextInput, code: KeyCode) -> TextInputResult {
+    match code {
+        KeyCode::Enter => {
+            let name = input.value.trim().to_string();
+            if name.is_empty() {
+                TextInputResult::Consumed
+            } else {
+                TextInputResult::Submitted(name)
+            }
+        }
+        KeyCode::Esc => TextInputResult::Dismissed,
+        KeyCode::Char(c) => {
+            input.push(c);
+            TextInputResult::Consumed
+        }
+        KeyCode::Backspace => {
+            input.backspace();
+            TextInputResult::Consumed
+        }
+        KeyCode::Left => {
+            input.move_left();
+            TextInputResult::Consumed
+        }
+        KeyCode::Right => {
+            input.move_right();
+            TextInputResult::Consumed
+        }
+        _ => TextInputResult::Consumed,
+    }
+}
+
 // ── Input handling ─────────────────────────────────────────────────────────
 
 impl Modal {
@@ -218,37 +257,27 @@ impl Modal {
                     }
                     KeyCode::Left => {
                         match *cursor {
-                            0 => *volume_pct = volume_pct.saturating_sub(1),
-                            1 => *seek_secs = seek_secs.saturating_sub(1).max(1),
-                            2 => {
-                                *preview_theme_idx = preview_theme_idx
-                                    .checked_sub(1)
-                                    .unwrap_or(themes().len() - 1);
-                                // Apply live preview without closing the modal.
-                                return ModalOutcome::Confirm(ModalConfirm::PreviewTheme {
-                                    theme_name: themes()[*preview_theme_idx].name.to_string(),
-                                    transparent: *transparent,
-                                });
-                            }
+                            0 => { *volume_pct = volume_pct.saturating_sub(1); return ModalOutcome::Consumed; }
+                            1 => { *seek_secs = seek_secs.saturating_sub(1).max(1); return ModalOutcome::Consumed; }
+                            2 => *preview_theme_idx = preview_theme_idx.checked_sub(1).unwrap_or(themes().len() - 1),
                             _ => *transparent = !*transparent,
                         }
-                        ModalOutcome::Consumed
+                        ModalOutcome::Confirm(ModalConfirm::PreviewTheme {
+                            theme_name: themes()[*preview_theme_idx].name.to_string(),
+                            transparent: *transparent,
+                        })
                     }
                     KeyCode::Right => {
                         match *cursor {
-                            0 => *volume_pct = (*volume_pct + 1).min(100),
-                            1 => *seek_secs = (*seek_secs + 1).min(120),
-                            2 => {
-                                *preview_theme_idx = (*preview_theme_idx + 1) % themes().len();
-                                // Apply live preview without closing the modal.
-                                return ModalOutcome::Confirm(ModalConfirm::PreviewTheme {
-                                    theme_name: themes()[*preview_theme_idx].name.to_string(),
-                                    transparent: *transparent,
-                                });
-                            }
+                            0 => { *volume_pct = (*volume_pct + 1).min(100); return ModalOutcome::Consumed; }
+                            1 => { *seek_secs = (*seek_secs + 1).min(120); return ModalOutcome::Consumed; }
+                            2 => *preview_theme_idx = (*preview_theme_idx + 1) % themes().len(),
                             _ => *transparent = !*transparent,
                         }
-                        ModalOutcome::Consumed
+                        ModalOutcome::Confirm(ModalConfirm::PreviewTheme {
+                            theme_name: themes()[*preview_theme_idx].name.to_string(),
+                            transparent: *transparent,
+                        })
                     }
                     // Esc and q both save and close.
                     KeyCode::Esc | KeyCode::Char('q') => {
@@ -273,64 +302,22 @@ impl Modal {
                 _ => ModalOutcome::Consumed,
             },
 
-            Modal::Rename { kind, id, input } => match code {
-                KeyCode::Enter => {
-                    let name = input.value.trim().to_string();
-                    if name.is_empty() {
-                        return ModalOutcome::Consumed;
-                    }
-                    ModalOutcome::Confirm(ModalConfirm::Rename {
-                        kind: kind.clone(),
-                        id: *id,
-                        new_name: name,
-                    })
-                }
-                KeyCode::Esc => ModalOutcome::Dismissed,
-                KeyCode::Char(c) => {
-                    input.push(c);
-                    ModalOutcome::Consumed
-                }
-                KeyCode::Backspace => {
-                    input.backspace();
-                    ModalOutcome::Consumed
-                }
-                KeyCode::Left => {
-                    input.move_left();
-                    ModalOutcome::Consumed
-                }
-                KeyCode::Right => {
-                    input.move_right();
-                    ModalOutcome::Consumed
-                }
-                _ => ModalOutcome::Consumed,
+            Modal::Rename { kind, id, input } => match handle_text_key(input, code) {
+                TextInputResult::Submitted(name) => ModalOutcome::Confirm(ModalConfirm::Rename {
+                    kind: kind.clone(),
+                    id: *id,
+                    new_name: name,
+                }),
+                TextInputResult::Dismissed => ModalOutcome::Dismissed,
+                TextInputResult::Consumed => ModalOutcome::Consumed,
             },
 
-            Modal::NewPlaylist { input } => match code {
-                KeyCode::Enter => {
-                    let name = input.value.trim().to_string();
-                    if name.is_empty() {
-                        return ModalOutcome::Consumed;
-                    }
+            Modal::NewPlaylist { input } => match handle_text_key(input, code) {
+                TextInputResult::Submitted(name) => {
                     ModalOutcome::Confirm(ModalConfirm::NewPlaylist { name })
                 }
-                KeyCode::Esc => ModalOutcome::Dismissed,
-                KeyCode::Char(c) => {
-                    input.push(c);
-                    ModalOutcome::Consumed
-                }
-                KeyCode::Backspace => {
-                    input.backspace();
-                    ModalOutcome::Consumed
-                }
-                KeyCode::Left => {
-                    input.move_left();
-                    ModalOutcome::Consumed
-                }
-                KeyCode::Right => {
-                    input.move_right();
-                    ModalOutcome::Consumed
-                }
-                _ => ModalOutcome::Consumed,
+                TextInputResult::Dismissed => ModalOutcome::Dismissed,
+                TextInputResult::Consumed => ModalOutcome::Consumed,
             },
 
             Modal::AddToPlaylist {
@@ -439,18 +426,20 @@ fn modal_block<'a>(title: &'a str, theme: &Theme) -> Block<'a> {
 
 fn render_notification(frame: &mut Frame, title: &str, message: &str, theme: &Theme) {
     let area = frame.area();
-    let rect = centered_rect(50, 5, area);
+    let rect = centered_rect(50, 7, area);
     frame.render_widget(Clear, rect);
     frame.render_widget(
         Paragraph::new(vec![
             Line::from(""),
             Line::from(Span::styled(message, Style::default().fg(theme.text))),
+            Line::from(""),
             Line::from(Span::styled(
                 "Press any key to dismiss",
                 Style::default().fg(theme.text_dim),
             )),
         ])
         .alignment(Alignment::Center)
+        .wrap(Wrap { trim: false })
         .block(modal_block(title, theme)),
         rect,
     );

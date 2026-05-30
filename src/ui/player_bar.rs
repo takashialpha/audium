@@ -166,10 +166,12 @@ fn thumb_bar(width: usize, ratio: f64, t: &Theme) -> Paragraph<'static> {
 
     let mut spans: Vec<Span> = Vec::with_capacity(width + 1);
     if filled > 0 {
-        spans.push(Span::styled(
-            "█".repeat(filled.saturating_sub(1)),
-            Style::default().fg(accent),
-        ));
+        if filled > 1 {
+            spans.push(Span::styled(
+                "█".repeat(filled - 1),
+                Style::default().fg(accent),
+            ));
+        }
         spans.push(Span::styled(
             "█",
             Style::default().fg(text).add_modifier(Modifier::BOLD),

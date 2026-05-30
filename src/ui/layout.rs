@@ -25,54 +25,27 @@ pub struct Theme {
 }
 
 impl Theme {
-    /// Returns the background color to use, or `None` when transparency is
-    /// enabled — callers must skip the `.bg(color)` style call entirely when
-    /// `None` so ratatui emits no background escape and the compositor can
-    /// show through.
-    pub fn bg(&self) -> Option<Color> {
-        if self.transparent {
-            None
-        } else {
-            Some(self.bg)
-        }
+    fn maybe_color(&self, color: Color) -> Option<Color> {
+        (!self.transparent).then_some(color)
     }
 
-    pub fn panel_bg(&self) -> Option<Color> {
-        if self.transparent {
-            None
-        } else {
-            Some(self.panel_bg)
-        }
-    }
-
-    pub fn sidebar_bg(&self) -> Option<Color> {
-        if self.transparent {
-            None
-        } else {
-            Some(self.sidebar_bg)
-        }
-    }
-
-    /// Applies the background color to a `Style` only if transparency is off.
-    pub fn apply_bg(&self, style: Style) -> Style {
-        match self.bg() {
+    fn apply_color(&self, style: Style, color: Color) -> Style {
+        match self.maybe_color(color) {
             Some(c) => style.bg(c),
             None => style,
         }
+    }
+
+    pub fn apply_bg(&self, style: Style) -> Style {
+        self.apply_color(style, self.bg)
     }
 
     pub fn apply_panel_bg(&self, style: Style) -> Style {
-        match self.panel_bg() {
-            Some(c) => style.bg(c),
-            None => style,
-        }
+        self.apply_color(style, self.panel_bg)
     }
 
     pub fn apply_sidebar_bg(&self, style: Style) -> Style {
-        match self.sidebar_bg() {
-            Some(c) => style.bg(c),
-            None => style,
-        }
+        self.apply_color(style, self.sidebar_bg)
     }
 }
 

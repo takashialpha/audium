@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::ui::layout::Theme;
+use crate::ui::layout::{Theme, truncate};
 
 /// A file extension is considered audio if it is one of these.
 const AUDIO_EXTS: &[&str] = &[
@@ -58,10 +58,10 @@ impl FilePicker {
         self.entries.clear();
         self.cursor = 0;
 
-        if self.current_dir.parent().is_some() {
+        if let Some(parent) = self.current_dir.parent() {
             self.entries.push(DirEntry {
                 name: "..".into(),
-                path: self.current_dir.parent().unwrap().to_path_buf(),
+                path: parent.to_path_buf(),
                 is_dir: true,
             });
         }
@@ -168,7 +168,10 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker, theme: &Theme) 
 
     frame.render_widget(Clear, rect);
 
-    let title = format!(" 📁 {} ", picker.current_dir.to_string_lossy());
+    // "  📁  " prefix (5 cols) + trailing " " (1) + corners (2) = 8 overhead
+    let path_max = width.saturating_sub(8) as usize;
+    let path_str = picker.current_dir.to_string_lossy();
+    let title = format!(" 📁 {} ", truncate(&path_str, path_max));
 
     let block = Block::default()
         .title(title)
@@ -192,6 +195,7 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker, theme: &Theme) 
         ..inner
     };
 
+    let name_max = inner.width.saturating_sub(2) as usize; // 2 cols for the icon
     let items: Vec<ListItem> = picker
         .entries
         .iter()
@@ -208,7 +212,7 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker, theme: &Theme) 
             };
             ListItem::new(Line::from(vec![
                 Span::styled(icon, style),
-                Span::styled(e.name.clone(), style),
+                Span::styled(truncate(&e.name, name_max), style),
             ]))
         })
         .collect();

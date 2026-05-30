@@ -99,7 +99,8 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(library: Library, player: PlayerHandle, settings: Settings) -> Self {
-        let theme = theme_by_name(&settings.theme_name).clone();
+        let mut theme = theme_by_name(&settings.theme_name).clone();
+        theme.transparent = settings.transparent;
         Self {
             library,
             player,
@@ -191,10 +192,27 @@ impl AppState {
     }
 
     pub fn play_prev(&mut self) {
-        if let Some(cur) = self.now_playing
-            && cur > 0
-        {
-            self.play_queue_index(cur - 1);
+        match self.loop_mode {
+            LoopMode::Track => {
+                let idx = self.now_playing.unwrap_or(0);
+                self.play_queue_index(idx);
+            }
+            LoopMode::Queue => {
+                if !self.queue.is_empty() {
+                    let idx = match self.now_playing {
+                        None | Some(0) => self.queue.len() - 1,
+                        Some(i) => i - 1,
+                    };
+                    self.play_queue_index(idx);
+                }
+            }
+            LoopMode::Off => {
+                if let Some(cur) = self.now_playing
+                    && cur > 0
+                {
+                    self.play_queue_index(cur - 1);
+                }
+            }
         }
     }
 
@@ -214,6 +232,10 @@ impl AppState {
     /// Returns the tracks of the currently displayed playlist.
     pub fn active_tracks(&self) -> Vec<&Track> {
         self.library.playlist_tracks(self.active_playlist)
+    }
+
+    fn selected_track(&self) -> Option<Track> {
+        self.active_tracks().get(self.tracklist_cursor).map(|t| (*t).clone())
     }
 
     // ── Tick ─────────────────────────────────────────────────────────────
@@ -242,9 +264,8 @@ impl AppState {
                     return;
                 }
                 FilePickerOutcome::Selected(path) => {
-                    let path_clone = path.clone();
                     self.file_picker = None;
-                    self.import_file(&path_clone);
+                    self.import_file(&path);
                     return;
                 }
             }
@@ -415,12 +436,7 @@ impl AppState {
                 self.focus = Focus::TrackList;
             }
             Focus::TrackList => {
-                let tracks = self
-                    .active_tracks()
-                    .into_iter()
-                    .cloned()
-                    .collect::<Vec<_>>();
-                if let Some(track) = tracks.get(self.tracklist_cursor).cloned() {
+                if let Some(track) = self.selected_track() {
                     let insert_at = self.now_playing.map(|i| i + 1).unwrap_or(0);
                     self.queue.insert(insert_at, track);
                     self.play_queue_index(insert_at);
@@ -434,23 +450,13 @@ impl AppState {
     }
 
     fn action_add_to_queue(&mut self) {
-        let tracks = self
-            .active_tracks()
-            .into_iter()
-            .cloned()
-            .collect::<Vec<_>>();
-        if let Some(track) = tracks.get(self.tracklist_cursor).cloned() {
+        if let Some(track) = self.selected_track() {
             self.queue.push(track);
         }
     }
 
     fn action_add_to_playlist(&mut self) {
-        let tracks = self
-            .active_tracks()
-            .into_iter()
-            .cloned()
-            .collect::<Vec<_>>();
-        if let Some(track) = tracks.get(self.tracklist_cursor) {
+        if let Some(track) = self.selected_track() {
             let choices: Vec<(u64, String)> = self
                 .library
                 .playlists
@@ -461,7 +467,7 @@ impl AppState {
 
             self.modal = Some(Modal::AddToPlaylist {
                 track_id: track.id,
-                track_name: track.name.clone(),
+                track_name: track.name,
                 choices,
                 cursor: 0,
             });
@@ -482,12 +488,7 @@ impl AppState {
                 }
             }
             Focus::TrackList => {
-                let tracks = self
-                    .active_tracks()
-                    .into_iter()
-                    .cloned()
-                    .collect::<Vec<_>>();
-                if let Some(track) = tracks.get(self.tracklist_cursor) {
+                if let Some(track) = self.selected_track() {
                     self.modal = Some(Modal::ConfirmRemove {
                         description: format!("Remove \"{}\" from library?", track.name),
                         target: RemoveTarget::TrackFromLibrary { track_id: track.id },
@@ -521,16 +522,17 @@ impl AppState {
                     });
                 }
             }
-            Focus::TrackList | Focus::Queue => {
-                let track: Option<Track> = match self.focus {
-                    Focus::TrackList => self
-                        .active_tracks()
-                        .get(self.tracklist_cursor)
-                        .map(|t| (*t).clone()),
-                    Focus::Queue => self.queue.get(self.queue_cursor).cloned(),
-                    _ => None,
-                };
-                if let Some(t) = track {
+            Focus::TrackList => {
+                if let Some(t) = self.selected_track() {
+                    self.modal = Some(Modal::Rename {
+                        kind: "Track".into(),
+                        id: t.id,
+                        input: TextInput::with_value(&t.name),
+                    });
+                }
+            }
+            Focus::Queue => {
+                if let Some(t) = self.queue.get(self.queue_cursor).cloned() {
                     self.modal = Some(Modal::Rename {
                         kind: "Track".into(),
                         id: t.id,
@@ -611,11 +613,26 @@ impl AppState {
 
                 RemoveTarget::TrackFromLibrary { track_id } => {
                     let _ = self.library.remove_track(track_id);
-                    let before_len = self.queue.len();
+
+                    let playing_removed = self.now_playing
+                        .and_then(|np| self.queue.get(np))
+                        .map(|t| t.id == track_id)
+                        .unwrap_or(false);
+                    let removed_before_np = self.now_playing
+                        .map(|np| self.queue[..np].iter().filter(|t| t.id == track_id).count())
+                        .unwrap_or(0);
+
                     self.queue.retain(|t| t.id != track_id);
-                    if self.queue.len() != before_len {
+
+                    if playing_removed {
                         self.halt_playback();
+                    } else if removed_before_np > 0
+                        && let Some(np) = self.now_playing.as_mut()
+                    {
+                        *np -= removed_before_np;
                     }
+
+                    self.queue_cursor = self.queue_cursor.min(self.queue.len().saturating_sub(1));
                     self.tracklist_cursor = self
                         .tracklist_cursor
                         .min(self.active_tracks().len().saturating_sub(1));
@@ -721,11 +738,13 @@ impl AppState {
     fn import_file(&mut self, path: &std::path::Path) {
         match self.library.add_file(path) {
             Ok((track, is_new)) => {
-                if is_new {
-                    self.modal = Some(Modal::Notify {
-                        message: format!("\"{}\" added to library.", track.name),
-                    });
-                }
+                self.modal = Some(Modal::Notify {
+                    message: if is_new {
+                        format!("\"{}\" added to library.", track.name)
+                    } else {
+                        format!("\"{}\" is already in the library.", track.name)
+                    },
+                });
             }
             Err(e) => {
                 self.modal = Some(Modal::Notify {
@@ -741,20 +760,26 @@ pub fn run(cli: Cli) -> Result<()> {
     let mut library = Library::load()?;
     let settings = Settings::load();
 
-    let initial_track: Option<Track> = if let Some(file) = cli.file {
-        let (track, _) = library.add_file(&file)?;
-        Some(track)
+    let initial_track: Option<(Track, bool)> = if let Some(file) = cli.file {
+        let result = library.add_file(&file)?;
+        Some(result)
     } else {
         None
     };
 
-    let player = spawn_audio_thread(settings.default_volume)?; // no need to be mutable by now
+    let player = spawn_audio_thread(settings.default_volume)?;
 
     let mut state = AppState::new(library, player, settings);
 
-    if let Some(track) = initial_track {
+    if let Some((track, is_new)) = initial_track {
+        let msg = if is_new {
+            format!("\"{}\" added to library.", track.name)
+        } else {
+            format!("\"{}\" is already in the library.", track.name)
+        };
         state.enqueue(track);
         state.play_queue_index(0);
+        state.modal = Some(Modal::Notify { message: msg });
     }
 
     let terminal = ratatui::init();

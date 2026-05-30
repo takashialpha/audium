@@ -169,17 +169,15 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 
 ## TODO
 
-- custom track fields (author, album, tags, etc.) stored in `library.json`
+- custom track fields (author, album, tags, etc.) stored in `library.json` (or just ID3)
 - filtering by custom fields
 - playback speed presets (`0.5×` → `2×`)
 - user-provided synced lyrics with overlay/panel support
-- YouTube audio import (WIP by contributor)
+- YouTube audio import
 
 ## Notes
 
-- truncate long filenames in filepicker popups
 - add more feature cards to the website grid
-- make transparency update live + apply on startup
 - use the GIF on the website too
 
 ## Contributing
