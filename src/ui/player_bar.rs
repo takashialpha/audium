@@ -63,11 +63,22 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     };
     let loop_width = loop_label.chars().count() as u16;
 
+    let speed = state.player.playback_speed;
+    let speed_label = if (speed - 1.0).abs() > 0.001 {
+        // Round to 2dp for display to avoid float-representation noise.
+        let s = (speed * 100.0).round() / 100.0;
+        format!(" {s}× ")
+    } else {
+        String::new()
+    };
+    let speed_width = speed_label.chars().count() as u16;
+
     let title_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Length(3),
             Constraint::Min(0),
+            Constraint::Length(speed_width),
             Constraint::Length(loop_width),
         ])
         .split(rows[0]);
@@ -80,10 +91,17 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         Paragraph::new(title).style(Style::default().fg(t.text).add_modifier(Modifier::BOLD)),
         title_cols[1],
     );
+    if speed_width > 0 {
+        frame.render_widget(
+            Paragraph::new(speed_label.as_str())
+                .style(Style::default().fg(t.accent).add_modifier(Modifier::BOLD)),
+            title_cols[2],
+        );
+    }
     if !loop_label.is_empty() {
         frame.render_widget(
             Paragraph::new(loop_label).style(Style::default().fg(t.subtle)),
-            title_cols[2],
+            title_cols[3],
         );
     }
 

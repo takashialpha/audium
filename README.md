@@ -24,10 +24,13 @@
 ## Features
 
 - **Keyboard-driven** — every action is one key. No mouse required.
-- **It's your library** — your tracks are stored as plain JSON at `~/.audium/library.json`. Edit it by hand, back it up, move it anywhere. audium doesn't rename your files, doesn't embed metadata, and never phones home.
+- **Track metadata** — artist, album, year and genre are read automatically from file tags on import and shown in the tracklist, queue, and player bar.
+- **It's your library** — your tracks are stored as plain JSON at `~/.audium/library.json`. Edit it by hand, back it up, move it anywhere. audium doesn't rename your files and never phones home.
 - **Themes** — 15 built-in themes (dark, light, nord, gruvbox, catppuccin, rosé pine, dracula, tokyo night, and more). Switch live from the settings menu with instant preview. Transparency support for composited terminals.
 - **Playlists** — create, rename, delete. *All Tracks* is always there.
 - **Loop modes** — off, loop queue, or loop track. Toggle with `l`.
+- **Playback speed** — adjustable from 0.05× to 3.0× in 0.05× steps with `[` / `]`.
+- **Tracklist filter** — press `/` to search across title, artist, album, year and genre in real time.
 - **Built-in file picker** — import audio files without leaving the app.
 - **Threaded audio** — playback runs on its own thread; the UI never stutters your music.
 - **System audio output** — audium plays through your default system output. Change the output device in your OS and audium follows — no in-app device switching, no surprises.
@@ -83,15 +86,16 @@ audium stores your library at `~/.audium/library.json` and your music at `~/.aud
 
 ### Playback
 
-| Key          | Action                   |
-|--------------|--------------------------|
-| `Space`      | Play / Pause             |
-| `n`          | Next track               |
-| `N`          | Previous track           |
-| `←` / `→`   | Seek backward / forward  |
-| `+` / `=`   | Volume up                |
-| `-`          | Volume down              |
-| `l`          | Cycle loop mode          |
+| Key          | Action                            |
+|--------------|-----------------------------------|
+| `Space`      | Play / Pause                      |
+| `n`          | Next track                        |
+| `N`          | Previous track                    |
+| `←` / `→`   | Seek backward / forward           |
+| `+` / `=`   | Volume up                         |
+| `-`          | Volume down                       |
+| `l`          | Cycle loop mode                   |
+| `[` / `]`   | Speed down / up (0.05× steps)     |
 
 ### Navigation
 
@@ -106,6 +110,7 @@ audium stores your library at `~/.audium/library.json` and your music at `~/.aud
 | Key  | Action                              |
 |------|-------------------------------------|
 | `f`  | Open file picker                    |
+| `/`  | Filter tracklist                    |
 | `a`  | Add selected track to queue         |
 | `p`  | Add selected track to a playlist    |
 | `c`  | Create new playlist                 |
@@ -169,9 +174,8 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 
 ## TODO
 
-- playback speed presets (`0.5×` → `2×`)
-- user-provided metadata (with in-app edition) + synced lyrics with overlay/panel support (in app insertion?)
-- YouTube audio import
+- user-provided metadata (in-app editing) + synced lyrics with overlay/panel support
+- YouTube audio import (no external binary deps)
 
 ## Contributing
 

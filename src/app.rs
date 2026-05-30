@@ -15,6 +15,12 @@ use crate::{
     ui::layout::{Theme, theme_by_name},
 };
 
+// ── Playback speed ─────────────────────────────────────────────────────────
+
+const SPEED_STEP: f32 = 0.05;
+const SPEED_MIN: f32 = 0.05;
+const SPEED_MAX: f32 = 3.0;
+
 // - LoopMode -
 
 /// Playback loop mode, cycled with `l`.
@@ -101,6 +107,7 @@ pub struct AppState {
     pub tracklist_filter: String,
     /// Whether the filter bar is currently receiving keyboard input.
     pub filter_active: bool,
+
 }
 
 impl AppState {
@@ -137,11 +144,10 @@ impl AppState {
         if self.player.is_paused {
             return self.seek_offset;
         }
-        self.seek_offset
-            + self
-                .track_start
-                .map(|s| s.elapsed())
-                .unwrap_or(Duration::ZERO)
+        let wall = self.track_start
+            .map(|s| s.elapsed())
+            .unwrap_or(Duration::ZERO);
+        self.seek_offset + wall.mul_f32(self.player.playback_speed)
     }
 
     pub fn progress_ratio(&self) -> f64 {
@@ -374,6 +380,8 @@ impl AppState {
             KeyCode::Char('m') => self.action_open_menu(),
             KeyCode::Char('l') => self.loop_mode = self.loop_mode.cycle(),
             KeyCode::Char('z') => self.action_shuffle_playlist(),
+            KeyCode::Char('[') => self.action_speed_down(),
+            KeyCode::Char(']') => self.action_speed_up(),
             KeyCode::Char('/') if self.focus == Focus::TrackList => {
                 self.filter_active = true;
             }
@@ -647,6 +655,38 @@ impl AppState {
                 playlist_id: pl.id,
                 playlist_name: pl.name.clone(),
             });
+        }
+    }
+
+    // ── Playback speed ────────────────────────────────────────────────────
+
+    fn action_speed_up(&mut self) {
+        let new = ((self.player.playback_speed + SPEED_STEP) * 100.0).round() / 100.0;
+        self.change_speed(new.min(SPEED_MAX));
+    }
+
+    fn action_speed_down(&mut self) {
+        let new = ((self.player.playback_speed - SPEED_STEP) * 100.0).round() / 100.0;
+        self.change_speed(new.max(SPEED_MIN));
+    }
+
+    fn change_speed(&mut self, new_speed: f32) {
+        if (new_speed - self.player.playback_speed).abs() < 0.001 {
+            return;
+        }
+        // Snapshot track position with the OLD speed before changing.
+        let current_pos = if self.now_playing.is_some() { Some(self.elapsed()) } else { None };
+        self.player.playback_speed = new_speed;
+        // Re-seek to the same position so the new speed takes effect immediately.
+        if let Some(pos) = current_pos
+            && let Some(np) = self.now_playing
+            && let Some(track) = self.queue.get(np)
+        {
+            let path = track.path.clone();
+            let paused = self.player.is_paused;
+            self.seek_offset = pos;
+            self.track_start = if paused { None } else { Some(Instant::now()) };
+            self.player.seek(path, pos, paused);
         }
     }
 

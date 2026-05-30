@@ -595,7 +595,7 @@ fn render_playlist_picker(
 
 fn render_help(frame: &mut Frame, theme: &Theme) {
     let area = frame.area();
-    let rect = centered_rect(60, 35, area);
+    let rect = centered_rect(60, 36, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Help — Keybindings", theme);
@@ -617,6 +617,7 @@ fn render_help(frame: &mut Frame, theme: &Theme) {
         ("+ / =", "Volume up"),
         ("-", "Volume down"),
         ("l", "Cycle loop mode"),
+        ("[  /  ]", "Speed down / up"),
         ("", ""),
         ("Enter", "Play selected track"),
         ("a", "Add track to queue"),

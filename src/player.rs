@@ -14,16 +14,18 @@ use std::{
 /// Commands sent from the UI thread to the audio thread.
 #[derive(Debug)]
 pub enum PlayerCommand {
-    Play(PathBuf),
+    Play { path: PathBuf, speed: f32 },
     Stop,
     Pause,
     Resume,
     /// Seek to an absolute position.  `paused` tells the thread whether to
-    /// stay paused after repositioning.
+    /// stay paused after repositioning.  `speed` is re-applied to the fresh
+    /// decoder so speed changes take effect immediately.
     Seek {
         path: PathBuf,
         position: Duration,
         paused: bool,
+        speed: f32,
     },
     SetVolume(f32),
     Quit,
@@ -57,6 +59,8 @@ pub struct PlayerHandle {
     pub volume: f32,
     /// Shadow of the audio thread's pause state.
     pub is_paused: bool,
+    /// Current playback speed multiplier, sent with every Play/Seek command.
+    pub playback_speed: f32,
 }
 
 impl PlayerHandle {
@@ -67,7 +71,7 @@ impl PlayerHandle {
 
     pub fn play(&mut self, path: PathBuf) {
         self.is_paused = false;
-        self.send(PlayerCommand::Play(path));
+        self.send(PlayerCommand::Play { path, speed: self.playback_speed });
     }
 
     pub fn stop(&mut self) {
@@ -93,6 +97,7 @@ impl PlayerHandle {
             path,
             position,
             paused,
+            speed: self.playback_speed,
         });
     }
 
@@ -151,6 +156,7 @@ pub fn spawn_audio_thread(default_volume: f32) -> Result<PlayerHandle> {
         event_rx,
         volume,
         is_paused: false,
+        playback_speed: 1.0,
     })
 }
 
@@ -203,12 +209,12 @@ fn handle_command(
     event_tx: &Sender<PlayerEvent>,
 ) {
     match cmd {
-        PlayerCommand::Play(path) => {
+        PlayerCommand::Play { path, speed } => {
             player.stop();
             match open_source(&path) {
                 Ok(source) => {
                     *stopped = false;
-                    player.append(source);
+                    player.append(source.speed(speed));
                     player.play();
                 }
                 Err(e) => {
@@ -225,13 +231,14 @@ fn handle_command(
             path,
             position,
             paused,
+            speed,
         } => {
             player.stop();
             match open_source(&path) {
                 Ok(mut source) => {
                     *stopped = false;
                     let _ = source.try_seek(position);
-                    player.append(source);
+                    player.append(source.speed(speed));
                     if paused {
                         player.pause();
                     } else {
