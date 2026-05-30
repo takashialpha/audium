@@ -8,13 +8,14 @@ license = "Apache-2.0"
 repository = "https://github.com/takashialpha/audium"
 
 [dependencies]
-anyhow = "1.0"
+anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-crossterm = "0.29"
+crossterm = "0"
 dirs-next = "2"
-rand = "0.10"
-ratatui = "0.30"
-rodio = { version = "0.22", features = ["symphonia-all"] }
+lofty = "0"
+rand = "0"
+ratatui = "0"
+rodio = { version = "0", features = ["symphonia-all"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

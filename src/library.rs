@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use lofty::prelude::{Accessor, TaggedFileExt};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -22,21 +23,60 @@ pub const ALL_TRACKS_ID: PlaylistId = 0;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     pub id: TrackId,
-    /// Display name derived from the filename stem.
+    /// Display name: title tag if present, otherwise the filename stem.
     pub name: String,
     /// Absolute path to the audio file (inside ~/.audium/music/ after import).
     pub path: PathBuf,
+
+    // Optional metadata read from file tags on import.
+    // All default to None so existing library.json files deserialize cleanly.
+    #[serde(default)]
+    pub artist: Option<String>,
+    #[serde(default)]
+    pub album: Option<String>,
+    #[serde(default)]
+    pub year: Option<u32>,
+    #[serde(default)]
+    pub genre: Option<String>,
 }
 
 impl Track {
-    pub fn new(id: TrackId, path: impl Into<PathBuf>) -> Self {
-        let path: PathBuf = path.into();
-        let name = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Unknown".to_string());
-        Self { id, name, path }
+    /// Returns `"{artist} — {name}"` when an artist is set, otherwise `"{name}"`.
+    pub fn display(&self) -> String {
+        match self.artist.as_deref().filter(|s| !s.is_empty()) {
+            Some(artist) => format!("{artist} — {}", self.name),
+            None => self.name.clone(),
+        }
     }
+}
+
+// ── Tag reading ────────────────────────────────────────────────────────────
+
+struct FileTags {
+    title:  Option<String>,
+    artist: Option<String>,
+    album:  Option<String>,
+    year:   Option<u32>,
+    genre:  Option<String>,
+}
+
+fn read_file_tags(path: &Path) -> Option<FileTags> {
+    use lofty::config::ParseOptions;
+    use lofty::probe::Probe;
+    let tagged = Probe::open(path)
+        .ok()?
+        .options(ParseOptions::new().read_cover_art(false))
+        .read()
+        .ok()?;
+    let tag = tagged.primary_tag().or_else(|| tagged.first_tag())?;
+    let nonempty = |s: String| if s.is_empty() { None } else { Some(s) };
+    Some(FileTags {
+        title:  tag.title().map(|s| s.into_owned()).and_then(nonempty),
+        artist: tag.artist().map(|s| s.into_owned()).and_then(nonempty),
+        album:  tag.album().map(|s| s.into_owned()).and_then(nonempty),
+        genre:  tag.genre().map(|s| s.into_owned()).and_then(nonempty),
+        year:   tag.date().map(|ts| u32::from(ts.year)),
+    })
 }
 
 // ── Playlist ───────────────────────────────────────────────────────────────
@@ -190,7 +230,21 @@ impl Library {
 
         let id = self.next_track_id;
         self.next_track_id += 1;
-        let track = Track::new(id, &dest);
+
+        let tags = read_file_tags(&dest);
+        let name = tags.as_ref()
+            .and_then(|t| t.title.clone())
+            .or_else(|| dest.file_stem().map(|s| s.to_string_lossy().into_owned()))
+            .unwrap_or_else(|| "Unknown".to_string());
+        let track = Track {
+            id,
+            name,
+            path: dest.clone(),
+            artist: tags.as_ref().and_then(|t| t.artist.clone()),
+            album:  tags.as_ref().and_then(|t| t.album.clone()),
+            year:   tags.as_ref().and_then(|t| t.year),
+            genre:  tags.as_ref().and_then(|t| t.genre.clone()),
+        };
 
         self.tracks.push(track.clone());
 

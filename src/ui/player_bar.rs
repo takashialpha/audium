@@ -47,11 +47,14 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         "▶ "
     };
 
-    let title = state
-        .now_playing
-        .and_then(|i| state.queue.get(i))
-        .map(|tr| tr.name.as_str())
-        .unwrap_or("-- Nothing playing --");
+    let current_track = state.now_playing.and_then(|i| state.queue.get(i));
+    let title_owned;
+    let title: &str = if let Some(tr) = current_track {
+        title_owned = tr.display();
+        &title_owned
+    } else {
+        "-- Nothing playing --"
+    };
 
     let loop_label = match state.loop_mode {
         LoopMode::Off => "",
@@ -111,6 +114,25 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         Paragraph::new(time_label).style(Style::default().fg(t.text_dim)),
         progress_cols[1],
     );
+
+    // ── Metadata line (album · year · genre) ─────────────────────────────
+    if let Some(tr) = current_track {
+        let parts: Vec<String> = [
+            tr.album.clone(),
+            tr.year.map(|y| y.to_string()),
+            tr.genre.clone(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if !parts.is_empty() {
+            frame.render_widget(
+                Paragraph::new(parts.join("  ·  "))
+                    .style(Style::default().fg(t.text_dim)),
+                rows[2],
+            );
+        }
+    }
 
     // ── Vertical volume bar ───────────────────────────────────────────────
     let vol = state.player.volume;

@@ -95,6 +95,12 @@ pub struct AppState {
     pub theme: Theme,
     pub settings: Settings,
     pub should_quit: bool,
+
+    // ── Tracklist filter ─────────────────────────────────────────────────
+    /// Current filter string applied to the active playlist's track list.
+    pub tracklist_filter: String,
+    /// Whether the filter bar is currently receiving keyboard input.
+    pub filter_active: bool,
 }
 
 impl AppState {
@@ -120,6 +126,8 @@ impl AppState {
             theme,
             settings,
             should_quit: false,
+            tracklist_filter: String::new(),
+            filter_active: false,
         }
     }
 
@@ -229,9 +237,23 @@ impl AppState {
 
     // ── Active playlist helpers ──────────────────────────────────────────
 
-    /// Returns the tracks of the currently displayed playlist.
+    /// Returns the tracks of the currently displayed playlist, filtered if a
+    /// filter string is set.
     pub fn active_tracks(&self) -> Vec<&Track> {
-        self.library.playlist_tracks(self.active_playlist)
+        let all = self.library.playlist_tracks(self.active_playlist);
+        if self.tracklist_filter.is_empty() {
+            return all;
+        }
+        let q = self.tracklist_filter.to_lowercase();
+        all.into_iter()
+            .filter(|t| {
+                t.name.to_lowercase().contains(&q)
+                    || t.artist.as_deref().is_some_and(|s| s.to_lowercase().contains(&q))
+                    || t.album.as_deref().is_some_and(|s| s.to_lowercase().contains(&q))
+                    || t.genre.as_deref().is_some_and(|s| s.to_lowercase().contains(&q))
+                    || t.year.is_some_and(|y| y.to_string().contains(&*q))
+            })
+            .collect()
     }
 
     fn selected_track(&self) -> Option<Track> {
@@ -289,6 +311,34 @@ impl AppState {
             }
         }
 
+        // ── Filter input (captures printable chars when active) ───────────
+        if self.filter_active {
+            match code {
+                KeyCode::Esc => {
+                    self.tracklist_filter.clear();
+                    self.filter_active = false;
+                    self.tracklist_cursor = 0;
+                    return;
+                }
+                KeyCode::Backspace => {
+                    self.tracklist_filter.pop();
+                    self.tracklist_cursor = 0;
+                    return;
+                }
+                KeyCode::Char(c) => {
+                    self.tracklist_filter.push(c);
+                    self.tracklist_cursor = 0;
+                    return;
+                }
+                // Enter exits typing mode; falls through to action_enter below.
+                KeyCode::Enter => {
+                    self.filter_active = false;
+                }
+                // All other keys (navigation, playback shortcuts) fall through.
+                _ => {}
+            }
+        }
+
         // ── Global keybindings ─────────────────────────────────────────
         match code {
             KeyCode::Char('q') => self.should_quit = true,
@@ -304,7 +354,12 @@ impl AppState {
             KeyCode::Char('-') => self.player.volume_down(),
 
             // Navigation
-            KeyCode::Tab => self.focus = self.focus.cycle(),
+            KeyCode::Tab => {
+                self.focus = self.focus.cycle();
+                self.filter_active = false;
+                self.tracklist_filter.clear();
+                self.tracklist_cursor = 0;
+            }
             KeyCode::Char('j') | KeyCode::Down => self.cursor_down(),
             KeyCode::Char('k') | KeyCode::Up => self.cursor_up(),
 
@@ -319,6 +374,9 @@ impl AppState {
             KeyCode::Char('m') => self.action_open_menu(),
             KeyCode::Char('l') => self.loop_mode = self.loop_mode.cycle(),
             KeyCode::Char('z') => self.action_shuffle_playlist(),
+            KeyCode::Char('/') if self.focus == Focus::TrackList => {
+                self.filter_active = true;
+            }
 
             _ => {}
         }
@@ -370,6 +428,8 @@ impl AppState {
         if let Some(pl) = self.library.playlists.get(self.sidebar_cursor) {
             self.active_playlist = pl.id;
             self.tracklist_cursor = 0;
+            self.tracklist_filter.clear();
+            self.filter_active = false;
         }
     }
 

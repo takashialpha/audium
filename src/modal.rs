@@ -595,7 +595,7 @@ fn render_playlist_picker(
 
 fn render_help(frame: &mut Frame, theme: &Theme) {
     let area = frame.area();
-    let rect = centered_rect(60, 34, area);
+    let rect = centered_rect(60, 35, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Help — Keybindings", theme);
@@ -628,6 +628,7 @@ fn render_help(frame: &mut Frame, theme: &Theme) {
         ("z", "Shuffle playlist into queue"),
         ("", ""),
         ("f", "Open file picker"),
+        ("/", "Filter tracklist"),
         ("", ""),
         ("m", "Open menu"),
     ];
