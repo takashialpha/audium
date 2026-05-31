@@ -38,6 +38,9 @@ pub struct Track {
     pub year: Option<u32>,
     #[serde(default)]
     pub genre: Option<String>,
+    /// Raw LRC text or plain lyrics, set by the user in-app.
+    #[serde(default)]
+    pub lyrics: Option<String>,
 }
 
 impl Track {
@@ -244,6 +247,7 @@ impl Library {
             album:  tags.as_ref().and_then(|t| t.album.clone()),
             year:   tags.as_ref().and_then(|t| t.year),
             genre:  tags.as_ref().and_then(|t| t.genre.clone()),
+            lyrics: None,
         };
 
         self.tracks.push(track.clone());
@@ -273,6 +277,38 @@ impl Library {
             t.name = new_name.into();
         }
         self.save()
+    }
+
+    /// Replaces all user-editable metadata for a track (no file is touched).
+    pub fn update_track_metadata(
+        &mut self,
+        id: TrackId,
+        name: String,
+        artist: Option<String>,
+        album: Option<String>,
+        year: Option<u32>,
+        genre: Option<String>,
+    ) -> Result<()> {
+        if let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) {
+            t.name = name;
+            t.artist = artist;
+            t.album = album;
+            t.year = year;
+            t.genre = genre;
+            self.save()
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Replaces (or clears) the raw lyrics text for a track.
+    pub fn set_track_lyrics(&mut self, id: TrackId, lyrics: Option<String>) -> Result<()> {
+        if let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) {
+            t.lyrics = lyrics;
+            self.save()
+        } else {
+            Ok(())
+        }
     }
 
     /// Returns a reference to a track by id.

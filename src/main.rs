@@ -2,6 +2,7 @@ mod app;
 mod cli;
 mod filepicker;
 mod library;
+mod lyrics;
 mod modal;
 mod player;
 mod settings;

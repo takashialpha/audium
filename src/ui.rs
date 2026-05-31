@@ -1,4 +1,5 @@
 pub mod layout;
+pub mod lyrics_overlay;
 pub mod overlay;
 pub mod player_bar;
 pub mod queue;

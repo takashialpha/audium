@@ -24,7 +24,8 @@
 ## Features
 
 - **Keyboard-driven** — every action is one key. No mouse required.
-- **Track metadata** — artist, album, year and genre are read automatically from file tags on import and shown in the tracklist, queue, and player bar.
+- **Track metadata** — artist, album, year and genre are read automatically from file tags on import and shown throughout the UI. Edit any field in-app with `e`.
+- **Lyrics** — store plain text or LRC synced lyrics per track. Toggle an overlay with `y` — synced lyrics auto-scroll to the current line; plain lyrics scroll with `j`/`k`. Edit directly in the built-in text editor.
 - **It's your library** — your tracks are stored as plain JSON at `~/.audium/library.json`. Edit it by hand, back it up, move it anywhere. audium doesn't rename your files and never phones home.
 - **Themes** — 15 built-in themes (dark, light, nord, gruvbox, catppuccin, rosé pine, dracula, tokyo night, and more). Switch live from the settings menu with instant preview. Transparency support for composited terminals.
 - **Playlists** — create, rename, delete. *All Tracks* is always there.
@@ -80,7 +81,7 @@ audium stores your library at `~/.audium/library.json` and your music at `~/.aud
 
 | Key          | Action                   |
 |--------------|--------------------------|
-| `q`          | Quit                     |
+| `q`          | Quit (confirm)           |
 | `Tab`        | Cycle panel focus        |
 | `?`          | Toggle help overlay      |
 
@@ -117,6 +118,8 @@ audium stores your library at `~/.audium/library.json` and your music at `~/.aud
 | `z`  | Shuffle playlist into queue         |
 | `d`  | Remove selected item                |
 | `r`  | Rename selected track or playlist   |
+| `e`  | Edit track metadata & lyrics        |
+| `y`  | Toggle lyrics overlay               |
 | `m`  | Open menu                           |
 
 ---
@@ -174,7 +177,6 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 
 ## TODO
 
-- user-provided metadata (in-app editing) + synced lyrics with overlay/panel support
 - YouTube audio import (no external binary deps)
 
 ## Contributing
