@@ -10,7 +10,7 @@ env:
 
 jobs:
   test:
-    name: Build, Test, Clippy
+    name: Test, Clippy
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
