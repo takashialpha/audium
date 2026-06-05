@@ -163,7 +163,8 @@ impl AppState {
         if self.player.is_paused {
             return self.seek_offset;
         }
-        let wall = self.track_start
+        let wall = self
+            .track_start
             .map(|s| s.elapsed())
             .unwrap_or(Duration::ZERO);
         self.seek_offset + wall.mul_f32(self.player.playback_speed)
@@ -275,12 +276,19 @@ impl AppState {
             return;
         }
         let q = self.tracklist_filter.to_lowercase();
-        self.filtered_ids = all.iter()
+        self.filtered_ids = all
+            .iter()
             .filter(|t| {
                 t.name.to_lowercase().contains(&q)
-                    || t.artist.as_deref().is_some_and(|s| s.to_lowercase().contains(&q))
-                    || t.album.as_deref().is_some_and(|s| s.to_lowercase().contains(&q))
-                    || t.genre.as_deref().is_some_and(|s| s.to_lowercase().contains(&q))
+                    || t.artist
+                        .as_deref()
+                        .is_some_and(|s| s.to_lowercase().contains(&q))
+                    || t.album
+                        .as_deref()
+                        .is_some_and(|s| s.to_lowercase().contains(&q))
+                    || t.genre
+                        .as_deref()
+                        .is_some_and(|s| s.to_lowercase().contains(&q))
                     || t.year.is_some_and(|y| y.to_string().contains(&*q))
             })
             .map(|t| t.id)
@@ -289,13 +297,16 @@ impl AppState {
 
     /// Returns the filtered tracks for the active playlist from the cached ID list.
     pub fn active_tracks(&self) -> Vec<&Track> {
-        self.filtered_ids.iter()
+        self.filtered_ids
+            .iter()
             .filter_map(|&id| self.library.track(id))
             .collect()
     }
 
     fn selected_track(&self) -> Option<Track> {
-        self.active_tracks().get(self.tracklist_cursor).map(|t| (*t).clone())
+        self.active_tracks()
+            .get(self.tracklist_cursor)
+            .map(|t| (*t).clone())
     }
 
     // ── Tick ─────────────────────────────────────────────────────────────
@@ -733,7 +744,11 @@ impl AppState {
             return;
         }
         // Snapshot track position with the OLD speed before changing.
-        let current_pos = if self.now_playing.is_some() { Some(self.elapsed()) } else { None };
+        let current_pos = if self.now_playing.is_some() {
+            Some(self.elapsed())
+        } else {
+            None
+        };
         self.player.playback_speed = new_speed;
         // Re-seek to the same position so the new speed takes effect immediately.
         if let Some(pos) = current_pos
@@ -776,7 +791,8 @@ impl AppState {
     }
 
     fn refresh_lyrics_cache(&mut self) {
-        self.lyrics_lines = self.now_playing
+        self.lyrics_lines = self
+            .now_playing
             .and_then(|i| self.queue.get(i))
             .and_then(|t| self.library.track(t.id))
             .and_then(|t| t.lyrics.as_ref())
@@ -786,7 +802,9 @@ impl AppState {
 
     fn sync_queue_name(&mut self, track_id: TrackId, name: &str) {
         for t in &mut self.queue {
-            if t.id == track_id { t.name = name.to_string(); }
+            if t.id == track_id {
+                t.name = name.to_string();
+            }
         }
     }
 
@@ -801,17 +819,19 @@ impl AppState {
     ) {
         for t in &mut self.queue {
             if t.id == track_id {
-                t.name   = name.to_string();
+                t.name = name.to_string();
                 t.artist = artist.clone();
-                t.album  = album.clone();
-                t.year   = year;
-                t.genre  = genre.clone();
+                t.album = album.clone();
+                t.year = year;
+                t.genre = genre.clone();
             }
         }
     }
 
     fn action_edit_lyrics(&mut self, track_id: TrackId) {
-        let raw = self.library.track(track_id)
+        let raw = self
+            .library
+            .track(track_id)
             .and_then(|t| t.lyrics.as_deref())
             .unwrap_or("")
             .to_string();
@@ -823,7 +843,9 @@ impl AppState {
 
     fn action_toggle_lyrics(&mut self) {
         if let Some(np) = self.now_playing.and_then(|i| self.queue.get(i)) {
-            let has_lyrics = self.library.track(np.id)
+            let has_lyrics = self
+                .library
+                .track(np.id)
                 .and_then(|t| t.lyrics.as_ref())
                 .is_some();
             if has_lyrics {
@@ -835,7 +857,8 @@ impl AppState {
             } else {
                 self.show_lyrics = false;
                 self.modal = Some(Modal::Notify {
-                    message: "No lyrics for this track — press e to edit metadata and add them.".into(),
+                    message: "No lyrics for this track — press e to edit metadata and add them."
+                        .into(),
                 });
             }
         } else {
@@ -870,11 +893,13 @@ impl AppState {
                 RemoveTarget::TrackFromLibrary { track_id } => {
                     let _ = self.library.remove_track(track_id);
 
-                    let playing_removed = self.now_playing
+                    let playing_removed = self
+                        .now_playing
                         .and_then(|np| self.queue.get(np))
                         .map(|t| t.id == track_id)
                         .unwrap_or(false);
-                    let removed_before_np = self.now_playing
+                    let removed_before_np = self
+                        .now_playing
                         .map(|np| self.queue[..np].iter().filter(|t| t.id == track_id).count())
                         .unwrap_or(0);
 
@@ -985,9 +1010,21 @@ impl AppState {
                 self.play_queue_index(0);
             }
 
-            ModalConfirm::SaveMetadata { track_id, name, artist, album, year, genre } => {
+            ModalConfirm::SaveMetadata {
+                track_id,
+                name,
+                artist,
+                album,
+                year,
+                genre,
+            } => {
                 let _ = self.library.update_track_metadata(
-                    track_id, name.clone(), artist.clone(), album.clone(), year, genre.clone(),
+                    track_id,
+                    name.clone(),
+                    artist.clone(),
+                    album.clone(),
+                    year,
+                    genre.clone(),
                 );
                 self.sync_queue_metadata(track_id, &name, &artist, &album, year, &genre);
                 self.rebuild_filter_cache();
@@ -995,12 +1032,26 @@ impl AppState {
 
             ModalConfirm::SaveLyrics { track_id, lyrics } => {
                 let _ = self.library.set_track_lyrics(track_id, lyrics);
-                if self.show_lyrics { self.refresh_lyrics_cache(); }
+                if self.show_lyrics {
+                    self.refresh_lyrics_cache();
+                }
             }
 
-            ModalConfirm::SaveMetadataAndEditLyrics { track_id, name, artist, album, year, genre } => {
+            ModalConfirm::SaveMetadataAndEditLyrics {
+                track_id,
+                name,
+                artist,
+                album,
+                year,
+                genre,
+            } => {
                 let _ = self.library.update_track_metadata(
-                    track_id, name.clone(), artist.clone(), album.clone(), year, genre.clone(),
+                    track_id,
+                    name.clone(),
+                    artist.clone(),
+                    album.clone(),
+                    year,
+                    genre.clone(),
                 );
                 self.sync_queue_metadata(track_id, &name, &artist, &album, year, &genre);
                 self.rebuild_filter_cache();

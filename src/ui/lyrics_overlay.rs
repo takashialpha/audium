@@ -9,12 +9,18 @@ use ratatui::{
 use crate::{app::AppState, library::TrackId, lyrics};
 
 pub fn render_lyrics_overlay(frame: &mut Frame, state: &AppState, track_id: TrackId) {
-    let Some(track) = state.library.track(track_id) else { return; };
+    let Some(track) = state.library.track(track_id) else {
+        return;
+    };
     let lines = &state.lyrics_lines;
-    if lines.is_empty() { return; }
+    if lines.is_empty() {
+        return;
+    }
 
     let area = frame.area();
-    let width  = (area.width * 2 / 3).max(40).min(area.width.saturating_sub(4));
+    let width = (area.width * 2 / 3)
+        .max(40)
+        .min(area.width.saturating_sub(4));
     let height = (area.height / 2).max(8).min(area.height.saturating_sub(4));
     let rect = Rect {
         x: area.x + area.width.saturating_sub(width) / 2,
@@ -37,11 +43,20 @@ pub fn render_lyrics_overlay(frame: &mut Frame, state: &AppState, track_id: Trac
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
-    if inner.height == 0 { return; }
+    if inner.height == 0 {
+        return;
+    }
 
     // Reserve the last row for the close hint.
-    let hint_row = Rect { y: inner.y + inner.height.saturating_sub(1), height: 1, ..inner };
-    let text_rect = Rect { height: inner.height.saturating_sub(1), ..inner };
+    let hint_row = Rect {
+        y: inner.y + inner.height.saturating_sub(1),
+        height: 1,
+        ..inner
+    };
+    let text_rect = Rect {
+        height: inner.height.saturating_sub(1),
+        ..inner
+    };
 
     frame.render_widget(
         Paragraph::new(Span::styled("[y] close", Style::default().fg(t.subtle)))
@@ -57,7 +72,7 @@ pub fn render_lyrics_overlay(frame: &mut Frame, state: &AppState, track_id: Trac
     };
 
     let visible = text_rect.height as usize;
-    let total   = lines.len();
+    let total = lines.len();
 
     let scroll = if is_synced {
         // Auto-scroll: keep the current line centred.
@@ -70,14 +85,17 @@ pub fn render_lyrics_overlay(frame: &mut Frame, state: &AppState, track_id: Trac
         state.lyrics_scroll.min(total.saturating_sub(visible))
     };
 
-    let items: Vec<Line> = lines.iter()
+    let items: Vec<Line> = lines
+        .iter()
         .enumerate()
         .skip(scroll)
         .take(visible)
         .map(|(i, l)| {
             let is_current = current == Some(i);
             let style = if is_current {
-                Style::default().fg(t.now_playing).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(t.now_playing)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(t.text_dim)
             };

@@ -145,8 +145,7 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         .collect();
         if !parts.is_empty() {
             frame.render_widget(
-                Paragraph::new(parts.join("  ·  "))
-                    .style(Style::default().fg(t.text_dim)),
+                Paragraph::new(parts.join("  ·  ")).style(Style::default().fg(t.text_dim)),
                 rows[2],
             );
         }

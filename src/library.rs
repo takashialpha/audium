@@ -56,11 +56,11 @@ impl Track {
 // ── Tag reading ────────────────────────────────────────────────────────────
 
 struct FileTags {
-    title:  Option<String>,
+    title: Option<String>,
     artist: Option<String>,
-    album:  Option<String>,
-    year:   Option<u32>,
-    genre:  Option<String>,
+    album: Option<String>,
+    year: Option<u32>,
+    genre: Option<String>,
 }
 
 fn read_file_tags(path: &Path) -> Option<FileTags> {
@@ -74,11 +74,11 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
     let tag = tagged.primary_tag().or_else(|| tagged.first_tag())?;
     let nonempty = |s: String| if s.is_empty() { None } else { Some(s) };
     Some(FileTags {
-        title:  tag.title().map(|s| s.into_owned()).and_then(nonempty),
+        title: tag.title().map(|s| s.into_owned()).and_then(nonempty),
         artist: tag.artist().map(|s| s.into_owned()).and_then(nonempty),
-        album:  tag.album().map(|s| s.into_owned()).and_then(nonempty),
-        genre:  tag.genre().map(|s| s.into_owned()).and_then(nonempty),
-        year:   tag.date().map(|ts| u32::from(ts.year)),
+        album: tag.album().map(|s| s.into_owned()).and_then(nonempty),
+        genre: tag.genre().map(|s| s.into_owned()).and_then(nonempty),
+        year: tag.date().map(|ts| u32::from(ts.year)),
     })
 }
 
@@ -175,7 +175,12 @@ impl Library {
         // Remove tracks whose files no longer exist.
         let mut removed = std::collections::HashSet::new();
         lib.tracks.retain(|t| {
-            if t.path.exists() { true } else { removed.insert(t.id); false }
+            if t.path.exists() {
+                true
+            } else {
+                removed.insert(t.id);
+                false
+            }
         });
         if !removed.is_empty() {
             for pl in &mut lib.playlists {
@@ -235,7 +240,8 @@ impl Library {
         self.next_track_id += 1;
 
         let tags = read_file_tags(&dest);
-        let name = tags.as_ref()
+        let name = tags
+            .as_ref()
             .and_then(|t| t.title.clone())
             .or_else(|| dest.file_stem().map(|s| s.to_string_lossy().into_owned()))
             .unwrap_or_else(|| "Unknown".to_string());
@@ -244,9 +250,9 @@ impl Library {
             name,
             path: dest.clone(),
             artist: tags.as_ref().and_then(|t| t.artist.clone()),
-            album:  tags.as_ref().and_then(|t| t.album.clone()),
-            year:   tags.as_ref().and_then(|t| t.year),
-            genre:  tags.as_ref().and_then(|t| t.genre.clone()),
+            album: tags.as_ref().and_then(|t| t.album.clone()),
+            year: tags.as_ref().and_then(|t| t.year),
+            genre: tags.as_ref().and_then(|t| t.genre.clone()),
             lyrics: None,
         };
 

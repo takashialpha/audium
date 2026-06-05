@@ -69,7 +69,7 @@ impl TextInput {
 
 #[derive(Debug, Default, Clone)]
 pub struct TextArea {
-    pub lines:      Vec<String>,
+    pub lines: Vec<String>,
     pub cursor_row: usize,
     pub cursor_col: usize,
     /// Undo stack of (lines, row, col) snapshots.
@@ -78,19 +78,32 @@ pub struct TextArea {
 
 impl TextArea {
     pub fn from_text(text: &str) -> Self {
-        let lines: Vec<String> = text.lines()
+        let lines: Vec<String> = text
+            .lines()
             .map(|l| l.trim_end_matches('\r').to_string())
             .collect();
-        let lines = if lines.is_empty() { vec![String::new()] } else { lines };
+        let lines = if lines.is_empty() {
+            vec![String::new()]
+        } else {
+            lines
+        };
         let cursor_row = lines.len() - 1;
         let cursor_col = lines[cursor_row].len();
-        Self { lines, cursor_row, cursor_col, undo_stack: Vec::new() }
+        Self {
+            lines,
+            cursor_row,
+            cursor_col,
+            undo_stack: Vec::new(),
+        }
     }
 
-    pub fn as_string(&self) -> String { self.lines.join("\n") }
+    pub fn as_string(&self) -> String {
+        self.lines.join("\n")
+    }
 
     fn snapshot(&mut self) {
-        self.undo_stack.push((self.lines.clone(), self.cursor_row, self.cursor_col));
+        self.undo_stack
+            .push((self.lines.clone(), self.cursor_row, self.cursor_col));
     }
 
     pub fn insert_char(&mut self, c: char) {
@@ -104,7 +117,9 @@ impl TextArea {
             self.snapshot();
             let line = &self.lines[self.cursor_row];
             let mut col = self.cursor_col - 1;
-            while !line.is_char_boundary(col) { col -= 1; }
+            while !line.is_char_boundary(col) {
+                col -= 1;
+            }
             self.lines[self.cursor_row].remove(col);
             self.cursor_col = col;
         } else if self.cursor_row > 0 {
@@ -142,7 +157,9 @@ impl TextArea {
         if self.cursor_col > 0 {
             let line = &self.lines[self.cursor_row];
             let mut col = self.cursor_col - 1;
-            while !line.is_char_boundary(col) { col -= 1; }
+            while !line.is_char_boundary(col) {
+                col -= 1;
+            }
             self.cursor_col = col;
         }
     }
@@ -169,17 +186,20 @@ impl TextArea {
         }
     }
 
-    pub fn move_line_start(&mut self) { self.cursor_col = 0; }
+    pub fn move_line_start(&mut self) {
+        self.cursor_col = 0;
+    }
 
     pub fn move_line_end(&mut self) {
         self.cursor_col = self.lines[self.cursor_row].len();
     }
-
 }
 
 fn clamp_col(line: &str, col: usize) -> usize {
     let mut c = col.min(line.len());
-    while c > 0 && !line.is_char_boundary(c) { c -= 1; }
+    while c > 0 && !line.is_char_boundary(c) {
+        c -= 1;
+    }
     c
 }
 
@@ -324,7 +344,11 @@ pub enum ModalConfirm {
 
 fn nonempty_opt(s: &str) -> Option<String> {
     let t = s.trim();
-    if t.is_empty() { None } else { Some(t.to_string()) }
+    if t.is_empty() {
+        None
+    } else {
+        Some(t.to_string())
+    }
 }
 
 // ── Text-input key helper ──────────────────────────────────────────────────
@@ -431,18 +455,29 @@ impl Modal {
                         let left = matches!(code, KeyCode::Left);
                         match *cursor {
                             0 => {
-                                if left { *volume_pct = volume_pct.saturating_sub(1); }
-                                else    { *volume_pct = (*volume_pct + 1).min(100); }
+                                if left {
+                                    *volume_pct = volume_pct.saturating_sub(1);
+                                } else {
+                                    *volume_pct = (*volume_pct + 1).min(100);
+                                }
                                 return ModalOutcome::Consumed;
                             }
                             1 => {
-                                if left { *seek_secs = seek_secs.saturating_sub(1).max(1); }
-                                else    { *seek_secs = (*seek_secs + 1).min(120); }
+                                if left {
+                                    *seek_secs = seek_secs.saturating_sub(1).max(1);
+                                } else {
+                                    *seek_secs = (*seek_secs + 1).min(120);
+                                }
                                 return ModalOutcome::Consumed;
                             }
                             2 => {
-                                if left { *preview_theme_idx = preview_theme_idx.checked_sub(1).unwrap_or(themes().len() - 1); }
-                                else    { *preview_theme_idx = (*preview_theme_idx + 1) % themes().len(); }
+                                if left {
+                                    *preview_theme_idx = preview_theme_idx
+                                        .checked_sub(1)
+                                        .unwrap_or(themes().len() - 1);
+                                } else {
+                                    *preview_theme_idx = (*preview_theme_idx + 1) % themes().len();
+                                }
                             }
                             _ => *transparent = !*transparent,
                         }
@@ -522,7 +557,12 @@ impl Modal {
                 _ => ModalOutcome::Consumed,
             },
 
-            Modal::EditMetadata { track_id, fields, active_field, year_error } => {
+            Modal::EditMetadata {
+                track_id,
+                fields,
+                active_field,
+                year_error,
+            } => {
                 // Rows 0-4 are text inputs; row 5 is the "Edit Lyrics →" button.
                 const ROWS: usize = 6;
                 match code {
@@ -533,19 +573,29 @@ impl Modal {
                             return ModalOutcome::Consumed;
                         }
                         *year_error = false;
-                        let tid    = *track_id;
-                        let name   = fields[0].value.trim().to_string();
+                        let tid = *track_id;
+                        let name = fields[0].value.trim().to_string();
                         let artist = nonempty_opt(&fields[1].value);
-                        let album  = nonempty_opt(&fields[2].value);
-                        let year   = year_str.parse().ok();
-                        let genre  = nonempty_opt(&fields[4].value);
+                        let album = nonempty_opt(&fields[2].value);
+                        let year = year_str.parse().ok();
+                        let genre = nonempty_opt(&fields[4].value);
                         if matches!(code, KeyCode::Enter) && *active_field == 5 {
                             ModalOutcome::Confirm(ModalConfirm::SaveMetadataAndEditLyrics {
-                                track_id: tid, name, artist, album, year, genre,
+                                track_id: tid,
+                                name,
+                                artist,
+                                album,
+                                year,
+                                genre,
                             })
                         } else {
                             ModalOutcome::Confirm(ModalConfirm::SaveMetadata {
-                                track_id: tid, name, artist, album, year, genre,
+                                track_id: tid,
+                                name,
+                                artist,
+                                album,
+                                year,
+                                genre,
                             })
                         }
                     }
@@ -570,8 +620,14 @@ impl Modal {
                         fields[*active_field].backspace();
                         ModalOutcome::Consumed
                     }
-                    KeyCode::Left  if *active_field < 5 => { fields[*active_field].move_left();  ModalOutcome::Consumed }
-                    KeyCode::Right if *active_field < 5 => { fields[*active_field].move_right(); ModalOutcome::Consumed }
+                    KeyCode::Left if *active_field < 5 => {
+                        fields[*active_field].move_left();
+                        ModalOutcome::Consumed
+                    }
+                    KeyCode::Right if *active_field < 5 => {
+                        fields[*active_field].move_right();
+                        ModalOutcome::Consumed
+                    }
                     _ => ModalOutcome::Consumed,
                 }
             }
@@ -582,19 +638,20 @@ impl Modal {
                         let s = textarea.as_string();
                         let lyrics = if s.trim().is_empty() { None } else { Some(s) };
                         return ModalOutcome::Confirm(ModalConfirm::SaveLyrics {
-                            track_id: *track_id, lyrics,
+                            track_id: *track_id,
+                            lyrics,
                         });
                     }
-                    KeyCode::Enter     => textarea.insert_newline(),
+                    KeyCode::Enter => textarea.insert_newline(),
                     KeyCode::Backspace => textarea.delete_char(),
-                    KeyCode::Delete    => textarea.delete_next_char(),
-                    KeyCode::Up        => textarea.move_up(),
-                    KeyCode::Down      => textarea.move_down(),
-                    KeyCode::Left      => textarea.move_left(),
-                    KeyCode::Right     => textarea.move_right(),
-                    KeyCode::Home      => textarea.move_line_start(),
-                    KeyCode::End       => textarea.move_line_end(),
-                    KeyCode::Char(c)   => textarea.insert_char(c),
+                    KeyCode::Delete => textarea.delete_next_char(),
+                    KeyCode::Up => textarea.move_up(),
+                    KeyCode::Down => textarea.move_down(),
+                    KeyCode::Left => textarea.move_left(),
+                    KeyCode::Right => textarea.move_right(),
+                    KeyCode::Home => textarea.move_line_start(),
+                    KeyCode::End => textarea.move_line_end(),
+                    KeyCode::Char(c) => textarea.insert_char(c),
                     _ => {}
                 }
                 ModalOutcome::Consumed
@@ -647,10 +704,13 @@ pub fn render_modal(frame: &mut Frame, modal: &Modal, theme: &Theme) {
             ),
             theme,
         ),
-        Modal::EditMetadata { fields, active_field, year_error, .. } =>
-            render_edit_metadata(frame, fields, *active_field, *year_error, theme),
-        Modal::EditLyrics { textarea, .. } =>
-            render_edit_lyrics(frame, textarea, theme),
+        Modal::EditMetadata {
+            fields,
+            active_field,
+            year_error,
+            ..
+        } => render_edit_metadata(frame, fields, *active_field, *year_error, theme),
+        Modal::EditLyrics { textarea, .. } => render_edit_lyrics(frame, textarea, theme),
     }
 }
 
@@ -1244,7 +1304,8 @@ fn render_edit_metadata(
         Paragraph::new(Span::styled(
             "Tab/↑↓  next field   ←→  cursor   Esc/Enter  save",
             Style::default().fg(theme.subtle),
-        )).alignment(Alignment::Center),
+        ))
+        .alignment(Alignment::Center),
         rows[0],
     );
 
@@ -1260,19 +1321,23 @@ fn render_edit_metadata(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 format!("{:>7}  ", label),
-                Style::default().fg(if is_active { theme.accent } else { theme.text_dim }),
+                Style::default().fg(if is_active {
+                    theme.accent
+                } else {
+                    theme.text_dim
+                }),
             )),
             cols[0],
         );
 
         if is_active {
             let before = &input.value[..input.cursor];
-            let after  = &input.value[input.cursor..];
+            let after = &input.value[input.cursor..];
             frame.render_widget(
                 Paragraph::new(Line::from(vec![
                     Span::styled(before.to_string(), Style::default().fg(theme.text)),
                     Span::styled("█", Style::default().fg(theme.accent)),
-                    Span::styled(after.to_string(),  Style::default().fg(theme.text)),
+                    Span::styled(after.to_string(), Style::default().fg(theme.text)),
                 ])),
                 cols[1],
             );
@@ -1297,8 +1362,16 @@ fn render_edit_metadata(
             Span::styled(
                 "Edit Lyrics →",
                 Style::default()
-                    .fg(if lyrics_active { theme.text } else { theme.text_dim })
-                    .add_modifier(if lyrics_active { Modifier::BOLD } else { Modifier::empty() }),
+                    .fg(if lyrics_active {
+                        theme.text
+                    } else {
+                        theme.text_dim
+                    })
+                    .add_modifier(if lyrics_active {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::empty()
+                    }),
             ),
         ])),
         rows[7],
@@ -1309,7 +1382,8 @@ fn render_edit_metadata(
             Paragraph::new(Span::styled(
                 "Year must be a number (e.g. 2024)",
                 Style::default().fg(theme.danger),
-            )).alignment(Alignment::Center),
+            ))
+            .alignment(Alignment::Center),
             rows[9],
         );
     }
@@ -1324,7 +1398,7 @@ pub fn make_lyrics_textarea(raw: &str) -> LyricsTextArea {
 
 fn render_edit_lyrics(frame: &mut Frame, textarea: &TextArea, theme: &Theme) {
     let area = frame.area();
-    let width  = area.width.saturating_sub(8).max(40);
+    let width = area.width.saturating_sub(8).max(40);
     let height = area.height.saturating_sub(4).max(12);
     let rect = centered_rect(width, height, area);
     frame.render_widget(Clear, rect);
@@ -1335,44 +1409,56 @@ fn render_edit_lyrics(frame: &mut Frame, textarea: &TextArea, theme: &Theme) {
 
     let splits = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(0), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
         .split(inner);
 
     frame.render_widget(
         Paragraph::new(Span::styled(
             "↑↓←→  navigate   Home/End  line start/end",
             Style::default().fg(theme.subtle),
-        )).alignment(Alignment::Center),
+        ))
+        .alignment(Alignment::Center),
         splits[0],
     );
     frame.render_widget(
         Paragraph::new(Span::styled(
             "Enter  new line   Backspace  delete   LRC: [mm:ss.xx] lyric   Esc  save",
             Style::default().fg(theme.subtle),
-        )).alignment(Alignment::Center),
+        ))
+        .alignment(Alignment::Center),
         splits[2],
     );
 
     let visible = splits[1].height as usize;
-    let scroll = textarea.cursor_row
+    let scroll = textarea
+        .cursor_row
         .saturating_sub(visible.saturating_sub(1))
         .min(textarea.lines.len().saturating_sub(visible));
 
-    let items: Vec<Line> = textarea.lines.iter()
+    let items: Vec<Line> = textarea
+        .lines
+        .iter()
         .enumerate()
         .skip(scroll)
         .take(visible)
         .map(|(row, line)| {
             if row == textarea.cursor_row {
                 let before = &line[..textarea.cursor_col];
-                let after  = &line[textarea.cursor_col..];
+                let after = &line[textarea.cursor_col..];
                 Line::from(vec![
                     Span::styled(before.to_string(), Style::default().fg(theme.text)),
                     Span::styled("█", Style::default().fg(theme.accent)),
-                    Span::styled(after.to_string(),  Style::default().fg(theme.text)),
+                    Span::styled(after.to_string(), Style::default().fg(theme.text)),
                 ])
             } else {
-                Line::from(Span::styled(line.as_str(), Style::default().fg(theme.text_dim)))
+                Line::from(Span::styled(
+                    line.as_str(),
+                    Style::default().fg(theme.text_dim),
+                ))
             }
         })
         .collect();

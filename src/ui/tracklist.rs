@@ -79,7 +79,10 @@ pub fn render_tracklist(frame: &mut Frame, state: &AppState, area: Rect) {
                 Style::default().fg(if is_playing { t.accent } else { t.subtle }),
             );
             let title_span = Span::styled(
-                truncate(&track.display(), (list_rect.width as usize).saturating_sub(8)),
+                truncate(
+                    &track.display(),
+                    (list_rect.width as usize).saturating_sub(8),
+                ),
                 if is_playing {
                     Style::default()
                         .fg(t.now_playing)

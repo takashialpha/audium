@@ -21,7 +21,10 @@ pub fn parse_lrc(raw: &str) -> Vec<LyricLine> {
         if let Some(ll) = try_timed(line) {
             timed.push(ll);
         } else if !line.starts_with('[') {
-            plain.push(LyricLine { time_ms: None, text: line.to_string() });
+            plain.push(LyricLine {
+                time_ms: None,
+                text: line.to_string(),
+            });
         }
     }
 
@@ -34,13 +37,17 @@ pub fn parse_lrc(raw: &str) -> Vec<LyricLine> {
 }
 
 fn try_timed(line: &str) -> Option<LyricLine> {
-    if !line.starts_with('[') { return None; }
+    if !line.starts_with('[') {
+        return None;
+    }
     let close = line.find(']')?;
     let tag = &line[1..close];
     let text = line[close + 1..].trim().to_string();
 
     // Reject metadata tags whose first char is not a digit (e.g. [ti:Title]).
-    if !tag.starts_with(|c: char| c.is_ascii_digit()) { return None; }
+    if !tag.starts_with(|c: char| c.is_ascii_digit()) {
+        return None;
+    }
 
     let colon = tag.find(':')?;
     let mm: u64 = tag[..colon].parse().ok()?;
@@ -60,13 +67,17 @@ fn try_timed(line: &str) -> Option<LyricLine> {
         mm * 60_000 + ss * 1_000
     };
 
-    Some(LyricLine { time_ms: Some(ms), text })
+    Some(LyricLine {
+        time_ms: Some(ms),
+        text,
+    })
 }
 
 /// Returns the index of the last timed line whose timestamp ≤ `elapsed`.
 pub fn active_idx(lines: &[LyricLine], elapsed: Duration) -> Option<usize> {
     let elapsed_ms = elapsed.as_millis() as u64;
-    lines.iter()
+    lines
+        .iter()
         .enumerate()
         .filter_map(|(i, l)| l.time_ms.map(|t| (i, t)))
         .rfind(|(_, t)| *t <= elapsed_ms)

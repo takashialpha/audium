@@ -14,7 +14,10 @@ use std::{
 /// Commands sent from the UI thread to the audio thread.
 #[derive(Debug)]
 pub enum PlayerCommand {
-    Play { path: PathBuf, speed: f32 },
+    Play {
+        path: PathBuf,
+        speed: f32,
+    },
     Stop,
     Pause,
     Resume,
@@ -71,7 +74,10 @@ impl PlayerHandle {
 
     pub fn play(&mut self, path: PathBuf) {
         self.is_paused = false;
-        self.send(PlayerCommand::Play { path, speed: self.playback_speed });
+        self.send(PlayerCommand::Play {
+            path,
+            speed: self.playback_speed,
+        });
     }
 
     pub fn stop(&mut self) {
@@ -196,8 +202,8 @@ fn audio_thread_main(
 
 // Opens and decodes an audio file; returns the source or a human-readable error.
 fn open_source(path: &std::path::Path) -> Result<Decoder<std::io::BufReader<File>>> {
-    let file = File::open(path)
-        .with_context(|| format!("could not open \"{}\"", path.display()))?;
+    let file =
+        File::open(path).with_context(|| format!("could not open \"{}\"", path.display()))?;
     Decoder::try_from(file)
         .map_err(|e| anyhow::Error::msg(format!("could not decode \"{}\": {e}", path.display())))
 }
@@ -247,9 +253,7 @@ fn handle_command(
                 }
                 Err(e) => {
                     *stopped = true;
-                    let _ = event_tx.send(PlayerEvent::Error(
-                        format!("Seek failed — {e}"),
-                    ));
+                    let _ = event_tx.send(PlayerEvent::Error(format!("Seek failed — {e}")));
                 }
             }
         }
