@@ -3,14 +3,16 @@ name: Rust
 on:
   push:
   pull_request:
-  workflow_dispatch: 
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 0"
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    name: Test, Clippy
+    name: Test, Clippy, Fmt
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -34,4 +36,7 @@ jobs:
       run: cargo test --verbose
 
     - name: Clippy
-      run: cargo clippy
+      run: cargo clippy -- -D warnings
+
+    - name: Fmt
+      run: cargo fmt --all -- --check

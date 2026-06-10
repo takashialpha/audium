@@ -48,7 +48,7 @@
 cargo install audium
 ```
 
-Requires Rust 1.96+ (MSRV). Installs the `audium` binary to `~/.cargo/bin/`.
+Requires a Rust toolchain with edition 2024 support. Installs the `audium` binary to `~/.cargo/bin/`.
 
 On Linux, ALSA is required to run and its development headers are required to build — see [Building from source](#building-from-source) for distro-specific instructions.
 
