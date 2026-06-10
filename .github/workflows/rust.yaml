@@ -36,7 +36,7 @@ jobs:
       run: cargo test --verbose
 
     - name: Clippy
-      run: cargo clippy -- -D warnings
+      run: cargo clippy --all-targets -- -D warnings
 
     - name: Fmt
       run: cargo fmt --all -- --check
