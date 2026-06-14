@@ -50,7 +50,7 @@ cargo install audium
 
 Requires a Rust toolchain with edition 2024 support. Installs the `audium` binary to `~/.cargo/bin/`.
 
-On Linux, ALSA is required to run and its development headers are required to build — see [Building from source](#building-from-source) for distro-specific instructions.
+audium uses ALSA for audio, the standard on Linux — its development headers are needed to build, see [Building from source](#building-from-source) for distro-specific instructions.
 
 ### AUR (Arch Linux)
 
@@ -133,7 +133,7 @@ cargo build --release
 # binary is at ./target/release/audium
 ```
 
-Requires ALSA and its development headers:
+Uses ALSA, the standard Linux audio API. Install its development headers:
 
 ```sh
 # Debian / Ubuntu
