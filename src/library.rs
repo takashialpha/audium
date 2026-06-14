@@ -63,6 +63,27 @@ struct FileTags {
     genre: Option<String>,
 }
 
+/// Builds a `Track` for `path`, reading metadata tags if available and
+/// falling back to the filename stem for the display name.
+fn track_from_file(id: TrackId, path: PathBuf) -> Track {
+    let tags = read_file_tags(&path);
+    let name = tags
+        .as_ref()
+        .and_then(|t| t.title.clone())
+        .or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "Unknown".to_string());
+    Track {
+        id,
+        name,
+        artist: tags.as_ref().and_then(|t| t.artist.clone()),
+        album: tags.as_ref().and_then(|t| t.album.clone()),
+        year: tags.as_ref().and_then(|t| t.year),
+        genre: tags.as_ref().and_then(|t| t.genre.clone()),
+        lyrics: None,
+        path,
+    }
+}
+
 fn read_file_tags(path: &Path) -> Option<FileTags> {
     use lofty::config::ParseOptions;
     use lofty::probe::Probe;
@@ -173,6 +194,24 @@ impl Library {
         let mut lib: Self = serde_json::from_str(&raw)
             .with_context(|| "parsing library.json — the file may be corrupted")?;
 
+        let mut changed = false;
+
+        // Re-locate tracks whose recorded path no longer exists but whose file
+        // is still present under the current music directory (e.g. after the
+        // data directory itself was moved).
+        let music_dir = Self::music_dir()?;
+        for t in &mut lib.tracks {
+            if !t.path.exists()
+                && let Some(name) = t.path.file_name()
+            {
+                let candidate = music_dir.join(name);
+                if candidate.exists() {
+                    t.path = candidate;
+                    changed = true;
+                }
+            }
+        }
+
         // Remove tracks whose files no longer exist.
         let mut removed = std::collections::HashSet::new();
         lib.tracks.retain(|t| {
@@ -180,6 +219,7 @@ impl Library {
                 true
             } else {
                 removed.insert(t.id);
+                changed = true;
                 false
             }
         });
@@ -195,6 +235,40 @@ impl Library {
             let mut all = Playlist::new(ALL_TRACKS_ID, "All Tracks");
             all.tracks = lib.tracks.iter().map(|t| t.id).collect();
             lib.playlists.insert(0, all);
+        }
+
+        // Re-import any audio files sitting in the music directory but not
+        // registered in the library, e.g. left behind after tracks were
+        // pruned due to a stale recorded path.
+        let known: std::collections::HashSet<PathBuf> = lib
+            .tracks
+            .iter()
+            .filter_map(|t| t.path.canonicalize().ok())
+            .collect();
+
+        if let Ok(entries) = fs::read_dir(&music_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                let Ok(canon) = path.canonicalize() else {
+                    continue;
+                };
+                if known.contains(&canon) || crate::player::validate_decodable(&path).is_err() {
+                    continue;
+                }
+
+                let id = lib.next_track_id;
+                lib.next_track_id += 1;
+                lib.playlists[0].tracks.push(id);
+                lib.tracks.push(track_from_file(id, path));
+                changed = true;
+            }
+        }
+
+        if changed {
+            lib.save()?;
         }
 
         Ok(lib)
@@ -217,6 +291,9 @@ impl Library {
     /// Returns `(track, is_new)`.  `is_new` is false if the file was already
     /// present (idempotent).
     pub fn add_file(&mut self, source: &Path) -> Result<(Track, bool)> {
+        crate::player::validate_decodable(source)
+            .with_context(|| format!("cannot import \"{}\"", source.display()))?;
+
         let music_dir = Self::music_dir()?;
 
         let filename = source.file_name().context("source path has no filename")?;
@@ -240,22 +317,7 @@ impl Library {
         let id = self.next_track_id;
         self.next_track_id += 1;
 
-        let tags = read_file_tags(&dest);
-        let name = tags
-            .as_ref()
-            .and_then(|t| t.title.clone())
-            .or_else(|| dest.file_stem().map(|s| s.to_string_lossy().into_owned()))
-            .unwrap_or_else(|| "Unknown".to_string());
-        let track = Track {
-            id,
-            name,
-            path: dest.clone(),
-            artist: tags.as_ref().and_then(|t| t.artist.clone()),
-            album: tags.as_ref().and_then(|t| t.album.clone()),
-            year: tags.as_ref().and_then(|t| t.year),
-            genre: tags.as_ref().and_then(|t| t.genre.clone()),
-            lyrics: None,
-        };
+        let track = track_from_file(id, dest);
 
         self.tracks.push(track.clone());
 

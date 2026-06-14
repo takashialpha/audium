@@ -326,6 +326,18 @@ impl AppState {
     // ── Input ─────────────────────────────────────────────────────────────
 
     pub fn handle_key(&mut self, code: KeyCode, modifiers: KeyModifiers) {
+        // ── Ctrl-C: same as 'q' (ask to quit, confirm on a second press) ──
+        if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+            if matches!(self.modal, Some(Modal::ConfirmQuit)) {
+                self.modal = None;
+                self.apply_modal_confirm(ModalConfirm::Quit);
+            } else {
+                self.file_picker = None;
+                self.modal = Some(Modal::ConfirmQuit);
+            }
+            return;
+        }
+
         // ── File picker takes priority ────────────────────────────────
         if let Some(picker) = &mut self.file_picker {
             match picker.handle_key(code) {

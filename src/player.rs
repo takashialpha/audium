@@ -283,6 +283,12 @@ fn handle_command(
 
 // ── Duration resolution ────────────────────────────────────────────────────
 
+/// Checks that `path` can be opened and decoded as audio.
+/// Used to reject files up front (e.g. a CLI argument) before playback starts.
+pub fn validate_decodable(path: &std::path::Path) -> Result<()> {
+    open_source(path).map(|_| ())
+}
+
 /// Opens a file purely to ask the decoder for its total duration, without
 /// starting playback.  Called from the UI thread after `Play` is dispatched
 /// so we can display a progress bar.

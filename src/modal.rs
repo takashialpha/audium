@@ -1172,7 +1172,7 @@ fn render_settings(
     render_settings_row(
         frame,
         rows[8],
-        "Transparency",
+        "Terminal transparency",
         cursor == 3,
         toggle_display(if transparent { "on" } else { "off" }, theme),
         theme,
