@@ -11,22 +11,12 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        include:
-          # Linux x86_64 (Arch Linux compatible)
-          - os: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-            artifact_name: audium-x86_64-unknown-linux-gnu
-            archive_name: audium-${{ github.ref_name }}-x86_64-linux.tar.gz
+    runs-on: ubuntu-24.04
 
-          # macOS Apple Silicon
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: audium-aarch64-apple-darwin
-            archive_name: audium-${{ github.ref_name }}-aarch64-macos.tar.gz
-
-    runs-on: ${{ matrix.os }}
+    env:
+      target: x86_64-unknown-linux-gnu
+      artifact_name: audium-x86_64-unknown-linux-gnu
+      archive_name: audium-${{ github.ref_name }}-x86_64-linux.tar.gz
 
     steps:
       - name: Checkout code
@@ -35,33 +25,32 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ env.target }}
 
       - name: Install Linux build dependencies (alsa-lib)
-        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libasound2-dev
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ env.target }}
 
       - name: Prepare and compress binary
         run: |
           mkdir -p artifacts
-          cp target/${{ matrix.target }}/release/audium artifacts/${{ matrix.artifact_name }}
-          chmod +x artifacts/${{ matrix.artifact_name }}
+          cp target/${{ env.target }}/release/audium artifacts/${{ env.artifact_name }}
+          chmod +x artifacts/${{ env.artifact_name }}
 
           # Create compressed archive with clean name
           cd artifacts
-          tar -czf ${{ matrix.archive_name }} ${{ matrix.artifact_name }}
+          tar -czf ${{ env.archive_name }} ${{ env.artifact_name }}
           ls -lh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact_name }}
-          path: artifacts/${{ matrix.archive_name }}
+          name: ${{ env.artifact_name }}
+          path: artifacts/${{ env.archive_name }}
 
   release:
     needs: build
@@ -82,4 +71,3 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/audium-x86_64-unknown-linux-gnu/audium-${{ github.ref_name }}-x86_64-linux.tar.gz
-            artifacts/audium-aarch64-apple-darwin/audium-${{ github.ref_name }}-aarch64-macos.tar.gz

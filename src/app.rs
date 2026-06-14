@@ -687,7 +687,9 @@ impl AppState {
     }
 
     fn action_open_filepicker(&mut self) {
-        let start = dirs_next::home_dir().unwrap_or_else(|| "/".into());
+        let start = std::env::var_os("HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| "/".into());
         self.file_picker = Some(FilePicker::new(start));
     }
 

@@ -26,7 +26,7 @@
 - **Keyboard-driven** — every action is one key. No mouse required.
 - **Track metadata** — artist, album, year and genre are read automatically from file tags on import and shown throughout the UI. Edit any field in-app with `e`.
 - **Lyrics** — store plain text or LRC synced lyrics per track. Toggle an overlay with `y` — synced lyrics auto-scroll to the current line; plain lyrics scroll with `j`/`k`. Edit directly in the built-in text editor.
-- **It's your library** — your tracks are stored as plain JSON at `~/.audium/library.json`. Edit it by hand, back it up, move it anywhere. audium doesn't rename your files and never phones home.
+- **It's your library** — your tracks are stored as plain JSON at `$XDG_DATA_HOME/audium/library.json` (typically `~/.local/share/audium/library.json`). Edit it by hand, back it up, move it anywhere. audium doesn't rename your files and never phones home.
 - **Themes** — 15 built-in themes (dark, light, nord, gruvbox, catppuccin, rosé pine, dracula, tokyo night, and more). Switch live from the settings menu with instant preview. Transparency support for composited terminals.
 - **Playlists** — create, rename, delete. *All Tracks* is always there.
 - **Loop modes** — off, loop queue, or loop track. Toggle with `l`.
@@ -36,7 +36,7 @@
 - **Threaded audio** — playback runs on its own thread; the UI never stutters your music.
 - **System audio output** — audium plays through your default system output. Change the output device in your OS and audium follows — no in-app device switching, no surprises.
 - **Format agnostic** — MP3, FLAC, OGG, WAV, AAC, M4A, Opus, AIFF and more via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
-- **Tiny binary** — ~3 MB stripped release build. No runtime dependencies on macOS.
+- **Tiny binary** — ~3 MB stripped release build.
 
 ---
 
@@ -71,7 +71,7 @@ audium
 audium path/to/song.flac
 ```
 
-audium stores your library at `~/.audium/library.json` and your music at `~/.audium/music/`.
+audium stores your library at `$XDG_DATA_HOME/audium/library.json` and your music at `$XDG_DATA_HOME/audium/music/` (typically under `~/.local/share/audium/`).
 
 ---
 
@@ -133,7 +133,7 @@ cargo build --release
 # binary is at ./target/release/audium
 ```
 
-**Linux** requires ALSA and its development headers:
+Requires ALSA and its development headers:
 
 ```sh
 # Debian / Ubuntu
@@ -146,16 +146,14 @@ sudo pacman -S alsa-utils alsa-lib
 sudo dnf install alsa-utils alsa-lib-devel
 ```
 
-**macOS** has no extra dependencies.
-
-> **Windows:** audium compiles on Windows (no additional dependencies) but is not an officially supported platform and has not been tested.
+> **Linux only:** audium targets Linux exclusively; other platforms are not supported.
 
 ---
 
 ## Library layout
 
 ```
-~/.audium/
+$XDG_DATA_HOME/audium/   # typically ~/.local/share/audium/
 ├── library.json   # track registry + playlists
 ├── settings.json  # user preferences (volume, theme, seek step)
 └── music/         # copies of all imported audio files

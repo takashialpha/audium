@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 
-/// Persistent user preferences stored at `~/.audium/settings.json`.
+/// Persistent user preferences stored at `$XDG_DATA_HOME/audium/settings.json`.
 ///
 /// All fields have sensible defaults via `Default` so missing keys in an
 /// older file are silently filled in on load.

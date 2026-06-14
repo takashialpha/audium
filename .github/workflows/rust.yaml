@@ -13,11 +13,7 @@ env:
 jobs:
   test:
     name: Test, Clippy, Fmt
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        toolchain: [stable]         
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v6
@@ -25,9 +21,8 @@ jobs:
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
 
-    # if arch linux: pacman -S --noconfirm alsa-lib     
+    # if arch linux: pacman -S --noconfirm alsa-lib
     - name: Install Linux Dependencies
-      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y libasound2-dev

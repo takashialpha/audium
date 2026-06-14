@@ -25,7 +25,7 @@ pub struct Track {
     pub id: TrackId,
     /// Display name: title tag if present, otherwise the filename stem.
     pub name: String,
-    /// Absolute path to the audio file (inside ~/.audium/music/ after import).
+    /// Absolute path to the audio file (inside $XDG_DATA_HOME/audium/music/ after import).
     pub path: PathBuf,
 
     // Optional metadata read from file tags on import.
@@ -141,8 +141,9 @@ impl Library {
     // ── Filesystem paths ─────────────────────────────────────────────────
 
     pub fn data_dir() -> Result<PathBuf> {
-        let home = dirs_next::home_dir().context("could not determine home directory")?;
-        Ok(home.join(".audium"))
+        xdg::BaseDirectories::with_prefix("audium")
+            .create_data_directory("")
+            .context("could not determine data directory")
     }
 
     pub fn music_dir() -> Result<PathBuf> {
@@ -155,7 +156,7 @@ impl Library {
 
     // ── Persistence ──────────────────────────────────────────────────────
 
-    /// Loads (or creates) the library from `~/.audium/library.json`.
+    /// Loads (or creates) the library from `$XDG_DATA_HOME/audium/library.json`.
     /// Silently prunes tracks whose files have been deleted externally.
     pub fn load() -> Result<Self> {
         fs::create_dir_all(Self::data_dir()?)?;
@@ -209,7 +210,7 @@ impl Library {
 
     // ── Track management ─────────────────────────────────────────────────
 
-    /// Copies `source` into `~/.audium/music/` (if not already there),
+    /// Copies `source` into `$XDG_DATA_HOME/audium/music/` (if not already there),
     /// registers it in the library and in every playlist that auto-includes
     /// all tracks (i.e., the virtual "All Tracks" playlist).
     ///

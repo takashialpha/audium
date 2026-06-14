@@ -149,7 +149,7 @@
         <p class="comment"># or yay, or manually with makepkg</p>
       </div>
     </div>
-    <p style="margin-top:20px;color:var(--muted);font-size:12.5px;">Linux requires ALSA to run and its development headers to build. See the <a href="https://github.com/takashialpha/audium#building-from-source">README</a> for distro-specific instructions. macOS and Windows have no extra dependencies.</p>
+    <p style="margin-top:20px;color:var(--muted);font-size:12.5px;">audium targets Linux exclusively. ALSA and its development headers are required to build — see the <a href="https://github.com/takashialpha/audium#building-from-source">README</a> for distro-specific instructions.</p>
   </div>
 </section>
 
@@ -216,7 +216,7 @@
       <div class="feature">
         <span class="feature-icon">💾</span>
         <h3>It's your library</h3>
-        <p>Stored at <code style="color:var(--accent)">~/.audium/library.json</code> — plain JSON, human-readable, editable by hand. audium doesn't rename your files, doesn't embed metadata, and never phones home.</p>
+        <p>Stored at <code style="color:var(--accent)">$XDG_DATA_HOME/audium/library.json</code> — plain JSON, human-readable, editable by hand. audium doesn't rename your files, doesn't embed metadata, and never phones home.</p>
       </div>
     </div>
   </div>
