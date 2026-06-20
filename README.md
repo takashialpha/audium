@@ -176,7 +176,6 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 ## TODO
 
 - YouTube audio import (no external binary deps)
-- Release workflow currently broken: artifact has to be unzipped before trying to attach to the release
 
 ## Contributing
 
