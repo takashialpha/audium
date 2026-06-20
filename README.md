@@ -23,7 +23,7 @@
 
 ## Features
 
-- **Keyboard-driven:** built to be driven entirely from the keyboard, for people who live in the terminal and never reach for the mouse.
+- **Keyboard-driven:** built to be driven entirely from the keyboard, for people who live in the terminal and never reach for the mouse. Press `?` in-app to see every keybinding.
 - **Library & metadata:** import through the built-in file picker; artist, album, year and genre are read from tags automatically and editable in-app.
 - **Lyrics:** store plain text or LRC synced lyrics per track. An overlay auto-scrolls synced lyrics to the current line, with a built-in editor.
 - **It's your library:** your tracks are stored as plain JSON at `$XDG_DATA_HOME/audium/library.json` (typically `~/.local/share/audium/library.json`). Edit it by hand, back it up, move it anywhere. audium doesn't rename your files and never phones home.
