@@ -15,11 +15,11 @@
 [![AUR](https://img.shields.io/aur/version/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://aur.archlinux.org/packages/audium)
 [![License](https://img.shields.io/crates/l/audium?style=flat-square&color=64b4ff&labelColor=161616)](LICENSE)
 
-[Website](https://takashialpha.github.io/audium) · [Installation](#installation) · [Keybindings](#keybindings) · [Building](#building-from-source)
+[Installation](#installation) · [Keybindings](#keybindings) · [Building](#building-from-source)
 
 </div>
 
-![demo](./docs/demo.gif)
+![demo](./audium-demo.gif)
 
 ## Features
 
