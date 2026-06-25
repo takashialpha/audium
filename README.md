@@ -19,7 +19,7 @@
 
 </div>
 
-![demo](./audium-demo.gif)
+![demo-gif](./audium-demo.gif)
 
 ## Features
 
