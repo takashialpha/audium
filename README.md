@@ -19,7 +19,20 @@
 
 </div>
 
-<video src="./audium-demo.mp4" autoplay loop muted playsinline></video>
+<!--
+  Demo video — see issue #6 for context on why this is set up the way it is.
+
+  GitHub strips autoplay/loop from <video> tags unless the src points to a
+  GitHub-hosted asset (uploaded via the issue/PR editor). A repo-relative path
+  like ./audium-demo.mp4 renders as a plain download link on GitHub.com and
+  does not play inline at all. Animated WebP is not rendered by GitHub either.
+  GIF works everywhere but tends to be larger for equivalent quality.
+
+  Solution: the src below points to a GitHub CDN asset (autoplay + loop on
+  GitHub.com). audium-demo.mp4 is kept in the repo root as a fallback for
+  local/offline viewers who clone the repo.
+-->
+<video src="https://github.com/user-attachments/assets/71b79793-8786-43b9-a5e8-45976c5babd5" autoplay loop muted playsinline></video>
 
 ## Features
 
