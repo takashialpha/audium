@@ -1,16 +1,17 @@
 <div align="center">
 
-```
+<pre>
  █████╗ ██╗   ██╗██████╗ ██╗██╗   ██╗███╗   ███╗
 ██╔══██╗██║   ██║██╔══██╗██║██║   ██║████╗ ████║
 ███████║██║   ██║██║  ██║██║██║   ██║██╔████╔██║
 ██╔══██║██║   ██║██║  ██║██║██║   ██║██║╚██╔╝██║
 ██║  ██║╚██████╔╝██████╔╝██║╚██████╔╝██║ ╚═╝ ██║
 ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝ ╚═════╝ ╚═╝     ╚═╝
-```
+</pre>
 
 **A terminal music app.**
 
+[![Website](https://img.shields.io/badge/website-takashialpha.com%2Faudium-64b4ff?style=flat-square&labelColor=161616)](https://takashialpha.com/audium)
 [![crates.io](https://img.shields.io/crates/v/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://crates.io/crates/audium)
 [![AUR](https://img.shields.io/aur/version/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://aur.archlinux.org/packages/audium)
 [![License](https://img.shields.io/crates/l/audium?style=flat-square&color=64b4ff&labelColor=161616)](LICENSE)
