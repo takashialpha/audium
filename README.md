@@ -19,7 +19,7 @@
 
 </div>
 
-![demo-gif](./audium-demo.gif)
+<video src="./audium-demo.mp4" autoplay loop muted playsinline></video>
 
 ## Features
 
