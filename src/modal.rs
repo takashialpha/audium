@@ -903,7 +903,7 @@ fn render_help(frame: &mut Frame, theme: &Theme) {
     let rect = centered_rect(60, 38, area);
     frame.render_widget(Clear, rect);
 
-    let block = modal_block("Help — Keybindings", theme);
+    let block = modal_block("Help: Keybindings", theme);
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
@@ -1333,7 +1333,7 @@ fn render_edit_metadata(
             );
         } else {
             let (text, style) = if input.value.is_empty() {
-                ("—", Style::default().fg(theme.subtle))
+                ("-", Style::default().fg(theme.subtle))
             } else {
                 (input.value.as_str(), Style::default().fg(theme.text_dim))
             };

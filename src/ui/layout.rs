@@ -60,7 +60,7 @@ pub fn theme_by_name(name: &str) -> &'static Theme {
 }
 
 static THEMES: [Theme; 15] = [
-    // 1 — dark (default)
+    // 1: dark (default)
     Theme {
         name: "dark",
         bg: Color::Rgb(18, 18, 18),
@@ -76,7 +76,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(50, 50, 50),
         transparent: false,
     },
-    // 2 — light
+    // 2: light
     Theme {
         name: "light",
         bg: Color::Rgb(245, 245, 245),
@@ -92,7 +92,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(200, 200, 200),
         transparent: false,
     },
-    // 3 — nord
+    // 3: nord
     Theme {
         name: "nord",
         bg: Color::Rgb(46, 52, 64),
@@ -108,7 +108,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(67, 76, 94),
         transparent: false,
     },
-    // 4 — gruvbox dark
+    // 4: gruvbox dark
     Theme {
         name: "gruvbox",
         bg: Color::Rgb(40, 40, 40),
@@ -124,7 +124,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(60, 56, 54),
         transparent: false,
     },
-    // 5 — gruvbox light
+    // 5: gruvbox light
     Theme {
         name: "gruvbox_light",
         bg: Color::Rgb(251, 241, 199),
@@ -140,7 +140,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(213, 196, 161),
         transparent: false,
     },
-    // 6 — rosé pine
+    // 6: rosé pine
     Theme {
         name: "rosepine",
         bg: Color::Rgb(25, 23, 36),
@@ -156,7 +156,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(38, 35, 58),
         transparent: false,
     },
-    // 7 — rosé pine dawn
+    // 7: rosé pine dawn
     Theme {
         name: "rosepine_dawn",
         bg: Color::Rgb(250, 244, 237),
@@ -172,7 +172,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(223, 218, 217),
         transparent: false,
     },
-    // 8 — catppuccin mocha
+    // 8: catppuccin mocha
     Theme {
         name: "catppuccin",
         bg: Color::Rgb(30, 30, 46),
@@ -188,7 +188,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(49, 50, 68),
         transparent: false,
     },
-    // 9 — catppuccin latte
+    // 9: catppuccin latte
     Theme {
         name: "catppuccin_latte",
         bg: Color::Rgb(239, 241, 245),
@@ -204,7 +204,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(204, 208, 218),
         transparent: false,
     },
-    // 10 — dracula
+    // 10: dracula
     Theme {
         name: "dracula",
         bg: Color::Rgb(40, 42, 54),
@@ -220,7 +220,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(55, 57, 72),
         transparent: false,
     },
-    // 11 — tokyo night
+    // 11: tokyo night
     Theme {
         name: "tokyo_night",
         bg: Color::Rgb(26, 27, 38),
@@ -236,7 +236,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(41, 46, 66),
         transparent: false,
     },
-    // 12 — solarized dark
+    // 12: solarized dark
     Theme {
         name: "solarized_dark",
         bg: Color::Rgb(0, 43, 54),
@@ -252,7 +252,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(0, 35, 43),
         transparent: false,
     },
-    // 13 — solarized light
+    // 13: solarized light
     Theme {
         name: "solarized_light",
         bg: Color::Rgb(253, 246, 227),
@@ -268,7 +268,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(210, 203, 186),
         transparent: false,
     },
-    // 14 — everforest dark
+    // 14: everforest dark
     Theme {
         name: "everforest",
         bg: Color::Rgb(35, 38, 33),
@@ -284,7 +284,7 @@ static THEMES: [Theme; 15] = [
         vol_empty: Color::Rgb(53, 57, 49),
         transparent: false,
     },
-    // 15 — kanagawa
+    // 15: kanagawa
     Theme {
         name: "kanagawa",
         bg: Color::Rgb(22, 22, 29),

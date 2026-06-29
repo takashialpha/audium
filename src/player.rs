@@ -97,7 +97,7 @@ impl PlayerHandle {
 
     /// Seek to `position` in the current track.  The path is required because
     /// the audio thread must reopen the file to create a fresh decoder.
-    /// `is_paused` on the handle is not changed here — the caller manages that.
+    /// `is_paused` on the handle is not changed here; the caller manages that.
     pub fn seek(&self, path: PathBuf, position: Duration, paused: bool) {
         self.send(PlayerCommand::Seek {
             path,
@@ -140,7 +140,7 @@ impl Drop for PlayerHandle {
 
 /// Spawns the audio thread and returns a `PlayerHandle` for the UI thread.
 /// `default_volume` comes from `Settings` so both the handle shadow and the
-/// audio thread start at the user's saved value — no post-init correction needed.
+/// audio thread start at the user's saved value; no post-init correction needed.
 pub fn spawn_audio_thread(default_volume: f32) -> Result<PlayerHandle> {
     let volume = default_volume.clamp(VOLUME_MIN, VOLUME_MAX);
 
@@ -253,7 +253,7 @@ fn handle_command(
                 }
                 Err(e) => {
                     *stopped = true;
-                    let _ = event_tx.send(PlayerEvent::Error(format!("Seek failed — {e}")));
+                    let _ = event_tx.send(PlayerEvent::Error(format!("Seek failed: {e}")));
                 }
             }
         }

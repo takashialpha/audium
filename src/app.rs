@@ -114,9 +114,9 @@ pub struct AppState {
     pub show_lyrics: bool,
     /// Manual scroll offset for plain-text (unsynced) lyrics.
     pub lyrics_scroll: usize,
-    /// Pre-parsed lyrics for the current track — updated on open/track-change/save.
+    /// Pre-parsed lyrics for the current track, updated on open/track-change/save.
     pub lyrics_lines: Vec<lyrics::LyricLine>,
-    /// Cached track IDs for the active playlist + filter — rebuilt on every mutation.
+    /// Cached track IDs for the active playlist + filter, rebuilt on every mutation.
     filtered_ids: Vec<TrackId>,
 }
 
@@ -728,7 +728,7 @@ impl AppState {
         self.modal = Some(Modal::About);
     }
 
-    /// `z` — prompt to shuffle the active playlist into the queue.
+    /// `z`: prompt to shuffle the active playlist into the queue.
     fn action_shuffle_playlist(&mut self) {
         if let Some(pl) = self.library.playlist(self.active_playlist) {
             if pl.tracks.is_empty() {
@@ -871,7 +871,7 @@ impl AppState {
             } else {
                 self.show_lyrics = false;
                 self.modal = Some(Modal::Notify {
-                    message: "No lyrics for this track — press e to edit metadata and add them."
+                    message: "No lyrics for this track. Press e to edit metadata and add them."
                         .into(),
                 });
             }

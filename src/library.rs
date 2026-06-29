@@ -44,10 +44,10 @@ pub struct Track {
 }
 
 impl Track {
-    /// Returns `"{artist} — {name}"` when an artist is set, otherwise `"{name}"`.
+    /// Returns `"{artist} - {name}"` when an artist is set, otherwise `"{name}"`.
     pub fn display(&self) -> String {
         match self.artist.as_deref().filter(|s| !s.is_empty()) {
-            Some(artist) => format!("{artist} — {}", self.name),
+            Some(artist) => format!("{artist} - {}", self.name),
             None => self.name.clone(),
         }
     }
@@ -192,7 +192,7 @@ impl Library {
             .with_context(|| format!("reading library index at {}", index.display()))?;
 
         let mut lib: Self = serde_json::from_str(&raw)
-            .with_context(|| "parsing library.json — the file may be corrupted")?;
+            .with_context(|| "parsing library.json: the file may be corrupted")?;
 
         let mut changed = false;
 
@@ -303,7 +303,7 @@ impl Library {
         let default_dest = music_dir.join(filename);
 
         // If the default destination already exists, check whether it is already
-        // registered — if so, the file was already imported and we're done.
+        // registered: if so, the file was already imported and we're done.
         if default_dest.exists() {
             let dest_canon = default_dest.canonicalize().ok();
             if let Some(existing) = self

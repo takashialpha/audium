@@ -21,7 +21,7 @@
 </div>
 
 <!--
-  Demo video — see issue #6 for context on why this is set up the way it is.
+  Demo video - see issue #6 for context on why this is set up the way it is.
 
   GitHub strips autoplay/loop from <video> tags unless the src points to a
   GitHub-hosted asset (uploaded via the issue/PR editor). A repo-relative path

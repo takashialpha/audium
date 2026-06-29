@@ -62,9 +62,12 @@ fn render_top_bar(frame: &mut Frame, area: ratatui::layout::Rect, state: &AppSta
             " audium ",
             Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  —  terminal music app", Style::default().fg(t.text_dim)),
         Span::styled(
-            " [?] help  [f] file picker  [c] new playlist  [m] menu  [q] quit ",
+            "     terminal music app     ",
+            Style::default().fg(t.text_dim),
+        ),
+        Span::styled(
+            "[?] help  [f] file picker  [c] new playlist  [m] menu  [q] quit ",
             Style::default().fg(t.subtle),
         ),
     ];
