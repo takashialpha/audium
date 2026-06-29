@@ -7,7 +7,8 @@ pub const APP_NAME: &str = "audium";
 #[command(
     name = APP_NAME,
     version,
-    about = "A terminal music player"
+    about = "A terminal music app.",
+    long_about = "A terminal music app: keyboard-driven, for people who live in the command line."
 )]
 pub struct Cli {
     /// Audio file to open immediately
