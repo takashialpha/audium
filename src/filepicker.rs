@@ -15,13 +15,13 @@ use crate::ui::layout::{Theme, truncate};
 
 /// A file extension is considered audio if it is one of these.
 const AUDIO_EXTS: &[&str] = &[
-    "mp3", "flac", "ogg", "wav", "aac", "m4a", "opus", "wma", "aiff",
+    "mp3", "flac", "ogg", "oga", "wav", "aac", "m4a", "opus", "wma", "aiff", "aif",
 ];
 
-fn is_audio(path: &Path) -> bool {
+pub(crate) fn is_audio(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
-        .map(|e| AUDIO_EXTS.contains(&e.to_lowercase().as_str()))
+        .map(|e| AUDIO_EXTS.contains(&e.to_ascii_lowercase().as_str()))
         .unwrap_or(false)
 }
 
@@ -94,21 +94,21 @@ impl FilePicker {
         self.entries.extend(files);
     }
 
-    pub fn move_down(&mut self) {
+    fn move_down(&mut self) {
         if !self.entries.is_empty() {
             self.cursor = (self.cursor + 1).min(self.entries.len() - 1);
         }
     }
 
-    pub fn move_up(&mut self) {
+    fn move_up(&mut self) {
         self.cursor = self.cursor.saturating_sub(1);
     }
 
-    pub fn selected(&self) -> Option<&DirEntry> {
+    fn selected(&self) -> Option<&DirEntry> {
         self.entries.get(self.cursor)
     }
 
-    pub fn enter_dir(&mut self) -> bool {
+    fn enter_dir(&mut self) -> bool {
         if let Some(entry) = self.selected()
             && entry.is_dir
         {

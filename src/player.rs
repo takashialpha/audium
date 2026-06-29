@@ -176,7 +176,7 @@ fn audio_thread_main(
     let player = Player::connect_new(sink.mixer());
     player.set_volume(default_volume);
 
-    let mut stopped_explicitly = false;
+    let mut stopped_explicitly = true;
 
     loop {
         // --- Process all pending commands first (non-blocking) ------------

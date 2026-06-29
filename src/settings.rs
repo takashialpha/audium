@@ -55,8 +55,11 @@ impl Settings {
 
     pub fn save(&self) -> Result<()> {
         let path = Self::path()?;
+        let tmp = path.with_extension("json.tmp");
         let raw = serde_json::to_string_pretty(self)?;
-        fs::write(&path, raw).with_context(|| format!("writing settings to {}", path.display()))?;
+        fs::write(&tmp, &raw).with_context(|| format!("writing settings to {}", tmp.display()))?;
+        fs::rename(&tmp, &path)
+            .with_context(|| format!("replacing settings at {}", path.display()))?;
         Ok(())
     }
 

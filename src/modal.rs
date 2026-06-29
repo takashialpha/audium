@@ -72,8 +72,6 @@ pub struct TextArea {
     pub lines: Vec<String>,
     pub cursor_row: usize,
     pub cursor_col: usize,
-    /// Undo stack of (lines, row, col) snapshots.
-    undo_stack: Vec<(Vec<String>, usize, usize)>,
 }
 
 impl TextArea {
@@ -93,7 +91,6 @@ impl TextArea {
             lines,
             cursor_row,
             cursor_col,
-            undo_stack: Vec::new(),
         }
     }
 
@@ -101,20 +98,13 @@ impl TextArea {
         self.lines.join("\n")
     }
 
-    fn snapshot(&mut self) {
-        self.undo_stack
-            .push((self.lines.clone(), self.cursor_row, self.cursor_col));
-    }
-
     pub fn insert_char(&mut self, c: char) {
-        self.snapshot();
         self.lines[self.cursor_row].insert(self.cursor_col, c);
         self.cursor_col += c.len_utf8();
     }
 
     pub fn delete_char(&mut self) {
         if self.cursor_col > 0 {
-            self.snapshot();
             let line = &self.lines[self.cursor_row];
             let mut col = self.cursor_col - 1;
             while !line.is_char_boundary(col) {
@@ -123,7 +113,6 @@ impl TextArea {
             self.lines[self.cursor_row].remove(col);
             self.cursor_col = col;
         } else if self.cursor_row > 0 {
-            self.snapshot();
             let current = self.lines.remove(self.cursor_row);
             self.cursor_row -= 1;
             let prev_len = self.lines[self.cursor_row].len();
@@ -135,17 +124,14 @@ impl TextArea {
     pub fn delete_next_char(&mut self) {
         let line_len = self.lines[self.cursor_row].len();
         if self.cursor_col < line_len {
-            self.snapshot();
             self.lines[self.cursor_row].remove(self.cursor_col);
         } else if self.cursor_row + 1 < self.lines.len() {
-            self.snapshot();
             let next = self.lines.remove(self.cursor_row + 1);
             self.lines[self.cursor_row].push_str(&next);
         }
     }
 
     pub fn insert_newline(&mut self) {
-        self.snapshot();
         let rest = self.lines[self.cursor_row][self.cursor_col..].to_string();
         self.lines[self.cursor_row].truncate(self.cursor_col);
         self.cursor_row += 1;
@@ -166,8 +152,9 @@ impl TextArea {
 
     pub fn move_right(&mut self) {
         let line = &self.lines[self.cursor_row];
-        if self.cursor_col < line.len() {
-            let c = line[self.cursor_col..].chars().next().unwrap();
+        if self.cursor_col < line.len()
+            && let Some(c) = line[self.cursor_col..].chars().next()
+        {
             self.cursor_col += c.len_utf8();
         }
     }
@@ -575,6 +562,9 @@ impl Modal {
                         *year_error = false;
                         let tid = *track_id;
                         let name = fields[0].value.trim().to_string();
+                        if name.is_empty() {
+                            return ModalOutcome::Consumed;
+                        }
                         let artist = nonempty_opt(&fields[1].value);
                         let album = nonempty_opt(&fields[2].value);
                         let year = year_str.parse().ok();

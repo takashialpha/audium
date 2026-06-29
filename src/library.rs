@@ -255,7 +255,7 @@ impl Library {
                 let Ok(canon) = path.canonicalize() else {
                     continue;
                 };
-                if known.contains(&canon) || crate::player::validate_decodable(&path).is_err() {
+                if known.contains(&canon) || !crate::filepicker::is_audio(&path) {
                     continue;
                 }
 
@@ -276,9 +276,12 @@ impl Library {
 
     pub fn save(&self) -> Result<()> {
         let index = Self::index_path()?;
+        let tmp = index.with_extension("json.tmp");
         let raw = serde_json::to_string_pretty(self)?;
-        fs::write(&index, raw)
-            .with_context(|| format!("writing library index to {}", index.display()))?;
+        fs::write(&tmp, &raw)
+            .with_context(|| format!("writing library index to {}", tmp.display()))?;
+        fs::rename(&tmp, &index)
+            .with_context(|| format!("replacing library index at {}", index.display()))?;
         Ok(())
     }
 
@@ -297,28 +300,64 @@ impl Library {
         let music_dir = Self::music_dir()?;
 
         let filename = source.file_name().context("source path has no filename")?;
-        let dest = music_dir.join(filename);
+        let default_dest = music_dir.join(filename);
 
-        if !dest.exists() {
-            fs::copy(source, &dest)
-                .with_context(|| format!("copying {} -> {}", source.display(), dest.display()))?;
+        // If the default destination already exists, check whether it is already
+        // registered — if so, the file was already imported and we're done.
+        if default_dest.exists() {
+            let dest_canon = default_dest.canonicalize().ok();
+            if let Some(existing) = self
+                .tracks
+                .iter()
+                .find(|t| t.path.canonicalize().ok() == dest_canon)
+            {
+                return Ok((existing.clone(), false));
+            }
         }
 
-        // Deduplication by canonical path.
-        let dest_canon = dest.canonicalize().ok();
-        if let Some(existing) = self
-            .tracks
-            .iter()
-            .find(|t| t.path.canonicalize().ok() == dest_canon)
+        // Also handle the case where the source itself is already registered
+        // (e.g. it lives inside the music directory under a different name).
+        let source_canon = source.canonicalize().ok();
+        if source_canon.is_some()
+            && let Some(existing) = self
+                .tracks
+                .iter()
+                .find(|t| t.path.canonicalize().ok() == source_canon)
         {
             return Ok((existing.clone(), false));
         }
+
+        // Resolve the actual copy destination, generating a unique name when
+        // a different file already occupies the default path.
+        let dest = if default_dest.exists() {
+            let stem = default_dest
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("track");
+            let ext = default_dest
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|e| format!(".{e}"))
+                .unwrap_or_default();
+            let mut i = 1u32;
+            loop {
+                let candidate = music_dir.join(format!("{stem}-{i}{ext}"));
+                if !candidate.exists() {
+                    break candidate;
+                }
+                i += 1;
+            }
+        } else {
+            default_dest
+        };
+
+        fs::copy(source, &dest)
+            .with_context(|| format!("copying {} -> {}", source.display(), dest.display()))?;
 
         let id = self.next_track_id;
         self.next_track_id += 1;
 
         let track = track_from_file(id, dest);
-
         self.tracks.push(track.clone());
 
         // Keep "All Tracks" in sync.
@@ -333,19 +372,24 @@ impl Library {
     /// Removes a track from the registry and from all playlists.
     /// Does NOT delete the file from disk.
     pub fn remove_track(&mut self, id: TrackId) -> Result<()> {
+        let before = self.tracks.len();
         self.tracks.retain(|t| t.id != id);
-        for pl in &mut self.playlists {
-            pl.tracks.retain(|&tid| tid != id);
+        if self.tracks.len() != before {
+            for pl in &mut self.playlists {
+                pl.tracks.retain(|&tid| tid != id);
+            }
+            self.save()?;
         }
-        self.save()
+        Ok(())
     }
 
     /// Renames a track (display name only; does not touch the file).
     pub fn rename_track(&mut self, id: TrackId, new_name: impl Into<String>) -> Result<()> {
         if let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) {
             t.name = new_name.into();
+            self.save()?;
         }
-        self.save()
+        Ok(())
     }
 
     /// Replaces all user-editable metadata for a track (no file is touched).
@@ -402,8 +446,12 @@ impl Library {
         if id == ALL_TRACKS_ID {
             return Ok(());
         }
+        let before = self.playlists.len();
         self.playlists.retain(|p| p.id != id);
-        self.save()
+        if self.playlists.len() != before {
+            self.save()?;
+        }
+        Ok(())
     }
 
     /// Renames a user playlist.  Silently ignores "All Tracks".
@@ -413,8 +461,9 @@ impl Library {
         }
         if let Some(pl) = self.playlists.iter_mut().find(|p| p.id == id) {
             pl.name = name.into();
+            self.save()?;
         }
-        self.save()
+        Ok(())
     }
 
     /// Adds a track to a playlist (no-op if already present).
@@ -423,8 +472,9 @@ impl Library {
             && !pl.tracks.contains(&track_id)
         {
             pl.tracks.push(track_id);
+            self.save()?;
         }
-        self.save()
+        Ok(())
     }
 
     /// Returns a reference to a playlist by id.
