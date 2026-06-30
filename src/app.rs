@@ -1,7 +1,7 @@
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use rand::seq::SliceRandom;
 use ratatui::DefaultTerminal;
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::time::{Duration, Instant};
 
 use crate::{

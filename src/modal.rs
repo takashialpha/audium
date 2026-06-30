@@ -1,6 +1,6 @@
-use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::{
     Frame,
+    crossterm::event::{KeyCode, KeyModifiers},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
