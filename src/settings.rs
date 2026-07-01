@@ -9,7 +9,7 @@ use std::fs;
 /// older file are silently filled in on load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
-    /// Initial volume applied when audium starts (0.0 – 1.0).
+    /// Initial volume applied when audium starts (0.0-1.0).
     pub default_volume: f32,
     /// How many seconds ← / → seek by.
     pub seek_step_secs: u64,
