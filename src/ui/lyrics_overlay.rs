@@ -71,14 +71,13 @@ pub fn render_lyrics_overlay(frame: &mut Frame, state: &AppState, track_id: Trac
         None
     };
 
-    let visible = text_rect.height as usize;
+    let visible = usize::from(text_rect.height);
     let total = lines.len();
 
     let scroll = if is_synced {
         // Auto-scroll: keep the current line centred.
         current
-            .map(|cur| cur.saturating_sub(visible / 2))
-            .unwrap_or(0)
+            .map_or(0, |cur| cur.saturating_sub(visible / 2))
             .min(total.saturating_sub(visible))
     } else {
         // Manual scroll via j/k; clamp to content length.

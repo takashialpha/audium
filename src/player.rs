@@ -155,7 +155,7 @@ pub fn spawn_audio_thread(default_volume: f32) -> Result<PlayerHandle> {
 
     thread::Builder::new()
         .name("audium-audio".into())
-        .spawn(move || audio_thread_main(sink, cmd_rx, event_tx, volume))?;
+        .spawn(move || audio_thread_main(&sink, &cmd_rx, &event_tx, volume))?;
 
     Ok(PlayerHandle {
         cmd_tx,
@@ -168,9 +168,9 @@ pub fn spawn_audio_thread(default_volume: f32) -> Result<PlayerHandle> {
 
 /// Entry point for the audio thread.
 fn audio_thread_main(
-    sink: MixerDeviceSink,
-    cmd_rx: Receiver<PlayerCommand>,
-    event_tx: Sender<PlayerEvent>,
+    sink: &MixerDeviceSink,
+    cmd_rx: &Receiver<PlayerCommand>,
+    event_tx: &Sender<PlayerEvent>,
     default_volume: f32,
 ) {
     let player = Player::connect_new(sink.mixer());
@@ -183,7 +183,7 @@ fn audio_thread_main(
         loop {
             match cmd_rx.try_recv() {
                 Ok(cmd) => {
-                    handle_command(&player, cmd, &mut stopped_explicitly, &event_tx);
+                    handle_command(&player, cmd, &mut stopped_explicitly, event_tx);
                 }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => return,

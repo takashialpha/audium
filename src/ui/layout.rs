@@ -30,10 +30,7 @@ impl Theme {
     }
 
     fn apply_color(&self, style: Style, color: Color) -> Style {
-        match self.maybe_color(color) {
-            Some(c) => style.bg(c),
-            None => style,
-        }
+        self.maybe_color(color).map_or(style, |c| style.bg(c))
     }
 
     pub fn apply_bg(&self, style: Style) -> Style {

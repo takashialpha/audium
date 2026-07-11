@@ -25,7 +25,7 @@ pub struct Track {
     pub id: TrackId,
     /// Display name: title tag if present, otherwise the filename stem.
     pub name: String,
-    /// Absolute path to the audio file (inside $XDG_DATA_HOME/audium/music/ after import).
+    /// Absolute path to the audio file (inside $`XDG_DATA_HOME/audium/music`/ after import).
     pub path: PathBuf,
 
     // Optional metadata read from file tags on import.
@@ -46,10 +46,10 @@ pub struct Track {
 impl Track {
     /// Returns `"{artist} - {name}"` when an artist is set, otherwise `"{name}"`.
     pub fn display(&self) -> String {
-        match self.artist.as_deref().filter(|s| !s.is_empty()) {
-            Some(artist) => format!("{artist} - {}", self.name),
-            None => self.name.clone(),
-        }
+        self.artist
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map_or_else(|| self.name.clone(), |artist| format!("{artist} - {}", self.name))
     }
 }
 
@@ -95,10 +95,10 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
     let tag = tagged.primary_tag().or_else(|| tagged.first_tag())?;
     let nonempty = |s: String| if s.is_empty() { None } else { Some(s) };
     Some(FileTags {
-        title: tag.title().map(|s| s.into_owned()).and_then(nonempty),
-        artist: tag.artist().map(|s| s.into_owned()).and_then(nonempty),
-        album: tag.album().map(|s| s.into_owned()).and_then(nonempty),
-        genre: tag.genre().map(|s| s.into_owned()).and_then(nonempty),
+        title: tag.title().map(std::borrow::Cow::into_owned).and_then(nonempty),
+        artist: tag.artist().map(std::borrow::Cow::into_owned).and_then(nonempty),
+        album: tag.album().map(std::borrow::Cow::into_owned).and_then(nonempty),
+        genre: tag.genre().map(std::borrow::Cow::into_owned).and_then(nonempty),
         year: tag.date().map(|ts| u32::from(ts.year)),
     })
 }

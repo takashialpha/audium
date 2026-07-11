@@ -10,6 +10,7 @@ use crate::{
     library::{ALL_TRACKS_ID, Library, PlaylistId, Track, TrackId},
     lyrics,
     modal::{Modal, ModalConfirm, ModalOutcome, RemoveTarget, TextInput, make_lyrics_textarea},
+    numeric,
     player::{PlayerEvent, PlayerHandle, resolve_duration, spawn_audio_thread},
     settings::Settings,
     ui,
@@ -36,7 +37,7 @@ pub enum LoopMode {
 }
 
 impl LoopMode {
-    pub fn cycle(self) -> Self {
+    pub const fn cycle(self) -> Self {
         match self {
             Self::Off => Self::Queue,
             Self::Queue => Self::Track,
@@ -56,7 +57,7 @@ pub enum Focus {
 }
 
 impl Focus {
-    pub fn cycle(self) -> Self {
+    pub const fn cycle(self) -> Self {
         match self {
             Self::Sidebar => Self::TrackList,
             Self::TrackList => Self::Queue,
@@ -165,8 +166,7 @@ impl AppState {
         }
         let wall = self
             .track_start
-            .map(|s| s.elapsed())
-            .unwrap_or(Duration::ZERO);
+            .map_or(Duration::ZERO, |s| s.elapsed());
         self.seek_offset + wall.mul_f32(self.player.playback_speed)
     }
 
@@ -211,7 +211,7 @@ impl AppState {
                 self.play_queue_index(idx);
             }
             LoopMode::Queue => {
-                let next = self.now_playing.map(|i| i + 1).unwrap_or(0);
+                let next = self.now_playing.map_or(0, |i| i + 1);
                 // Wrap around to the first track instead of halting.
                 let idx = if next < self.queue.len() { next } else { 0 };
                 if !self.queue.is_empty() {
@@ -219,7 +219,7 @@ impl AppState {
                 }
             }
             LoopMode::Off => {
-                let next = self.now_playing.map(|i| i + 1).unwrap_or(0);
+                let next = self.now_playing.map_or(0, |i| i + 1);
                 if next < self.queue.len() {
                     self.play_queue_index(next);
                 } else {
@@ -326,103 +326,132 @@ impl AppState {
     // ── Input ─────────────────────────────────────────────────────────────
 
     pub fn handle_key(&mut self, code: KeyCode, modifiers: KeyModifiers) {
-        // ── Ctrl-C: same as 'q' (ask to quit, confirm on a second press) ──
-        if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
-            if matches!(self.modal, Some(Modal::ConfirmQuit)) {
-                self.modal = None;
-                self.apply_modal_confirm(ModalConfirm::Quit);
-            } else {
-                self.file_picker = None;
-                self.modal = Some(Modal::ConfirmQuit);
-            }
+        if self.handle_quit_shortcut(code, modifiers) {
             return;
         }
+        if self.handle_file_picker_key(code) {
+            return;
+        }
+        if self.handle_modal_key(code, modifiers) {
+            return;
+        }
+        if self.handle_lyrics_overlay_key(code) {
+            return;
+        }
+        if self.handle_filter_key(code) {
+            return;
+        }
+        self.handle_global_key(code);
+    }
 
-        // ── File picker takes priority ────────────────────────────────
-        if let Some(picker) = &mut self.file_picker {
-            match picker.handle_key(code) {
-                FilePickerOutcome::Continue => return,
-                FilePickerOutcome::Dismissed => {
-                    self.file_picker = None;
-                    return;
-                }
-                FilePickerOutcome::Selected(path) => {
-                    self.file_picker = None;
-                    self.import_file(&path);
-                    return;
-                }
+    // ── Ctrl-C: same as 'q' (ask to quit, confirm on a second press) ──────
+    fn handle_quit_shortcut(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
+        if code != KeyCode::Char('c') || !modifiers.contains(KeyModifiers::CONTROL) {
+            return false;
+        }
+        if matches!(self.modal, Some(Modal::ConfirmQuit)) {
+            self.modal = None;
+            self.apply_modal_confirm(ModalConfirm::Quit);
+        } else {
+            self.file_picker = None;
+            self.modal = Some(Modal::ConfirmQuit);
+        }
+        true
+    }
+
+    // ── File picker takes priority over everything else ───────────────────
+    fn handle_file_picker_key(&mut self, code: KeyCode) -> bool {
+        let Some(picker) = &mut self.file_picker else {
+            return false;
+        };
+        match picker.handle_key(code) {
+            FilePickerOutcome::Continue => {}
+            FilePickerOutcome::Dismissed => self.file_picker = None,
+            FilePickerOutcome::Selected(path) => {
+                self.file_picker = None;
+                self.import_file(&path);
             }
         }
+        true
+    }
 
-        // ── Modal intercepts next ─────────────────────────────────────
-        if let Some(modal) = &mut self.modal {
-            match modal.handle_key(code, modifiers) {
-                ModalOutcome::Consumed => return,
-                ModalOutcome::Dismissed => {
+    // ── Modal intercepts next ──────────────────────────────────────────────
+    fn handle_modal_key(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
+        let Some(modal) = &mut self.modal else {
+            return false;
+        };
+        match modal.handle_key(code, modifiers) {
+            ModalOutcome::Consumed => {}
+            ModalOutcome::Dismissed => self.modal = None,
+            ModalOutcome::Confirm(c) => {
+                if !matches!(c, ModalConfirm::PreviewTheme { .. }) {
                     self.modal = None;
-                    return;
                 }
-                ModalOutcome::Confirm(c) => {
-                    if !matches!(c, ModalConfirm::PreviewTheme { .. }) {
-                        self.modal = None;
-                    }
-                    self.apply_modal_confirm(c);
-                    return;
-                }
+                self.apply_modal_confirm(c);
             }
         }
+        true
+    }
 
-        // ── Lyrics overlay intercepts when visible, no modal open ───────────
-        if self.show_lyrics && self.modal.is_none() && self.file_picker.is_none() {
-            match code {
-                KeyCode::Char('j') | KeyCode::Down => {
-                    self.lyrics_scroll = self.lyrics_scroll.saturating_add(1);
-                    return;
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    self.lyrics_scroll = self.lyrics_scroll.saturating_sub(1);
-                    return;
-                }
-                KeyCode::Esc | KeyCode::Char('y') => {
-                    self.show_lyrics = false;
-                    return;
-                }
-                _ => {}
-            }
+    // ── Lyrics overlay intercepts when visible, no modal open ─────────────
+    const fn handle_lyrics_overlay_key(&mut self, code: KeyCode) -> bool {
+        if !self.show_lyrics || self.modal.is_some() || self.file_picker.is_some() {
+            return false;
         }
-
-        // ── Filter input (captures printable chars when active) ───────────
-        if self.filter_active {
-            match code {
-                KeyCode::Esc => {
-                    self.tracklist_filter.clear();
-                    self.filter_active = false;
-                    self.tracklist_cursor = 0;
-                    self.rebuild_filter_cache();
-                    return;
-                }
-                KeyCode::Backspace => {
-                    self.tracklist_filter.pop();
-                    self.tracklist_cursor = 0;
-                    self.rebuild_filter_cache();
-                    return;
-                }
-                KeyCode::Char(c) => {
-                    self.tracklist_filter.push(c);
-                    self.tracklist_cursor = 0;
-                    self.rebuild_filter_cache();
-                    return;
-                }
-                // Enter exits typing mode; falls through to action_enter below.
-                KeyCode::Enter => {
-                    self.filter_active = false;
-                }
-                // All other keys (navigation, playback shortcuts) fall through.
-                _ => {}
+        match code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.lyrics_scroll = self.lyrics_scroll.saturating_add(1);
+                true
             }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.lyrics_scroll = self.lyrics_scroll.saturating_sub(1);
+                true
+            }
+            KeyCode::Esc | KeyCode::Char('y') => {
+                self.show_lyrics = false;
+                true
+            }
+            _ => false,
         }
+    }
 
-        // ── Global keybindings ─────────────────────────────────────────
+    // ── Filter input (captures printable chars when active) ───────────────
+    fn handle_filter_key(&mut self, code: KeyCode) -> bool {
+        if !self.filter_active {
+            return false;
+        }
+        match code {
+            KeyCode::Esc => {
+                self.tracklist_filter.clear();
+                self.filter_active = false;
+                self.tracklist_cursor = 0;
+                self.rebuild_filter_cache();
+                true
+            }
+            KeyCode::Backspace => {
+                self.tracklist_filter.pop();
+                self.tracklist_cursor = 0;
+                self.rebuild_filter_cache();
+                true
+            }
+            KeyCode::Char(c) => {
+                self.tracklist_filter.push(c);
+                self.tracklist_cursor = 0;
+                self.rebuild_filter_cache();
+                true
+            }
+            // Enter exits typing mode; falls through to action_enter below.
+            KeyCode::Enter => {
+                self.filter_active = false;
+                false
+            }
+            // All other keys (navigation, playback shortcuts) fall through.
+            _ => false,
+        }
+    }
+
+    // ── Global keybindings ─────────────────────────────────────────────────
+    fn handle_global_key(&mut self, code: KeyCode) {
         match code {
             KeyCode::Char('q') => self.modal = Some(Modal::ConfirmQuit),
             KeyCode::Char('?') => self.modal = Some(Modal::Help),
@@ -431,9 +460,9 @@ impl AppState {
             KeyCode::Char(' ') => self.action_toggle_play(),
             KeyCode::Char('n') => self.play_next(),
             KeyCode::Char('N') => self.play_prev(),
-            KeyCode::Left => self.action_seek(-(self.settings.seek_step_secs as i64)),
-            KeyCode::Right => self.action_seek(self.settings.seek_step_secs as i64),
-            KeyCode::Char('+') | KeyCode::Char('=') => self.player.volume_up(),
+            KeyCode::Left => self.action_seek(-self.settings.seek_step_secs.cast_signed()),
+            KeyCode::Right => self.action_seek(self.settings.seek_step_secs.cast_signed()),
+            KeyCode::Char('+' | '=') => self.player.volume_up(),
             KeyCode::Char('-') => self.player.volume_down(),
 
             // Navigation
@@ -546,22 +575,20 @@ impl AppState {
     /// Seek by `delta_secs` seconds (negative = rewind, positive = forward).
     /// No-op if nothing is playing or the track path is unavailable.
     fn action_seek(&mut self, delta_secs: i64) {
-        let idx = match self.now_playing {
-            Some(i) => i,
-            None => return,
+        let Some(idx) = self.now_playing else {
+            return;
         };
-        let path = match self.queue.get(idx) {
-            Some(t) => t.path.clone(),
-            None => return,
+        let Some(track) = self.queue.get(idx) else {
+            return;
         };
+        let path = track.path.clone();
 
         // Compute new position, clamped to [0, duration].
-        let current = self.elapsed().as_secs() as i64;
+        let current = self.elapsed().as_secs().cast_signed();
         let max_secs = self
             .track_duration
-            .map(|d| d.as_secs().saturating_sub(1) as i64)
-            .unwrap_or(i64::MAX);
-        let target_secs = (current + delta_secs).clamp(0, max_secs) as u64;
+            .map_or(i64::MAX, |d| d.as_secs().saturating_sub(1).cast_signed());
+        let target_secs = (current + delta_secs).clamp(0, max_secs).cast_unsigned();
         let target = Duration::from_secs(target_secs);
 
         // Update UI-side clock immediately so the bar moves on the next frame.
@@ -586,7 +613,7 @@ impl AppState {
             }
             Focus::TrackList => {
                 if let Some(track) = self.selected_track() {
-                    let insert_at = self.now_playing.map(|i| i + 1).unwrap_or(0);
+                    let insert_at = self.now_playing.map_or(0, |i| i + 1);
                     self.queue.insert(insert_at, track);
                     self.play_queue_index(insert_at);
                 }
@@ -699,9 +726,7 @@ impl AppState {
     }
 
     fn action_open_filepicker(&mut self) {
-        let start = std::env::var_os("HOME")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| "/".into());
+        let start = std::env::var_os("HOME").map_or_else(|| "/".into(), std::path::PathBuf::from);
         self.file_picker = Some(FilePicker::new(start));
     }
 
@@ -710,7 +735,7 @@ impl AppState {
     }
 
     fn open_settings(&mut self) {
-        let vol_pct = (self.settings.default_volume * 100.0).round() as u32;
+        let vol_pct = numeric::ratio_to_whole_percent(self.settings.default_volume);
         let preview_theme_idx = crate::ui::layout::themes()
             .iter()
             .position(|t| t.name == self.settings.theme_name.as_str())
@@ -826,18 +851,18 @@ impl AppState {
         &mut self,
         track_id: TrackId,
         name: &str,
-        artist: &Option<String>,
-        album: &Option<String>,
+        artist: Option<&String>,
+        album: Option<&String>,
         year: Option<u32>,
-        genre: &Option<String>,
+        genre: Option<&String>,
     ) {
         for t in &mut self.queue {
             if t.id == track_id {
                 t.name = name.to_string();
-                t.artist = artist.clone();
-                t.album = album.clone();
+                t.artist = artist.cloned();
+                t.album = album.cloned();
                 t.year = year;
-                t.genre = genre.clone();
+                t.genre = genre.cloned();
             }
         }
     }
@@ -885,63 +910,87 @@ impl AppState {
 
     // ── Modal confirm handler ─────────────────────────────────────────────
 
-    fn apply_modal_confirm(&mut self, confirm: ModalConfirm) {
-        match confirm {
-            ModalConfirm::Remove(target) => match target {
-                RemoveTarget::TrackFromQueue { queue_idx } => {
-                    if queue_idx < self.queue.len() {
-                        self.queue.remove(queue_idx);
-                        if let Some(np) = self.now_playing {
-                            if queue_idx < np {
-                                self.now_playing = Some(np - 1);
-                            } else if queue_idx == np {
-                                self.halt_playback();
-                            }
+    fn apply_remove(&mut self, target: RemoveTarget) {
+        match target {
+            RemoveTarget::TrackFromQueue { queue_idx } => {
+                if queue_idx < self.queue.len() {
+                    self.queue.remove(queue_idx);
+                    if let Some(np) = self.now_playing {
+                        if queue_idx < np {
+                            self.now_playing = Some(np - 1);
+                        } else if queue_idx == np {
+                            self.halt_playback();
                         }
-
-                        self.queue_cursor =
-                            self.queue_cursor.min(self.queue.len().saturating_sub(1));
-                    }
-                }
-
-                RemoveTarget::TrackFromLibrary { track_id } => {
-                    let _ = self.library.remove_track(track_id);
-
-                    let playing_removed = self
-                        .now_playing
-                        .and_then(|np| self.queue.get(np))
-                        .map(|t| t.id == track_id)
-                        .unwrap_or(false);
-                    let removed_before_np = self
-                        .now_playing
-                        .map(|np| self.queue[..np].iter().filter(|t| t.id == track_id).count())
-                        .unwrap_or(0);
-
-                    self.queue.retain(|t| t.id != track_id);
-
-                    if playing_removed {
-                        self.halt_playback();
-                    } else if removed_before_np > 0
-                        && let Some(np) = self.now_playing.as_mut()
-                    {
-                        *np -= removed_before_np;
                     }
 
                     self.queue_cursor = self.queue_cursor.min(self.queue.len().saturating_sub(1));
-                    self.rebuild_filter_cache();
-                    self.tracklist_cursor = self
-                        .tracklist_cursor
-                        .min(self.active_tracks().len().saturating_sub(1));
+                }
+            }
+
+            RemoveTarget::TrackFromLibrary { track_id } => {
+                let _ = self.library.remove_track(track_id);
+
+                let playing_removed = self
+                    .now_playing
+                    .and_then(|np| self.queue.get(np))
+                    .is_some_and(|t| t.id == track_id);
+                let removed_before_np = self
+                    .now_playing
+                    .map_or(0, |np| self.queue[..np].iter().filter(|t| t.id == track_id).count());
+
+                self.queue.retain(|t| t.id != track_id);
+
+                if playing_removed {
+                    self.halt_playback();
+                } else if removed_before_np > 0
+                    && let Some(np) = self.now_playing.as_mut()
+                {
+                    *np -= removed_before_np;
                 }
 
-                RemoveTarget::Playlist { playlist_id } => {
-                    let _ = self.library.delete_playlist(playlist_id);
-                    self.sidebar_cursor = self
-                        .sidebar_cursor
-                        .min(self.library.playlists.len().saturating_sub(1));
-                    self.sync_active_playlist();
-                }
-            },
+                self.queue_cursor = self.queue_cursor.min(self.queue.len().saturating_sub(1));
+                self.rebuild_filter_cache();
+                self.tracklist_cursor = self
+                    .tracklist_cursor
+                    .min(self.active_tracks().len().saturating_sub(1));
+            }
+
+            RemoveTarget::Playlist { playlist_id } => {
+                let _ = self.library.delete_playlist(playlist_id);
+                self.sidebar_cursor = self
+                    .sidebar_cursor
+                    .min(self.library.playlists.len().saturating_sub(1));
+                self.sync_active_playlist();
+            }
+        }
+    }
+
+    /// Persists edited metadata to the library and syncs it into the live
+    /// queue. Shared by `SaveMetadata` and `SaveMetadataAndEditLyrics`.
+    fn save_metadata(
+        &mut self,
+        track_id: TrackId,
+        name: &str,
+        artist: Option<&String>,
+        album: Option<&String>,
+        year: Option<u32>,
+        genre: Option<&String>,
+    ) {
+        let _ = self.library.update_track_metadata(
+            track_id,
+            name.to_string(),
+            artist.cloned(),
+            album.cloned(),
+            year,
+            genre.cloned(),
+        );
+        self.sync_queue_metadata(track_id, name, artist, album, year, genre);
+        self.rebuild_filter_cache();
+    }
+
+    fn apply_modal_confirm(&mut self, confirm: ModalConfirm) {
+        match confirm {
+            ModalConfirm::Remove(target) => self.apply_remove(target),
 
             ModalConfirm::Rename { kind, id, new_name } => {
                 if kind == "Track" {
@@ -983,7 +1032,8 @@ impl AppState {
                 theme_name,
                 transparent,
             } => {
-                self.settings.set_default_volume(volume_pct as f32 / 100.0);
+                self.settings
+                    .set_default_volume(numeric::whole_percent_to_ratio(volume_pct));
                 self.settings.set_seek_step_secs(seek_secs);
                 self.settings.set_theme(&theme_name);
                 self.settings.transparent = transparent;
@@ -1032,16 +1082,7 @@ impl AppState {
                 year,
                 genre,
             } => {
-                let _ = self.library.update_track_metadata(
-                    track_id,
-                    name.clone(),
-                    artist.clone(),
-                    album.clone(),
-                    year,
-                    genre.clone(),
-                );
-                self.sync_queue_metadata(track_id, &name, &artist, &album, year, &genre);
-                self.rebuild_filter_cache();
+                self.save_metadata(track_id, &name, artist.as_ref(), album.as_ref(), year, genre.as_ref());
             }
 
             ModalConfirm::SaveLyrics { track_id, lyrics } => {
@@ -1059,16 +1100,7 @@ impl AppState {
                 year,
                 genre,
             } => {
-                let _ = self.library.update_track_metadata(
-                    track_id,
-                    name.clone(),
-                    artist.clone(),
-                    album.clone(),
-                    year,
-                    genre.clone(),
-                );
-                self.sync_queue_metadata(track_id, &name, &artist, &album, year, &genre);
-                self.rebuild_filter_cache();
+                self.save_metadata(track_id, &name, artist.as_ref(), album.as_ref(), year, genre.as_ref());
                 self.action_edit_lyrics(track_id);
             }
         }

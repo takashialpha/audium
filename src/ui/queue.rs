@@ -44,7 +44,7 @@ pub fn render_queue(frame: &mut Frame, state: &AppState, area: Rect) {
                 "{}{:<3} {}",
                 prefix,
                 i + 1,
-                truncate(&track.display(), (area.width as usize).saturating_sub(8))
+                truncate(&track.display(), usize::from(area.width).saturating_sub(8))
             );
             ListItem::new(label).style(style)
         })

@@ -39,16 +39,14 @@ impl Settings {
     /// Loads settings from disk.  Missing file → `Default`.
     /// Corrupt file → `Default` (non-fatal; we just overwrite on next save).
     pub fn load() -> Self {
-        let path = match Self::path() {
-            Ok(p) => p,
-            Err(_) => return Self::default(),
+        let Ok(path) = Self::path() else {
+            return Self::default();
         };
         if !path.exists() {
             return Self::default();
         }
-        let raw = match fs::read_to_string(&path) {
-            Ok(r) => r,
-            Err(_) => return Self::default(),
+        let Ok(raw) = fs::read_to_string(&path) else {
+            return Self::default();
         };
         serde_json::from_str(&raw).unwrap_or_default()
     }
@@ -65,7 +63,7 @@ impl Settings {
 
     // ── Validated setters ─────────────────────────────────────────────────
 
-    pub fn set_default_volume(&mut self, v: f32) {
+    pub const fn set_default_volume(&mut self, v: f32) {
         self.default_volume = v.clamp(0.0, 1.0);
     }
 

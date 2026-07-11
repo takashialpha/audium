@@ -28,11 +28,11 @@ pub fn parse_lrc(raw: &str) -> Vec<LyricLine> {
         }
     }
 
-    if !timed.is_empty() {
+    if timed.is_empty() {
+        plain
+    } else {
         timed.sort_by_key(|l| l.time_ms);
         timed
-    } else {
-        plain
     }
 }
 
@@ -75,7 +75,7 @@ fn try_timed(line: &str) -> Option<LyricLine> {
 
 /// Returns the index of the last timed line whose timestamp ≤ `elapsed`.
 pub fn active_idx(lines: &[LyricLine], elapsed: Duration) -> Option<usize> {
-    let elapsed_ms = elapsed.as_millis() as u64;
+    let elapsed_ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
     lines
         .iter()
         .enumerate()

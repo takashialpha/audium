@@ -18,11 +18,10 @@ const AUDIO_EXTS: &[&str] = &[
     "mp3", "flac", "ogg", "oga", "wav", "aac", "m4a", "opus", "wma", "aiff", "aif",
 ];
 
-pub(crate) fn is_audio(path: &Path) -> bool {
+pub fn is_audio(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
-        .map(|e| AUDIO_EXTS.contains(&e.to_ascii_lowercase().as_str()))
-        .unwrap_or(false)
+        .is_some_and(|e| AUDIO_EXTS.contains(&e.to_ascii_lowercase().as_str()))
 }
 
 // ── Entry ──────────────────────────────────────────────────────────────────
@@ -66,9 +65,8 @@ impl FilePicker {
             });
         }
 
-        let read = match fs::read_dir(&self.current_dir) {
-            Ok(r) => r,
-            Err(_) => return,
+        let Ok(read) = fs::read_dir(&self.current_dir) else {
+            return;
         };
 
         let mut dirs: Vec<DirEntry> = Vec::new();
@@ -100,7 +98,7 @@ impl FilePicker {
         }
     }
 
-    fn move_up(&mut self) {
+    const fn move_up(&mut self) {
         self.cursor = self.cursor.saturating_sub(1);
     }
 
@@ -169,7 +167,7 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker, theme: &Theme) 
     frame.render_widget(Clear, rect);
 
     // "  📁  " prefix (5 cols) + trailing " " (1) + corners (2) = 8 overhead
-    let path_max = width.saturating_sub(8) as usize;
+    let path_max = usize::from(width.saturating_sub(8));
     let path_str = picker.current_dir.to_string_lossy();
     let title = format!(" 📁 {} ", truncate(&path_str, path_max));
 
@@ -195,7 +193,7 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker, theme: &Theme) 
         ..inner
     };
 
-    let name_max = inner.width.saturating_sub(2) as usize; // 2 cols for the icon
+    let name_max = usize::from(inner.width.saturating_sub(2)); // 2 cols for the icon
     let items: Vec<ListItem> = picker
         .entries
         .iter()

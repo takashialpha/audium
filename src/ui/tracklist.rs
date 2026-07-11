@@ -17,10 +17,9 @@ pub fn render_tracklist(frame: &mut Frame, state: &AppState, area: Rect) {
     let pl_name = state
         .library
         .playlist(state.active_playlist)
-        .map(|p| p.name.as_str())
-        .unwrap_or("Tracks");
+        .map_or("Tracks", |p| p.name.as_str());
 
-    let title = format!(" {} ", pl_name);
+    let title = format!(" {pl_name} ");
     let block = styled_block(&title, focused, t).style(t.apply_panel_bg(Style::default()));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -71,8 +70,7 @@ pub fn render_tracklist(frame: &mut Frame, state: &AppState, area: Rect) {
             let is_playing = state
                 .now_playing
                 .and_then(|np| state.queue.get(np))
-                .map(|qt| qt.id == track.id)
-                .unwrap_or(false);
+                .is_some_and(|qt| qt.id == track.id);
 
             let num = Span::styled(
                 format!(" {:>3}  ", i + 1),
@@ -81,7 +79,7 @@ pub fn render_tracklist(frame: &mut Frame, state: &AppState, area: Rect) {
             let title_span = Span::styled(
                 truncate(
                     &track.display(),
-                    (list_rect.width as usize).saturating_sub(8),
+                    usize::from(list_rect.width).saturating_sub(8),
                 ),
                 if is_playing {
                     Style::default()

@@ -6,6 +6,8 @@ description = "A terminal music app"
 authors = ["takashialpha <takashialpha@protonmail.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/takashialpha/audium"
+keywords = ["music", "app", "player", "tui", "terminal", "audio"]
+categories = ["command-line-utilities", "multimedia::audio"]
 
 [dependencies]
 anyhow = "1"

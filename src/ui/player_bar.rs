@@ -8,6 +8,8 @@ use ratatui::{
 
 use super::layout::{Theme, format_duration};
 use crate::app::{AppState, LoopMode};
+use crate::library::Track;
+use crate::numeric::{ratio_to_unit_count, ratio_to_whole_percent, usize_to_u16_saturating};
 
 pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     let t = &state.theme;
@@ -39,6 +41,38 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         ])
         .split(main_area);
 
+    let current_track = state.now_playing.and_then(|i| state.queue.get(i));
+    render_title_row(frame, rows[0], state, current_track, t);
+    render_progress_row(frame, rows[1], state, t);
+
+    // ── Metadata line (album · year · genre) ─────────────────────────────
+    if let Some(tr) = current_track {
+        let parts: Vec<String> = [
+            tr.album.clone(),
+            tr.year.map(|y| y.to_string()),
+            tr.genre.clone(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if !parts.is_empty() {
+            frame.render_widget(
+                Paragraph::new(parts.join("  ·  ")).style(Style::default().fg(t.text_dim)),
+                rows[2],
+            );
+        }
+    }
+
+    render_volume_bar(frame, vol_area, state.player.volume, t);
+}
+
+fn render_title_row(
+    frame: &mut Frame,
+    row: Rect,
+    state: &AppState,
+    current_track: Option<&Track>,
+    t: &Theme,
+) {
     let is_paused = state.player.is_paused;
     let has_track = state.now_playing.is_some();
     let status = if has_track && !is_paused {
@@ -47,8 +81,10 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         "▶ "
     };
 
-    let current_track = state.now_playing.and_then(|i| state.queue.get(i));
     let title_owned;
+    // Deferred-init pattern needs `if let` block scoping; `map_or` can't express
+    // a closure that both assigns an outer binding and returns a ref into it.
+    #[allow(clippy::option_if_let_else)]
     let title: &str = if let Some(tr) = current_track {
         title_owned = tr.display();
         &title_owned
@@ -61,7 +97,7 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         LoopMode::Queue => " loop queue ",
         LoopMode::Track => " loop track ",
     };
-    let loop_width = loop_label.chars().count() as u16;
+    let loop_width = usize_to_u16_saturating(loop_label.chars().count());
 
     let speed = state.player.playback_speed;
     let speed_label = if (speed - 1.0).abs() > 0.001 {
@@ -71,7 +107,7 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     } else {
         String::new()
     };
-    let speed_width = speed_label.chars().count() as u16;
+    let speed_width = usize_to_u16_saturating(speed_label.chars().count());
 
     let title_cols = Layout::default()
         .direction(Direction::Horizontal)
@@ -81,7 +117,7 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
             Constraint::Length(speed_width),
             Constraint::Length(loop_width),
         ])
-        .split(rows[0]);
+        .split(row);
 
     frame.render_widget(
         Paragraph::new(status).style(Style::default().fg(t.accent).add_modifier(Modifier::BOLD)),
@@ -104,58 +140,40 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
             title_cols[3],
         );
     }
+}
 
-    // Progress bar + time label.
+fn render_progress_row(frame: &mut Frame, row: Rect, state: &AppState, t: &Theme) {
     let (elapsed_str, total_str) = if state.now_playing.is_some() {
         let e = format_duration(state.elapsed().as_secs());
         let d = state
             .track_duration
-            .map(|d| format_duration(d.as_secs()))
-            .unwrap_or_else(|| "-:--".to_string());
+            .map_or_else(|| "-:--".to_string(), |d| format_duration(d.as_secs()));
         (e, d)
     } else {
         ("0:00".to_string(), "-:--".to_string())
     };
     let time_label = format!(" {elapsed_str} / {total_str} ");
-    let time_width = time_label.chars().count() as u16;
+    let time_width = usize_to_u16_saturating(time_label.chars().count());
 
     let progress_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Min(0), Constraint::Length(time_width)])
-        .split(rows[1]);
+        .split(row);
 
     frame.render_widget(
-        thumb_bar(progress_cols[0].width as usize, state.progress_ratio(), t),
+        thumb_bar(usize::from(progress_cols[0].width), state.progress_ratio(), t),
         progress_cols[0],
     );
     frame.render_widget(
         Paragraph::new(time_label).style(Style::default().fg(t.text_dim)),
         progress_cols[1],
     );
+}
 
-    // ── Metadata line (album · year · genre) ─────────────────────────────
-    if let Some(tr) = current_track {
-        let parts: Vec<String> = [
-            tr.album.clone(),
-            tr.year.map(|y| y.to_string()),
-            tr.genre.clone(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-        if !parts.is_empty() {
-            frame.render_widget(
-                Paragraph::new(parts.join("  ·  ")).style(Style::default().fg(t.text_dim)),
-                rows[2],
-            );
-        }
-    }
-
-    // ── Vertical volume bar ───────────────────────────────────────────────
-    let vol = state.player.volume;
-    let vol_pct = (vol * 100.0).round() as u8;
+fn render_volume_bar(frame: &mut Frame, vol_area: Rect, vol: f32, t: &Theme) {
+    let vol_pct = ratio_to_whole_percent(vol);
     let bar_height = vol_area.height.saturating_sub(1);
-    let filled = ((vol * bar_height as f32).round() as u16).min(bar_height);
+    let filled = usize_to_u16_saturating(ratio_to_unit_count(f64::from(vol), usize::from(bar_height)));
     let empty = bar_height - filled;
 
     let mut vol_lines: Vec<Line> = Vec::new();
@@ -172,7 +190,7 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
         )));
     }
     vol_lines.push(Line::from(Span::styled(
-        format!("{:>4}%", vol_pct),
+        format!("{vol_pct:>4}%"),
         Style::default().fg(t.text_dim),
     )));
 
@@ -194,9 +212,7 @@ fn thumb_bar(width: usize, ratio: f64, t: &Theme) -> Paragraph<'static> {
     if width == 0 {
         return Paragraph::new("");
     }
-    let ratio = ratio.clamp(0.0, 1.0);
-    let filled = (ratio * width as f64).round() as usize;
-    let filled = filled.min(width);
+    let filled = ratio_to_unit_count(ratio, width);
     let remaining = width.saturating_sub(filled);
 
     let accent = t.accent;
