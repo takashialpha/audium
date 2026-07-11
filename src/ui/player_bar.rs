@@ -161,7 +161,11 @@ fn render_progress_row(frame: &mut Frame, row: Rect, state: &AppState, t: &Theme
         .split(row);
 
     frame.render_widget(
-        thumb_bar(usize::from(progress_cols[0].width), state.progress_ratio(), t),
+        thumb_bar(
+            usize::from(progress_cols[0].width),
+            state.progress_ratio(),
+            t,
+        ),
         progress_cols[0],
     );
     frame.render_widget(
@@ -173,7 +177,8 @@ fn render_progress_row(frame: &mut Frame, row: Rect, state: &AppState, t: &Theme
 fn render_volume_bar(frame: &mut Frame, vol_area: Rect, vol: f32, t: &Theme) {
     let vol_pct = ratio_to_whole_percent(vol);
     let bar_height = vol_area.height.saturating_sub(1);
-    let filled = usize_to_u16_saturating(ratio_to_unit_count(f64::from(vol), usize::from(bar_height)));
+    let filled =
+        usize_to_u16_saturating(ratio_to_unit_count(f64::from(vol), usize::from(bar_height)));
     let empty = bar_height - filled;
 
     let mut vol_lines: Vec<Line> = Vec::new();

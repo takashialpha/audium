@@ -49,7 +49,10 @@ impl Track {
         self.artist
             .as_deref()
             .filter(|s| !s.is_empty())
-            .map_or_else(|| self.name.clone(), |artist| format!("{artist} - {}", self.name))
+            .map_or_else(
+                || self.name.clone(),
+                |artist| format!("{artist} - {}", self.name),
+            )
     }
 }
 
@@ -95,10 +98,22 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
     let tag = tagged.primary_tag().or_else(|| tagged.first_tag())?;
     let nonempty = |s: String| if s.is_empty() { None } else { Some(s) };
     Some(FileTags {
-        title: tag.title().map(std::borrow::Cow::into_owned).and_then(nonempty),
-        artist: tag.artist().map(std::borrow::Cow::into_owned).and_then(nonempty),
-        album: tag.album().map(std::borrow::Cow::into_owned).and_then(nonempty),
-        genre: tag.genre().map(std::borrow::Cow::into_owned).and_then(nonempty),
+        title: tag
+            .title()
+            .map(std::borrow::Cow::into_owned)
+            .and_then(nonempty),
+        artist: tag
+            .artist()
+            .map(std::borrow::Cow::into_owned)
+            .and_then(nonempty),
+        album: tag
+            .album()
+            .map(std::borrow::Cow::into_owned)
+            .and_then(nonempty),
+        genre: tag
+            .genre()
+            .map(std::borrow::Cow::into_owned)
+            .and_then(nonempty),
         year: tag.date().map(|ts| u32::from(ts.year)),
     })
 }

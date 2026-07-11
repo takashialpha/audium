@@ -522,15 +522,16 @@ fn handle_edit_metadata_key(
     }
 }
 
-fn handle_edit_lyrics_key(code: KeyCode, track_id: TrackId, textarea: &mut TextArea) -> ModalOutcome {
+fn handle_edit_lyrics_key(
+    code: KeyCode,
+    track_id: TrackId,
+    textarea: &mut TextArea,
+) -> ModalOutcome {
     match code {
         KeyCode::Esc => {
             let s = textarea.as_string();
             let lyrics = if s.trim().is_empty() { None } else { Some(s) };
-            return ModalOutcome::Confirm(ModalConfirm::SaveLyrics {
-                track_id,
-                lyrics,
-            });
+            return ModalOutcome::Confirm(ModalConfirm::SaveLyrics { track_id, lyrics });
         }
         KeyCode::Enter => textarea.insert_newline(),
         KeyCode::Backspace => textarea.delete_char(),
@@ -585,9 +586,7 @@ impl Modal {
             Self::Notify { .. } | Self::Help | Self::About => ModalOutcome::Dismissed,
 
             Self::ConfirmQuit => match code {
-                KeyCode::Char('y' | 'Y' | 'q') => {
-                    ModalOutcome::Confirm(ModalConfirm::Quit)
-                }
+                KeyCode::Char('y' | 'Y' | 'q') => ModalOutcome::Confirm(ModalConfirm::Quit),
                 _ => ModalOutcome::Dismissed,
             },
 
@@ -610,14 +609,10 @@ impl Modal {
             },
 
             Self::ShufflePlaylist { playlist_id, .. } => match code {
-                KeyCode::Char('y' | 'Y') => {
-                    ModalOutcome::Confirm(ModalConfirm::ShufflePlaylist {
-                        playlist_id: *playlist_id,
-                    })
-                }
-                KeyCode::Esc | KeyCode::Char('n' | 'N' | 'q') => {
-                    ModalOutcome::Dismissed
-                }
+                KeyCode::Char('y' | 'Y') => ModalOutcome::Confirm(ModalConfirm::ShufflePlaylist {
+                    playlist_id: *playlist_id,
+                }),
+                KeyCode::Esc | KeyCode::Char('n' | 'N' | 'q') => ModalOutcome::Dismissed,
                 _ => ModalOutcome::Consumed,
             },
 
@@ -637,12 +632,8 @@ impl Modal {
             ),
 
             Self::ConfirmRemove { target, .. } => match code {
-                KeyCode::Char('y' | 'Y') => {
-                    ModalOutcome::Confirm(ModalConfirm::Remove(*target))
-                }
-                KeyCode::Esc | KeyCode::Char('n' | 'N' | 'q') => {
-                    ModalOutcome::Dismissed
-                }
+                KeyCode::Char('y' | 'Y') => ModalOutcome::Confirm(ModalConfirm::Remove(*target)),
+                KeyCode::Esc | KeyCode::Char('n' | 'N' | 'q') => ModalOutcome::Dismissed,
                 _ => ModalOutcome::Consumed,
             },
 
@@ -723,9 +714,7 @@ pub fn render_modal(frame: &mut Frame, modal: &Modal, theme: &Theme) {
         ),
         Modal::ShufflePlaylist { playlist_name, .. } => render_confirm(
             frame,
-            &format!(
-                "Shuffle \"{playlist_name}\"? This will clear the current queue."
-            ),
+            &format!("Shuffle \"{playlist_name}\"? This will clear the current queue."),
             theme,
         ),
         Modal::EditMetadata {
@@ -982,10 +971,7 @@ fn render_help(frame: &mut Frame, theme: &Theme) {
                 Line::from("")
             } else {
                 Line::from(vec![
-                    Span::styled(
-                        format!("  {key:>10}  "),
-                        Style::default().fg(theme.accent),
-                    ),
+                    Span::styled(format!("  {key:>10}  "), Style::default().fg(theme.accent)),
                     Span::styled(*desc, Style::default().fg(theme.text_dim)),
                 ])
             }
@@ -1103,10 +1089,7 @@ fn render_about(frame: &mut Frame, theme: &Theme) {
     for (i, (label, value)) in meta.iter().enumerate() {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(
-                    format!("  {label:>8}  "),
-                    Style::default().fg(theme.subtle),
-                ),
+                Span::styled(format!("  {label:>8}  "), Style::default().fg(theme.subtle)),
                 Span::styled(*value, Style::default().fg(theme.text)),
             ])),
             rows[2 + i],

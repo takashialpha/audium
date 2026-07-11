@@ -164,9 +164,7 @@ impl AppState {
         if self.player.is_paused {
             return self.seek_offset;
         }
-        let wall = self
-            .track_start
-            .map_or(Duration::ZERO, |s| s.elapsed());
+        let wall = self.track_start.map_or(Duration::ZERO, |s| s.elapsed());
         self.seek_offset + wall.mul_f32(self.player.playback_speed)
     }
 
@@ -934,9 +932,9 @@ impl AppState {
                     .now_playing
                     .and_then(|np| self.queue.get(np))
                     .is_some_and(|t| t.id == track_id);
-                let removed_before_np = self
-                    .now_playing
-                    .map_or(0, |np| self.queue[..np].iter().filter(|t| t.id == track_id).count());
+                let removed_before_np = self.now_playing.map_or(0, |np| {
+                    self.queue[..np].iter().filter(|t| t.id == track_id).count()
+                });
 
                 self.queue.retain(|t| t.id != track_id);
 
@@ -1082,7 +1080,14 @@ impl AppState {
                 year,
                 genre,
             } => {
-                self.save_metadata(track_id, &name, artist.as_ref(), album.as_ref(), year, genre.as_ref());
+                self.save_metadata(
+                    track_id,
+                    &name,
+                    artist.as_ref(),
+                    album.as_ref(),
+                    year,
+                    genre.as_ref(),
+                );
             }
 
             ModalConfirm::SaveLyrics { track_id, lyrics } => {
@@ -1100,7 +1105,14 @@ impl AppState {
                 year,
                 genre,
             } => {
-                self.save_metadata(track_id, &name, artist.as_ref(), album.as_ref(), year, genre.as_ref());
+                self.save_metadata(
+                    track_id,
+                    &name,
+                    artist.as_ref(),
+                    album.as_ref(),
+                    year,
+                    genre.as_ref(),
+                );
                 self.action_edit_lyrics(track_id);
             }
         }
