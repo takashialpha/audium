@@ -990,15 +990,7 @@ impl AppState {
         match confirm {
             ModalConfirm::Remove(target) => self.apply_remove(target),
 
-            ModalConfirm::Rename { kind, id, new_name } => {
-                if kind == "Track" {
-                    let _ = self.library.rename_track(id, &new_name);
-                    self.sync_queue_name(id, &new_name);
-                    self.rebuild_filter_cache();
-                } else {
-                    let _ = self.library.rename_playlist(id, new_name);
-                }
-            }
+            ModalConfirm::Rename { kind, id, new_name } => self.apply_rename(&kind, id, new_name),
 
             ModalConfirm::NewPlaylist { name } => {
                 let _ = self.library.create_playlist(name);
@@ -1029,18 +1021,7 @@ impl AppState {
                 seek_secs,
                 theme_name,
                 transparent,
-            } => {
-                self.settings
-                    .set_default_volume(numeric::whole_percent_to_ratio(volume_pct));
-                self.settings.set_seek_step_secs(seek_secs);
-                self.settings.set_theme(&theme_name);
-                self.settings.transparent = transparent;
-                // Apply theme and transparency live.
-                let mut t = theme_by_name(&theme_name).clone();
-                t.transparent = transparent;
-                self.theme = t;
-                let _ = self.settings.save();
-            }
+            } => self.apply_save_settings(volume_pct, seek_secs, &theme_name, transparent),
 
             ModalConfirm::PreviewTheme {
                 theme_name,
@@ -1052,24 +1033,7 @@ impl AppState {
             }
 
             ModalConfirm::ShufflePlaylist { playlist_id } => {
-                // Resolve tracks, shuffle in place, replace queue, start playing.
-                let mut tracks: Vec<Track> = self
-                    .library
-                    .playlist_tracks(playlist_id)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-
-                if tracks.is_empty() {
-                    return;
-                }
-
-                tracks.shuffle(&mut rand::rng());
-
-                self.halt_playback();
-                self.queue = tracks;
-                self.queue_cursor = 0;
-                self.play_queue_index(0);
+                self.apply_shuffle_playlist(playlist_id);
             }
 
             ModalConfirm::SaveMetadata {
@@ -1138,6 +1102,56 @@ impl AppState {
                 });
             }
         }
+    }
+
+    fn apply_rename(&mut self, kind: &str, id: u64, new_name: String) {
+        if kind == "Track" {
+            let _ = self.library.rename_track(id, &new_name);
+            self.sync_queue_name(id, &new_name);
+            self.rebuild_filter_cache();
+        } else {
+            let _ = self.library.rename_playlist(id, new_name);
+        }
+    }
+
+    fn apply_save_settings(
+        &mut self,
+        volume_pct: u32,
+        seek_secs: u64,
+        theme_name: &str,
+        transparent: bool,
+    ) {
+        self.settings
+            .set_default_volume(numeric::whole_percent_to_ratio(volume_pct));
+        self.settings.set_seek_step_secs(seek_secs);
+        self.settings.set_theme(theme_name);
+        self.settings.transparent = transparent;
+        // Apply theme and transparency live.
+        let mut t = theme_by_name(theme_name).clone();
+        t.transparent = transparent;
+        self.theme = t;
+        let _ = self.settings.save();
+    }
+
+    fn apply_shuffle_playlist(&mut self, playlist_id: PlaylistId) {
+        // Resolve tracks, shuffle in place, replace queue, start playing.
+        let mut tracks: Vec<Track> = self
+            .library
+            .playlist_tracks(playlist_id)
+            .into_iter()
+            .cloned()
+            .collect();
+
+        if tracks.is_empty() {
+            return;
+        }
+
+        tracks.shuffle(&mut rand::rng());
+
+        self.halt_playback();
+        self.queue = tracks;
+        self.queue_cursor = 0;
+        self.play_queue_index(0);
     }
 }
 // ── Entry point ────────────────────────────────────────────────────────────

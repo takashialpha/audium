@@ -32,3 +32,48 @@ strip = true
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[lints.rust]
+unsafe_code = "forbid"
+warnings = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+
+# Not actionable in this repo: flags duplicate transitive dependency versions
+# pulled in via our dependency tree (rodio/cpal/lofty et al).
+multiple_crate_versions = "allow"
+
+# Selected `clippy::restriction` lints (not enabled as a group: many of its
+# lints actively conflict with each other or with pedantic/nursery choices
+# above).
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+exit = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+get_unwrap = "deny"
+unwrap_in_result = "deny"
+mem_forget = "deny"
+verbose_file_reads = "deny"
+empty_drop = "deny"
+float_cmp_const = "deny"
+large_include_file = "deny"
+rc_buffer = "deny"
+rest_pat_in_fully_bound_structs = "deny"
+same_name_method = "deny"
+empty_structs_with_brackets = "deny"
+format_push_string = "deny"
+redundant_type_annotations = "deny"
+semicolon_outside_block = "deny"
+undocumented_unsafe_blocks = "deny"
+unneeded_field_pattern = "deny"
+mod_module_files = "deny"
