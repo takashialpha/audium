@@ -9,13 +9,53 @@ use crate::{
     filepicker::{FilePicker, FilePickerOutcome},
     library::{ALL_TRACKS_ID, Library, PlaylistId, Track, TrackId},
     lyrics,
-    modal::{Modal, ModalConfirm, ModalOutcome, RemoveTarget, TextInput, make_lyrics_textarea},
+    modal::{
+        Modal, ModalConfirm, ModalOutcome, RemoveTarget, SettingsState, TextInput,
+        make_lyrics_textarea,
+    },
     numeric,
     player::{PlayerEvent, PlayerHandle, resolve_duration, spawn_audio_thread},
-    settings::Settings,
+    settings::{ColorMode, Settings},
     ui,
-    ui::layout::{Theme, theme_by_name},
+    ui::layout::{Theme, console_theme, theme_by_name},
 };
+
+// ── Terminal color detection ───────────────────────────────────────────────
+
+/// Best-effort detection of 24-bit truecolor support.
+///
+/// There is no portable query for this, so we use the widely-agreed
+/// heuristics: `NO_COLOR` disables color entirely, a real Linux tty
+/// (`TERM=linux`) or `TERM=dumb` is 16-color only, and `COLORTERM` set to
+/// `truecolor`/`24bit` is the standard opt-in signal.  Misdetection is
+/// recoverable from the settings menu via the Color mode override.
+fn detect_truecolor() -> bool {
+    if std::env::var_os("NO_COLOR").is_some() {
+        return false;
+    }
+    if let Ok("linux" | "dumb") = std::env::var("TERM").as_deref() {
+        return false;
+    }
+    matches!(
+        std::env::var("COLORTERM").as_deref(),
+        Ok("truecolor" | "24bit")
+    )
+}
+
+/// Resolves the live theme for the current color state.
+///
+/// With truecolor active the selected RGB theme is used (honoring
+/// transparency); otherwise the named-ANSI console theme is substituted while
+/// the user's real theme choice is left untouched in settings.
+fn resolve_theme(theme_name: &str, transparent: bool, truecolor: bool) -> Theme {
+    if truecolor {
+        let mut t = theme_by_name(theme_name).clone();
+        t.transparent = transparent;
+        t
+    } else {
+        console_theme().clone()
+    }
+}
 
 // ── Playback speed ─────────────────────────────────────────────────────────
 
@@ -123,8 +163,11 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(library: Library, player: PlayerHandle, settings: Settings) -> Self {
-        let mut theme = theme_by_name(&settings.theme_name).clone();
-        theme.transparent = settings.transparent;
+        let theme = resolve_theme(
+            &settings.theme_name,
+            settings.transparent,
+            settings.color_mode.truecolor(detect_truecolor()),
+        );
         let mut s = Self {
             library,
             player,
@@ -749,13 +792,15 @@ impl AppState {
             .iter()
             .position(|t| t.name == self.settings.theme_name.as_str())
             .unwrap_or(0);
-        self.modal = Some(Modal::Settings {
+        self.modal = Some(Modal::Settings(SettingsState {
             cursor: 0,
             volume_pct: vol_pct,
             seek_secs: self.settings.seek_step_secs,
             preview_theme_idx,
             transparent: self.settings.transparent,
-        });
+            color_mode: self.settings.color_mode,
+            detected_truecolor: detect_truecolor(),
+        }));
     }
 
     fn open_about(&mut self) {
@@ -1038,15 +1083,22 @@ impl AppState {
                 seek_secs,
                 theme_name,
                 transparent,
-            } => self.apply_save_settings(volume_pct, seek_secs, &theme_name, transparent),
+                color_mode,
+            } => self.apply_save_settings(
+                volume_pct,
+                seek_secs,
+                &theme_name,
+                transparent,
+                color_mode,
+            ),
 
             ModalConfirm::PreviewTheme {
                 theme_name,
                 transparent,
+                color_mode,
             } => {
-                let mut t = theme_by_name(&theme_name).clone();
-                t.transparent = transparent;
-                self.theme = t;
+                let truecolor = color_mode.truecolor(detect_truecolor());
+                self.theme = resolve_theme(&theme_name, transparent, truecolor);
             }
 
             ModalConfirm::ShufflePlaylist { playlist_id } => {
@@ -1137,16 +1189,20 @@ impl AppState {
         seek_secs: u64,
         theme_name: &str,
         transparent: bool,
+        color_mode: ColorMode,
     ) {
         self.settings
             .set_default_volume(numeric::whole_percent_to_ratio(volume_pct));
         self.settings.set_seek_step_secs(seek_secs);
         self.settings.set_theme(theme_name);
         self.settings.transparent = transparent;
-        // Apply theme and transparency live.
-        let mut t = theme_by_name(theme_name).clone();
-        t.transparent = transparent;
-        self.theme = t;
+        self.settings.color_mode = color_mode;
+        // Apply the resolved theme live (console fallback when not truecolor).
+        self.theme = resolve_theme(
+            theme_name,
+            transparent,
+            color_mode.truecolor(detect_truecolor()),
+        );
         let _ = self.settings.save();
     }
 

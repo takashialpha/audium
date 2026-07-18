@@ -166,10 +166,14 @@ pub fn render_filepicker(frame: &mut Frame<'_>, picker: &FilePicker, theme: &The
 
     frame.render_widget(Clear, rect);
 
-    // "  📁  " prefix (5 cols) + trailing " " (1) + corners (2) = 8 overhead
+    // icon (≤3 cols) + surrounding spaces (3) + corners (2) = 8 overhead
     let path_max = usize::from(width.saturating_sub(8));
     let path_str = picker.current_dir.to_string_lossy();
-    let title = format!(" 📁 {} ", truncate(&path_str, path_max));
+    let title = format!(
+        " {} {} ",
+        theme.glyphs().folder,
+        truncate(&path_str, path_max)
+    );
 
     let block = Block::default()
         .title(title)
@@ -198,15 +202,16 @@ pub fn render_filepicker(frame: &mut Frame<'_>, picker: &FilePicker, theme: &The
         .entries
         .iter()
         .map(|e| {
+            let g = theme.glyphs();
             let (icon, style) = if e.is_dir {
                 (
-                    "▶ ",
+                    format!("{} ", g.arrow_right),
                     Style::default()
                         .fg(theme.dir_col)
                         .add_modifier(Modifier::BOLD),
                 )
             } else {
-                ("♪ ", Style::default().fg(theme.text_dim))
+                (format!("{} ", g.note), Style::default().fg(theme.text_dim))
             };
             ListItem::new(Line::from(vec![
                 Span::styled(icon, style),

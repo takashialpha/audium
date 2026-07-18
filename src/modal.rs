@@ -2,13 +2,14 @@ use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyModifiers},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
 use crate::library::{PlaylistId, TrackId};
 use crate::numeric::usize_to_u16_saturating;
+use crate::settings::ColorMode;
 use crate::ui::layout::{Theme, format_duration, themes};
 
 // ── Text-input widget ──────────────────────────────────────────────────────
@@ -204,6 +205,23 @@ pub enum RemoveTarget {
     Queue,
 }
 
+// ── Settings modal state ───────────────────────────────────────────────────
+
+/// Live state of the settings modal, mutated in place while it is open.
+#[derive(Debug, Clone)]
+pub struct SettingsState {
+    pub cursor: usize,
+    pub volume_pct: u32,
+    pub seek_secs: u64,
+    pub preview_theme_idx: usize,
+    pub transparent: bool,
+    /// Editable color-mode preference (Auto / Truecolor / 16-color).
+    pub color_mode: ColorMode,
+    /// What truecolor auto-detection found; drives the banner and whether the
+    /// theme / transparency rows are interactive.
+    pub detected_truecolor: bool,
+}
+
 // ── Modal variants ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -240,13 +258,7 @@ pub enum Modal {
     },
     About,
     ConfirmQuit,
-    Settings {
-        cursor: usize,
-        volume_pct: u32,
-        seek_secs: u64,
-        preview_theme_idx: usize,
-        transparent: bool,
-    },
+    Settings(SettingsState),
     /// In-app editor for track metadata (name, artist, album, year, genre).
     EditMetadata {
         track_id: TrackId,
@@ -293,11 +305,13 @@ pub enum ModalConfirm {
         seek_secs: u64,
         theme_name: String,
         transparent: bool,
+        color_mode: ColorMode,
     },
     /// Apply a theme live during settings preview without closing the modal.
     PreviewTheme {
         theme_name: String,
         transparent: bool,
+        color_mode: ColorMode,
     },
     ShufflePlaylist {
         playlist_id: PlaylistId,
@@ -381,65 +395,105 @@ fn handle_text_key(input: &mut TextInput, code: KeyCode) -> TextInputResult {
 
 // ── Input handling ─────────────────────────────────────────────────────────
 
-fn handle_settings_key(
-    code: KeyCode,
-    cursor: &mut usize,
-    volume_pct: &mut u32,
-    seek_secs: &mut u64,
-    preview_theme_idx: &mut usize,
-    transparent: &mut bool,
-) -> ModalOutcome {
-    const ROWS: usize = 4; // volume, seek, theme, transparency
+// Settings rows, in display order.
+const SET_VOLUME: usize = 0;
+const SET_SEEK: usize = 1;
+const SET_COLOR_MODE: usize = 2;
+const SET_THEME: usize = 3;
+const SET_TRANSPARENCY: usize = 4;
+const SET_ROWS: usize = 5;
+
+/// Which rows accept input.  Theme and transparency are locked (and skipped by
+/// the cursor) whenever truecolor is not in effect, since the console fallback
+/// ignores both.
+const fn settings_enabled(color_mode: ColorMode, detected: bool) -> [bool; SET_ROWS] {
+    let tc = color_mode.truecolor(detected);
+    [true, true, true, tc, tc]
+}
+
+fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
+    let enabled = settings_enabled(s.color_mode, s.detected_truecolor);
+    let preview = |s: &SettingsState| {
+        ModalOutcome::Confirm(ModalConfirm::PreviewTheme {
+            theme_name: themes()[s.preview_theme_idx].name.to_string(),
+            transparent: s.transparent,
+            color_mode: s.color_mode,
+        })
+    };
     match code {
         KeyCode::Char('j') | KeyCode::Down => {
-            *cursor = (*cursor + 1).min(ROWS - 1);
+            let mut n = s.cursor;
+            while n + 1 < SET_ROWS {
+                n += 1;
+                if enabled[n] {
+                    s.cursor = n;
+                    break;
+                }
+            }
             ModalOutcome::Consumed
         }
         KeyCode::Char('k') | KeyCode::Up => {
-            *cursor = cursor.saturating_sub(1);
+            let mut n = s.cursor;
+            while n > 0 {
+                n -= 1;
+                if enabled[n] {
+                    s.cursor = n;
+                    break;
+                }
+            }
             ModalOutcome::Consumed
         }
         KeyCode::Left | KeyCode::Right => {
             let left = matches!(code, KeyCode::Left);
-            match *cursor {
-                0 => {
+            match s.cursor {
+                SET_VOLUME => {
                     if left {
-                        *volume_pct = volume_pct.saturating_sub(1);
+                        s.volume_pct = s.volume_pct.saturating_sub(1);
                     } else {
-                        *volume_pct = (*volume_pct + 1).min(100);
+                        s.volume_pct = (s.volume_pct + 1).min(100);
                     }
-                    return ModalOutcome::Consumed;
+                    ModalOutcome::Consumed
                 }
-                1 => {
+                SET_SEEK => {
                     if left {
-                        *seek_secs = seek_secs.saturating_sub(1).max(1);
+                        s.seek_secs = s.seek_secs.saturating_sub(1).max(1);
                     } else {
-                        *seek_secs = (*seek_secs + 1).min(120);
+                        s.seek_secs = (s.seek_secs + 1).min(120);
                     }
-                    return ModalOutcome::Consumed;
+                    ModalOutcome::Consumed
                 }
-                2 => {
+                SET_COLOR_MODE => {
+                    s.color_mode = if left {
+                        s.color_mode.prev()
+                    } else {
+                        s.color_mode.next()
+                    };
+                    preview(s)
+                }
+                SET_THEME => {
                     if left {
-                        *preview_theme_idx = preview_theme_idx
+                        s.preview_theme_idx = s
+                            .preview_theme_idx
                             .checked_sub(1)
                             .unwrap_or_else(|| themes().len() - 1);
                     } else {
-                        *preview_theme_idx = (*preview_theme_idx + 1) % themes().len();
+                        s.preview_theme_idx = (s.preview_theme_idx + 1) % themes().len();
                     }
+                    preview(s)
                 }
-                _ => *transparent = !*transparent,
+                _ => {
+                    s.transparent = !s.transparent;
+                    preview(s)
+                }
             }
-            ModalOutcome::Confirm(ModalConfirm::PreviewTheme {
-                theme_name: themes()[*preview_theme_idx].name.to_string(),
-                transparent: *transparent,
-            })
         }
         // Esc and q both save and close.
         KeyCode::Esc | KeyCode::Char('q') => ModalOutcome::Confirm(ModalConfirm::SaveSettings {
-            volume_pct: *volume_pct,
-            seek_secs: *seek_secs,
-            theme_name: themes()[*preview_theme_idx].name.to_string(),
-            transparent: *transparent,
+            volume_pct: s.volume_pct,
+            seek_secs: s.seek_secs,
+            theme_name: themes()[s.preview_theme_idx].name.to_string(),
+            transparent: s.transparent,
+            color_mode: s.color_mode,
         }),
         _ => ModalOutcome::Consumed,
     }
@@ -617,20 +671,7 @@ impl Modal {
                 _ => ModalOutcome::Consumed,
             },
 
-            Self::Settings {
-                cursor,
-                volume_pct,
-                seek_secs,
-                preview_theme_idx,
-                transparent,
-            } => handle_settings_key(
-                code,
-                cursor,
-                volume_pct,
-                seek_secs,
-                preview_theme_idx,
-                transparent,
-            ),
+            Self::Settings(state) => handle_settings_key(code, state),
 
             Self::ConfirmRemove { target, .. } => match code {
                 KeyCode::Char('y' | 'Y') => ModalOutcome::Confirm(ModalConfirm::Remove(*target)),
@@ -697,22 +738,7 @@ pub fn render_modal(frame: &mut Frame<'_>, modal: &Modal, theme: &Theme) {
             cursor,
             ..
         } => render_playlist_picker(frame, track_name, choices, *cursor, theme),
-        Modal::Settings {
-            cursor,
-            volume_pct,
-            seek_secs,
-            preview_theme_idx,
-            transparent,
-            ..
-        } => render_settings(
-            frame,
-            *cursor,
-            *volume_pct,
-            *seek_secs,
-            *preview_theme_idx,
-            *transparent,
-            theme,
-        ),
+        Modal::Settings(state) => render_settings(frame, state, theme),
         Modal::ShufflePlaylist { playlist_name, .. } => render_confirm(
             frame,
             &format!("Shuffle \"{playlist_name}\"? This will clear the current queue."),
@@ -833,7 +859,7 @@ fn render_text_input(frame: &mut Frame<'_>, title: &str, input: &TextInput, them
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(before.to_string(), Style::default().fg(theme.text)),
-            Span::styled("█", Style::default().fg(theme.accent)),
+            Span::styled(theme.glyphs().caret, Style::default().fg(theme.accent)),
             Span::styled(after.to_string(), Style::default().fg(theme.text)),
         ])),
         rows[1],
@@ -931,18 +957,22 @@ fn render_help(frame: &mut Frame<'_>, theme: &Theme) {
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
+    let g = theme.glyphs();
+    let down = format!("j / {}", g.arrow_down);
+    let up = format!("k / {}", g.arrow_up);
+    let seek = format!("{} / {}", g.arrow_left, g.arrow_right);
     let bindings: &[(&str, &str)] = &[
         ("q", "Quit"),
         ("Tab", "Cycle panel focus"),
         ("?", "Toggle this help"),
         ("", ""),
-        ("j / ↓", "Move cursor down"),
-        ("k / ↑", "Move cursor up"),
+        (&down, "Move cursor down"),
+        (&up, "Move cursor up"),
         ("", ""),
         ("Space", "Play / Pause"),
         ("n", "Next track"),
         ("N", "Previous track"),
-        ("← / →", "Seek backward / forward"),
+        (&seek, "Seek backward / forward"),
         ("+ / =", "Volume up"),
         ("-", "Volume down"),
         ("l", "Cycle loop mode"),
@@ -1008,7 +1038,11 @@ fn render_menu(frame: &mut Frame<'_>, cursor: usize, theme: &Theme) {
 
     for (i, label) in entries.iter().enumerate() {
         let selected = cursor == i;
-        let prefix = if selected { "▶  " } else { "   " };
+        let prefix = if selected {
+            theme.glyphs().marker
+        } else {
+            "   "
+        };
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(prefix, Style::default().fg(theme.accent)),
@@ -1036,38 +1070,41 @@ fn render_menu(frame: &mut Frame<'_>, cursor: usize, theme: &Theme) {
 }
 
 fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
+    // Single pure-ASCII logo, rendered the same on every terminal.
+    const LOGO: [&str; 7] = [
+        "                          mm     ##                       ",
+        "                          ##     \"\"                       ",
+        " m#####m  ##    ##   m###m##   ####     ##    ##  ####m##m",
+        " \" mmm##  ##    ##  ##\"  \"##     ##     ##    ##  ## ## ##",
+        "m##\"\"\"##  ##    ##  ##    ##     ##     ##    ##  ## ## ##",
+        "##mmm###  ##mmm###  \"##mm###  mmm##mmm  ##mmm###  ## ## ##",
+        " \"\"\"\" \"\"   \"\"\"\" \"\"    \"\"\" \"\"  \"\"\"\"\"\"\"\"   \"\"\"\" \"\"  \"\" \"\" \"\"",
+    ];
+
     let area = frame.area();
-    let rect = centered_rect(62, 18, area);
+    let rect = centered_rect(64, 17, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("About", theme);
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
-    let logo_lines = [
-        " █████╗ ██╗   ██╗██████╗ ██╗██╗   ██╗███╗   ███╗",
-        "██╔══██╗██║   ██║██╔══██╗██║██║   ██║████╗ ████║",
-        "███████║██║   ██║██║  ██║██║██║   ██║██╔████╔██║",
-        "██╔══██║██║   ██║██║  ██║██║██║   ██║██║╚██╔╝██║",
-        "██║  ██║╚██████╔╝██████╔╝██║╚██████╔╝██║ ╚═╝ ██║",
-        "╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝ ╚═════╝ ╚═╝     ╚═╝",
-    ];
-
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(6), // logo
+            Constraint::Length(1), // top margin
+            Constraint::Length(7), // logo
             Constraint::Length(1), // spacer
             Constraint::Length(1), // version
             Constraint::Length(1), // author
             Constraint::Length(1), // license
             Constraint::Length(1), // repo
-            Constraint::Min(0),    // padding
+            Constraint::Min(0),    // bottom gap
             Constraint::Length(1), // hint
         ])
         .split(inner);
 
-    let logo: Vec<Line<'_>> = logo_lines
+    let logo: Vec<Line<'_>> = LOGO
         .iter()
         .map(|l| {
             Line::from(Span::styled(
@@ -1078,7 +1115,7 @@ fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
             ))
         })
         .collect();
-    frame.render_widget(Paragraph::new(logo).alignment(Alignment::Center), rows[0]);
+    frame.render_widget(Paragraph::new(logo).alignment(Alignment::Center), rows[1]);
 
     let version = env!("CARGO_PKG_VERSION");
     let meta: [(&str, &str); 4] = [
@@ -1094,7 +1131,7 @@ fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
                 Span::styled(format!("  {label:>8}  "), Style::default().fg(theme.subtle)),
                 Span::styled(*value, Style::default().fg(theme.text)),
             ])),
-            rows[2 + i],
+            rows[3 + i],
         );
     }
 
@@ -1104,22 +1141,15 @@ fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
             Style::default().fg(theme.subtle),
         ))
         .alignment(Alignment::Center),
-        rows[7],
+        rows[8],
     );
 }
 
-fn render_settings(
-    frame: &mut Frame<'_>,
-    cursor: usize,
-    volume_pct: u32,
-    seek_secs: u64,
-    preview_theme_idx: usize,
-    transparent: bool,
-    theme: &Theme,
-) {
+fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
+    let truecolor = view.color_mode.truecolor(view.detected_truecolor);
     let area = frame.area();
-    // border(2) + hint(1) + spacer(1) + 4×row(3) + 3×spacer(1) = 17 inner → 19 with border
-    let rect = centered_rect(56, 19, area);
+    // border(2) + banner(1) + hint(1) + spacer(1) + 5×row(3) + footnote(2) = 20 inner → 22
+    let rect = centered_rect(60, 22, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Settings", theme);
@@ -1129,63 +1159,159 @@ fn render_settings(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
+            Constraint::Length(1), // banner
             Constraint::Length(1), // hint
             Constraint::Length(1), // spacer
             Constraint::Length(3), // volume
-            Constraint::Length(1), // spacer
             Constraint::Length(3), // seek
-            Constraint::Length(1), // spacer
+            Constraint::Length(3), // color mode
             Constraint::Length(3), // theme
-            Constraint::Length(1), // spacer
             Constraint::Length(3), // transparency
-            Constraint::Min(0),    // padding
+            Constraint::Length(2), // footnote (wraps to 2 lines)
         ])
         .split(inner);
 
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            "j/k select   ← → adjust   Esc/q save & close",
-            Style::default().fg(theme.subtle),
-        ))
-        .alignment(Alignment::Center),
-        rows[0],
-    );
+    render_settings_header(frame, rows[0], rows[1], view, theme);
 
     render_settings_row(
         frame,
-        rows[2],
+        rows[3],
         "Default volume",
-        cursor == 0,
-        volume_bar(volume_pct, theme),
+        view.cursor == SET_VOLUME,
+        volume_bar(view.volume_pct, theme),
         theme,
     );
     render_settings_row(
         frame,
         rows[4],
         "Seek step",
-        cursor == 1,
-        seek_display(seek_secs, theme),
+        view.cursor == SET_SEEK,
+        seek_display(view.seek_secs, theme),
+        theme,
+    );
+    render_settings_row(
+        frame,
+        rows[5],
+        "Color mode",
+        view.cursor == SET_COLOR_MODE,
+        color_mode_display(view.color_mode, theme),
         theme,
     );
 
-    let theme_name = themes()[preview_theme_idx].name;
+    // Theme and transparency are locked when the console fallback is active.
+    let theme_name = themes()[view.preview_theme_idx].name;
+    let theme_value = if truecolor {
+        theme_cycle_display(theme_name, theme)
+    } else {
+        locked_display("console", theme)
+    };
     render_settings_row(
         frame,
         rows[6],
         "Theme",
-        cursor == 2,
-        theme_cycle_display(theme_name, theme),
+        view.cursor == SET_THEME,
+        theme_value,
         theme,
     );
 
+    let transparency_value = if truecolor {
+        toggle_display(if view.transparent { "on" } else { "off" }, theme)
+    } else {
+        locked_display("unavailable", theme)
+    };
     render_settings_row(
         frame,
-        rows[8],
+        rows[7],
         "Terminal transparency",
-        cursor == 3,
-        toggle_display(if transparent { "on" } else { "off" }, theme),
+        view.cursor == SET_TRANSPARENCY,
+        transparency_value,
         theme,
     );
+
+    // Footnote follows the selected row in both modes.  Locked rows can't be
+    // selected, so the color-mode row's description carries the override hint.
+    frame.render_widget(
+        Paragraph::new(Span::styled(
+            settings_row_description(view.cursor, truecolor),
+            Style::default().fg(theme.text_dim),
+        ))
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true }),
+        rows[8],
+    );
+}
+
+/// One-line description of a settings row, shown in the footnote when selected.
+const fn settings_row_description(cursor: usize, truecolor: bool) -> &'static str {
+    match cursor {
+        SET_VOLUME => "Volume applied each time audium starts.",
+        SET_SEEK => "How far the seek keys jump, in seconds.",
+        SET_COLOR_MODE if truecolor => {
+            "Auto detects truecolor support; force a mode if detection is wrong."
+        }
+        SET_COLOR_MODE => "Theme & transparency need truecolor. Set this to Truecolor to override.",
+        SET_THEME => "Color scheme for the interface.",
+        // SET_TRANSPARENCY
+        _ => {
+            "Shows the terminal background through the UI. Best with a transparent or blurred terminal."
+        }
+    }
+}
+
+/// Renders the settings modal header: capability banner plus key hint.
+fn render_settings_header(
+    frame: &mut Frame<'_>,
+    banner_area: Rect,
+    hint_area: Rect,
+    view: &SettingsState,
+    theme: &Theme,
+) {
+    frame.render_widget(
+        Paragraph::new(terminal_banner(
+            view.color_mode,
+            view.detected_truecolor,
+            theme,
+        ))
+        .alignment(Alignment::Center),
+        banner_area,
+    );
+    let g = theme.glyphs();
+    frame.render_widget(
+        Paragraph::new(Span::styled(
+            format!(
+                "j/k select   {} {} adjust   Esc/q save & close",
+                g.arrow_left, g.arrow_right
+            ),
+            Style::default().fg(theme.text_dim),
+        ))
+        .alignment(Alignment::Center),
+        hint_area,
+    );
+}
+
+/// The terminal-capability banner shown at the top of the settings modal.
+fn terminal_banner(color_mode: ColorMode, detected: bool, theme: &Theme) -> Line<'static> {
+    let truecolor = color_mode.truecolor(detected);
+    let (label, color) = if truecolor {
+        ("truecolor", theme.now_playing)
+    } else {
+        ("16-color console", theme.dir_col)
+    };
+    let source = if matches!(color_mode, ColorMode::Auto) {
+        "auto-detected"
+    } else {
+        "forced"
+    };
+    Line::from(vec![
+        Span::styled(theme.glyphs().bullet, Style::default().fg(color)),
+        Span::raw(" "),
+        Span::styled("Terminal: ", Style::default().fg(theme.text_dim)),
+        Span::styled(
+            label,
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(format!("  ({source})"), Style::default().fg(theme.subtle)),
+    ])
 }
 
 fn render_settings_row<'a>(
@@ -1221,57 +1347,71 @@ fn render_settings_row<'a>(
     );
 }
 
+/// Wraps a row's value span(s) between the left/right cycle arrows.
+fn cycle_line(middle: Vec<Span<'static>>, theme: &Theme) -> Line<'static> {
+    let g = theme.glyphs();
+    let arrow = Style::default().fg(theme.subtle);
+    let mut spans = Vec::with_capacity(middle.len() + 4);
+    spans.push(Span::styled(g.arrow_left, arrow));
+    spans.push(Span::raw("  "));
+    spans.extend(middle);
+    spans.push(Span::raw("  "));
+    spans.push(Span::styled(g.arrow_right, arrow));
+    Line::from(spans)
+}
+
+/// A bold value styled with `color`, the common middle of most cycle rows.
+fn cycle_value(value: &str, color: Color, theme: &Theme) -> Line<'static> {
+    cycle_line(
+        vec![Span::styled(
+            value.to_owned(),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        )],
+        theme,
+    )
+}
+
 fn volume_bar(pct: u32, theme: &Theme) -> Line<'static> {
     let filled = (pct / 10) as usize;
     let empty = 10usize.saturating_sub(filled);
-    let bar: String = "█".repeat(filled) + &"░".repeat(empty);
-    Line::from(vec![
-        Span::styled("◀ ", Style::default().fg(theme.subtle)),
-        Span::styled(bar, Style::default().fg(theme.accent)),
-        Span::styled(
-            format!(" {pct:>3}%"),
-            Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(" ▶", Style::default().fg(theme.subtle)),
-    ])
+    let g = theme.glyphs();
+    let bar = g.bar_fill.repeat(filled) + &g.bar_empty.repeat(empty);
+    cycle_line(
+        vec![
+            Span::styled(bar, Style::default().fg(theme.accent)),
+            Span::styled(
+                format!(" {pct:>3}%"),
+                Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
+            ),
+        ],
+        theme,
+    )
 }
 
 fn seek_display(secs: u64, theme: &Theme) -> Line<'static> {
-    let label = format_duration(secs);
-    Line::from(vec![
-        Span::styled("◀  ", Style::default().fg(theme.subtle)),
-        Span::styled(
-            label,
-            Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled("  ▶", Style::default().fg(theme.subtle)),
-    ])
+    cycle_value(&format_duration(secs), theme.text, theme)
 }
 
-fn theme_cycle_display(name: &'static str, theme: &Theme) -> Line<'static> {
-    Line::from(vec![
-        Span::styled("◀  ", Style::default().fg(theme.subtle)),
-        Span::styled(
-            name,
-            Style::default()
-                .fg(theme.accent)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled("  ▶", Style::default().fg(theme.subtle)),
-    ])
+fn theme_cycle_display(name: &str, theme: &Theme) -> Line<'static> {
+    cycle_value(name, theme.accent, theme)
 }
 
-fn toggle_display(value: &'static str, theme: &Theme) -> Line<'static> {
+fn color_mode_display(mode: ColorMode, theme: &Theme) -> Line<'static> {
+    cycle_value(mode.label(), theme.accent, theme)
+}
+
+fn toggle_display(value: &str, theme: &Theme) -> Line<'static> {
     let col = if value == "on" {
         theme.now_playing
     } else {
         theme.text_dim
     };
-    Line::from(vec![
-        Span::styled("◀  ", Style::default().fg(theme.subtle)),
-        Span::styled(value, Style::default().fg(col).add_modifier(Modifier::BOLD)),
-        Span::styled("  ▶", Style::default().fg(theme.subtle)),
-    ])
+    cycle_value(value, col, theme)
+}
+
+/// A dimmed, non-interactive value shown for rows locked by the console fallback.
+fn locked_display(value: &'static str, theme: &Theme) -> Line<'static> {
+    Line::from(Span::styled(value, Style::default().fg(theme.subtle)))
 }
 
 // ── EditMetadata renderer ──────────────────────────────────────────────────
@@ -1309,7 +1449,7 @@ fn render_metadata_field(
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(before.to_string(), Style::default().fg(theme.text)),
-                Span::styled("█", Style::default().fg(theme.accent)),
+                Span::styled(theme.glyphs().caret, Style::default().fg(theme.accent)),
                 Span::styled(after.to_string(), Style::default().fg(theme.text)),
             ])),
             cols[1],
@@ -1328,11 +1468,11 @@ fn render_edit_lyrics_button(frame: &mut Frame<'_>, row: Rect, active: bool, the
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
-                if active { "▶  " } else { "   " },
+                if active { theme.glyphs().marker } else { "   " },
                 Style::default().fg(theme.accent),
             ),
             Span::styled(
-                "Edit Lyrics →",
+                format!("Edit Lyrics {}", theme.glyphs().arrow_right),
                 Style::default()
                     .fg(if active { theme.text } else { theme.text_dim })
                     .add_modifier(if active {
@@ -1377,9 +1517,13 @@ fn render_edit_metadata(
         ])
         .split(inner);
 
+    let g = theme.glyphs();
     frame.render_widget(
         Paragraph::new(Span::styled(
-            "Tab/↑↓  next field   ←→  cursor   Esc/Enter  save",
+            format!(
+                "Tab/{}{}  next field   {}{}  cursor   Esc/Enter  save",
+                g.arrow_up, g.arrow_down, g.arrow_left, g.arrow_right
+            ),
             Style::default().fg(theme.subtle),
         ))
         .alignment(Alignment::Center),
@@ -1432,9 +1576,13 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
         ])
         .split(inner);
 
+    let g = theme.glyphs();
     frame.render_widget(
         Paragraph::new(Span::styled(
-            "↑↓←→  navigate   Home/End  line start/end",
+            format!(
+                "{}{}{}{}  navigate   Home/End  line start/end",
+                g.arrow_up, g.arrow_down, g.arrow_left, g.arrow_right
+            ),
             Style::default().fg(theme.subtle),
         ))
         .alignment(Alignment::Center),
@@ -1467,7 +1615,7 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
                 let after = &line[textarea.cursor_col..];
                 Line::from(vec![
                     Span::styled(before.to_string(), Style::default().fg(theme.text)),
-                    Span::styled("█", Style::default().fg(theme.accent)),
+                    Span::styled(theme.glyphs().caret, Style::default().fg(theme.accent)),
                     Span::styled(after.to_string(), Style::default().fg(theme.text)),
                 ])
             } else {

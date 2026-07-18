@@ -47,7 +47,11 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
                 Span::styled("/ ", prefix_style),
                 Span::styled(state.tracklist_filter.as_str(), Style::default().fg(t.text)),
                 Span::styled(
-                    if state.filter_active { "█" } else { "" },
+                    if state.filter_active {
+                        t.glyphs().caret
+                    } else {
+                        ""
+                    },
                     Style::default().fg(t.accent),
                 ),
             ])),

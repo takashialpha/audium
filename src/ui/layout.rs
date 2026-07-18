@@ -22,9 +22,101 @@ pub struct Theme {
     pub dir_col: Color,
     pub vol_empty: Color,
     pub transparent: bool,
+    /// When set, render UI glyphs as ASCII (for limited terminals / a tty).
+    /// Only the console fallback theme enables this.
+    pub ascii: bool,
 }
 
+// ── Glyphs ──────────────────────────────────────────────────────────────────
+
+/// Semantic UI glyphs, chosen per-terminal so a tty / limited console gets
+/// ASCII fallbacks instead of unrenderable Unicode.  One table is selected via
+/// [`Theme::glyphs`]; every render site reads from it rather than hard-coding
+/// glyph literals.
+#[derive(Debug)]
+pub struct Glyphs {
+    /// Player status: playback in progress (shown while paused-capable).
+    pub play: &'static str,
+    /// Player status: paused-capable (shown while playing).
+    pub pause: &'static str,
+    /// 3-column list prefix marking the selected / active row.
+    pub marker: &'static str,
+    /// Left / right value-cycle arrows in the settings rows.
+    pub arrow_left: &'static str,
+    pub arrow_right: &'static str,
+    /// Up / down arrows for hint text.
+    pub arrow_up: &'static str,
+    pub arrow_down: &'static str,
+    /// Horizontal bar fill / empty (progress, thumb, settings volume).
+    pub bar_fill: &'static str,
+    pub bar_empty: &'static str,
+    /// 5-column vertical volume cells (padded), filled / empty.
+    pub vol_fill: &'static str,
+    pub vol_empty: &'static str,
+    /// Text-input caret.
+    pub caret: &'static str,
+    /// Padded metadata separator (e.g. `album · year`).
+    pub sep: &'static str,
+    /// Music note (lyrics title, file-picker audio entries).
+    pub note: &'static str,
+    /// Directory marker in the file picker's title.
+    pub folder: &'static str,
+    /// Terminal-capability banner bullet.
+    pub bullet: &'static str,
+    /// Playback-speed multiplier sign.
+    pub times: &'static str,
+}
+
+static UNICODE_GLYPHS: Glyphs = Glyphs {
+    play: "▶",
+    pause: "⏸",
+    marker: "▶  ",
+    arrow_left: "◀",
+    arrow_right: "▶",
+    arrow_up: "↑",
+    arrow_down: "↓",
+    bar_fill: "█",
+    bar_empty: "░",
+    vol_fill: " ▓▓▓ ",
+    vol_empty: " ░░░ ",
+    caret: "█",
+    sep: "  ·  ",
+    note: "♪",
+    folder: "📁",
+    bullet: "●",
+    times: "×",
+};
+
+static ASCII_GLYPHS: Glyphs = Glyphs {
+    play: "|>",
+    pause: "||",
+    marker: ">  ",
+    arrow_left: "<",
+    arrow_right: ">",
+    arrow_up: "^",
+    arrow_down: "v",
+    bar_fill: "#",
+    bar_empty: "-",
+    vol_fill: " ### ",
+    vol_empty: " --- ",
+    caret: "|",
+    sep: "  -  ",
+    note: "*",
+    folder: "[/]",
+    bullet: "*",
+    times: "x",
+};
+
 impl Theme {
+    /// The glyph table to render with: ASCII on limited terminals.
+    pub const fn glyphs(&self) -> &'static Glyphs {
+        if self.ascii {
+            &ASCII_GLYPHS
+        } else {
+            &UNICODE_GLYPHS
+        }
+    }
+
     fn maybe_color(&self, color: Color) -> Option<Color> {
         (!self.transparent).then_some(color)
     }
@@ -56,6 +148,35 @@ pub fn theme_by_name(name: &str) -> &'static Theme {
     THEMES.iter().find(|t| t.name == name).unwrap_or(&THEMES[0])
 }
 
+/// The 16-color fallback used when truecolor is not in effect.
+///
+/// Built from named ANSI colors so it renders correctly on a real tty and
+/// inherits whatever palette the user has themed their console with.  All
+/// backgrounds are `Reset` (terminal default); selection contrast comes from
+/// bold/foreground, matching how the RGB themes highlight rows.  Kept out of
+/// `THEMES` so it never appears in the theme cycler.
+pub fn console_theme() -> &'static Theme {
+    &CONSOLE_THEME
+}
+
+static CONSOLE_THEME: Theme = Theme {
+    name: "console",
+    bg: Color::Reset,
+    panel_bg: Color::Reset,
+    sidebar_bg: Color::Reset,
+    // Bright ANSI variants for higher contrast against a typical dark console.
+    accent: Color::LightCyan,
+    subtle: Color::Gray,
+    text: Color::White,
+    text_dim: Color::Gray,
+    now_playing: Color::LightGreen,
+    danger: Color::LightRed,
+    dir_col: Color::LightYellow,
+    vol_empty: Color::DarkGray,
+    transparent: false,
+    ascii: true,
+};
+
 static THEMES: [Theme; 15] = [
     // 1: dark (default)
     Theme {
@@ -72,6 +193,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(255, 210, 100),
         vol_empty: Color::Rgb(50, 50, 50),
         transparent: false,
+        ascii: false,
     },
     // 2: light
     Theme {
@@ -88,6 +210,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(180, 100, 0),
         vol_empty: Color::Rgb(200, 200, 200),
         transparent: false,
+        ascii: false,
     },
     // 3: nord
     Theme {
@@ -104,6 +227,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(235, 203, 139),
         vol_empty: Color::Rgb(67, 76, 94),
         transparent: false,
+        ascii: false,
     },
     // 4: gruvbox dark
     Theme {
@@ -120,6 +244,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(214, 93, 14),
         vol_empty: Color::Rgb(60, 56, 54),
         transparent: false,
+        ascii: false,
     },
     // 5: gruvbox light
     Theme {
@@ -136,6 +261,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(214, 93, 14),
         vol_empty: Color::Rgb(213, 196, 161),
         transparent: false,
+        ascii: false,
     },
     // 6: rosé pine
     Theme {
@@ -152,6 +278,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(246, 193, 119),
         vol_empty: Color::Rgb(38, 35, 58),
         transparent: false,
+        ascii: false,
     },
     // 7: rosé pine dawn
     Theme {
@@ -168,6 +295,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(234, 157, 52),
         vol_empty: Color::Rgb(223, 218, 217),
         transparent: false,
+        ascii: false,
     },
     // 8: catppuccin mocha
     Theme {
@@ -184,6 +312,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(249, 226, 175),
         vol_empty: Color::Rgb(49, 50, 68),
         transparent: false,
+        ascii: false,
     },
     // 9: catppuccin latte
     Theme {
@@ -200,6 +329,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(223, 142, 29),
         vol_empty: Color::Rgb(204, 208, 218),
         transparent: false,
+        ascii: false,
     },
     // 10: dracula
     Theme {
@@ -216,6 +346,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(255, 184, 108),
         vol_empty: Color::Rgb(55, 57, 72),
         transparent: false,
+        ascii: false,
     },
     // 11: tokyo night
     Theme {
@@ -232,6 +363,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(224, 175, 104),
         vol_empty: Color::Rgb(41, 46, 66),
         transparent: false,
+        ascii: false,
     },
     // 12: solarized dark
     Theme {
@@ -248,6 +380,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(203, 75, 22),
         vol_empty: Color::Rgb(0, 35, 43),
         transparent: false,
+        ascii: false,
     },
     // 13: solarized light
     Theme {
@@ -264,6 +397,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(203, 75, 22),
         vol_empty: Color::Rgb(210, 203, 186),
         transparent: false,
+        ascii: false,
     },
     // 14: everforest dark
     Theme {
@@ -280,6 +414,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(230, 192, 115),
         vol_empty: Color::Rgb(53, 57, 49),
         transparent: false,
+        ascii: false,
     },
     // 15: kanagawa
     Theme {
@@ -296,6 +431,7 @@ static THEMES: [Theme; 15] = [
         dir_col: Color::Rgb(196, 154, 105),
         vol_empty: Color::Rgb(38, 38, 50),
         transparent: false,
+        ascii: false,
     },
 ];
 

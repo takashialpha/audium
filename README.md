@@ -1,12 +1,13 @@
 <div align="center">
 
 <pre>
- █████╗ ██╗   ██╗██████╗ ██╗██╗   ██╗███╗   ███╗
-██╔══██╗██║   ██║██╔══██╗██║██║   ██║████╗ ████║
-███████║██║   ██║██║  ██║██║██║   ██║██╔████╔██║
-██╔══██║██║   ██║██║  ██║██║██║   ██║██║╚██╔╝██║
-██║  ██║╚██████╔╝██████╔╝██║╚██████╔╝██║ ╚═╝ ██║
-╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝ ╚═════╝ ╚═╝     ╚═╝
+                          mm     ##
+                          ##     ""
+ m#####m  ##    ##   m###m##   ####     ##    ##  ####m##m
+ " mmm##  ##    ##  ##"  "##     ##     ##    ##  ## ## ##
+m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
+##mmm###  ##mmm###  "##mm###  mmm##mmm  ##mmm###  ## ## ##
+ """" ""   """" ""    """ ""  """"""""   """" ""  "" "" ""
 </pre>
 
 **A terminal music app.**
@@ -42,7 +43,8 @@
 - **Library & metadata:** import through the built-in file picker; artist, album, year and genre are read from tags automatically and editable in-app.
 - **Lyrics:** store plain text or LRC synced lyrics per track. An overlay auto-scrolls synced lyrics to the current line, with a built-in editor.
 - **It's your library:** your tracks are stored as plain JSON at `$XDG_DATA_HOME/audium/library.json` (typically `~/.local/share/audium/library.json`). Edit it by hand, back it up, move it anywhere. audium doesn't rename your files and never phones home.
-- **Themes:** 15 built-in themes (nord, gruvbox, catppuccin, rosé pine, dracula, tokyo night, and more). Switch live with instant preview. Transparency support for composited terminals.
+- **Themes:** 15 built-in truecolor themes (nord, gruvbox, catppuccin, rosé pine, dracula, tokyo night, and more). Switch live with instant preview. Optional background transparency for composited terminals.
+- **Adapts to your terminal:** detects truecolor support and, on a bare Linux console (tty) or any terminal without it, automatically falls back to a crisp 16-color theme with ASCII-only glyphs so the UI stays readable everywhere. The settings menu shows what it detected and lets you force the color mode if the guess is wrong.
 - **Playlists & queue:** create, rename and delete playlists, shuffle them into the queue, and pick a loop mode.
 - **Playback control:** filter the tracklist in real time, adjust playback speed and seek freely.
 - **Threaded audio:** playback runs on its own thread; the UI never stutters your music.
@@ -119,7 +121,7 @@ sudo dnf install alsa-utils alsa-lib-devel
 ```
 $XDG_DATA_HOME/audium/   # typically ~/.local/share/audium/
 ├── library.json   # track registry + playlists
-├── settings.json  # user preferences (volume, theme, seek step)
+├── settings.json  # user preferences (volume, seek step, theme, transparency, color mode)
 └── music/         # copies of all imported audio files
 ```
 

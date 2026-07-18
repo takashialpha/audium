@@ -57,7 +57,7 @@ pub fn render_player_bar(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
         .collect();
         if !parts.is_empty() {
             frame.render_widget(
-                Paragraph::new(parts.join("  ·  ")).style(Style::default().fg(t.text_dim)),
+                Paragraph::new(parts.join(t.glyphs().sep)).style(Style::default().fg(t.text_dim)),
                 rows[2],
             );
         }
@@ -76,9 +76,9 @@ fn render_title_row(
     let is_paused = state.player.is_paused;
     let has_track = state.now_playing.is_some();
     let status = if has_track && !is_paused {
-        "⏸ "
+        t.glyphs().pause
     } else {
-        "▶ "
+        t.glyphs().play
     };
 
     let title_owned;
@@ -103,7 +103,7 @@ fn render_title_row(
     let speed_label = if (speed - 1.0).abs() > 0.001 {
         // Round to 2dp for display to avoid float-representation noise.
         let s = (speed * 100.0).round() / 100.0;
-        format!(" {s}× ")
+        format!(" {s}{} ", t.glyphs().times)
     } else {
         String::new()
     };
@@ -181,16 +181,17 @@ fn render_volume_bar(frame: &mut Frame<'_>, vol_area: Rect, vol: f32, t: &Theme)
         usize_to_u16_saturating(ratio_to_unit_count(f64::from(vol), usize::from(bar_height)));
     let empty = bar_height - filled;
 
+    let g = t.glyphs();
     let mut vol_lines: Vec<Line<'_>> = Vec::new();
     for _ in 0..empty {
         vol_lines.push(Line::from(Span::styled(
-            " ░░░ ",
+            g.vol_empty,
             Style::default().fg(t.vol_empty),
         )));
     }
     for _ in 0..filled {
         vol_lines.push(Line::from(Span::styled(
-            " ▓▓▓ ",
+            g.vol_fill,
             Style::default().fg(t.accent),
         )));
     }
@@ -219,28 +220,25 @@ fn thumb_bar(width: usize, ratio: f64, t: &Theme) -> Paragraph<'static> {
     }
     let filled = ratio_to_unit_count(ratio, width);
     let remaining = width.saturating_sub(filled);
-
-    let accent = t.accent;
-    let text = t.text;
-    let subtle = t.subtle;
+    let g = t.glyphs();
 
     let mut spans: Vec<Span<'_>> = Vec::with_capacity(width + 1);
     if filled > 0 {
         if filled > 1 {
             spans.push(Span::styled(
-                "█".repeat(filled - 1),
-                Style::default().fg(accent),
+                g.bar_fill.repeat(filled - 1),
+                Style::default().fg(t.accent),
             ));
         }
         spans.push(Span::styled(
-            "█",
-            Style::default().fg(text).add_modifier(Modifier::BOLD),
+            g.bar_fill,
+            Style::default().fg(t.text).add_modifier(Modifier::BOLD),
         ));
     }
     if remaining > 0 {
         spans.push(Span::styled(
-            "░".repeat(remaining),
-            Style::default().fg(subtle),
+            g.bar_empty.repeat(remaining),
+            Style::default().fg(t.subtle),
         ));
     }
     Paragraph::new(Line::from(spans))

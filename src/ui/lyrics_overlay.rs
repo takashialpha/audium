@@ -33,7 +33,7 @@ pub fn render_lyrics_overlay(frame: &mut Frame<'_>, state: &AppState, track_id: 
 
     let t = &state.theme;
     let block = Block::default()
-        .title(format!(" ♪ {} ", track.display()))
+        .title(format!(" {} {} ", t.glyphs().note, track.display()))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)

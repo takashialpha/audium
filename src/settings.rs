@@ -3,6 +3,58 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 
+/// How colors are chosen for the UI.
+///
+/// The built-in themes are authored in 24-bit RGB, which a real tty or a
+/// terminal without truecolor renders incorrectly.  When truecolor is not in
+/// effect the UI falls back to the named-ANSI `console` theme instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColorMode {
+    /// Detect truecolor support from the environment.
+    #[default]
+    Auto,
+    /// Force full 24-bit color, using the selected RGB theme.
+    Truecolor,
+    /// Force the 16-color console fallback theme.
+    Ansi16,
+}
+
+impl ColorMode {
+    /// Whether truecolor is effectively active, given what auto-detection found.
+    pub const fn truecolor(self, detected: bool) -> bool {
+        match self {
+            Self::Auto => detected,
+            Self::Truecolor => true,
+            Self::Ansi16 => false,
+        }
+    }
+
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Auto => Self::Truecolor,
+            Self::Truecolor => Self::Ansi16,
+            Self::Ansi16 => Self::Auto,
+        }
+    }
+
+    pub const fn prev(self) -> Self {
+        match self {
+            Self::Auto => Self::Ansi16,
+            Self::Ansi16 => Self::Truecolor,
+            Self::Truecolor => Self::Auto,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Truecolor => "truecolor",
+            Self::Ansi16 => "16-color",
+        }
+    }
+}
+
 /// Persistent user preferences stored at `$XDG_DATA_HOME/audium/settings.json`.
 ///
 /// All fields have sensible defaults via `Default` so missing keys in an
@@ -18,6 +70,10 @@ pub struct Settings {
     pub theme_name: String,
     /// Whether background transparency is enabled.
     pub transparent: bool,
+    /// How colors are selected.  `Auto` detects truecolor support and falls
+    /// back to the console theme when it is missing.
+    #[serde(default)]
+    pub color_mode: ColorMode,
 }
 
 impl Default for Settings {
@@ -27,6 +83,7 @@ impl Default for Settings {
             seek_step_secs: 1,
             theme_name: "dark".to_string(),
             transparent: false,
+            color_mode: ColorMode::Auto,
         }
     }
 }
