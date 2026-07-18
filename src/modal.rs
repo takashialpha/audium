@@ -201,6 +201,7 @@ pub enum RemoveTarget {
     TrackFromQueue { queue_idx: usize },
     TrackFromLibrary { track_id: TrackId },
     Playlist { playlist_id: PlaylistId },
+    Queue,
 }
 
 // ── Modal variants ─────────────────────────────────────────────────────────
@@ -951,6 +952,7 @@ fn render_help(frame: &mut Frame<'_>, theme: &Theme) {
         ("a", "Add track to queue"),
         ("p", "Add track to playlist"),
         ("d", "Remove selected item"),
+        ("D", "Clear queue"),
         ("r", "Rename track / playlist"),
         ("e", "Edit track metadata & lyrics"),
         ("y", "Toggle lyrics overlay"),

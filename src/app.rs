@@ -19,7 +19,7 @@ use crate::{
 
 // ── Playback speed ─────────────────────────────────────────────────────────
 
-const SPEED_STEP: f32 = 0.05;
+const SPEED_STEP: f32 = 0.01;
 const SPEED_MIN: f32 = 0.05;
 const SPEED_MAX: f32 = 3.0;
 
@@ -479,6 +479,7 @@ impl AppState {
             KeyCode::Char('a') => self.action_add_to_queue(),
             KeyCode::Char('p') => self.action_add_to_playlist(),
             KeyCode::Char('d') => self.action_remove(),
+            KeyCode::Char('D') => self.action_clear_queue(),
             KeyCode::Char('r') => self.action_rename(),
             KeyCode::Char('c') => self.action_new_playlist(),
             KeyCode::Char('f') => self.action_open_filepicker(),
@@ -680,6 +681,16 @@ impl AppState {
                 }
             }
         }
+    }
+
+    fn action_clear_queue(&mut self) {
+        if self.queue.is_empty() {
+            return;
+        }
+        self.modal = Some(Modal::ConfirmRemove {
+            description: "Clear the entire queue?".into(),
+            target: RemoveTarget::Queue,
+        });
     }
 
     fn action_rename(&mut self) {
@@ -959,6 +970,12 @@ impl AppState {
                     .sidebar_cursor
                     .min(self.library.playlists.len().saturating_sub(1));
                 self.sync_active_playlist();
+            }
+
+            RemoveTarget::Queue => {
+                self.queue.clear();
+                self.queue_cursor = 0;
+                self.halt_playback();
             }
         }
     }
