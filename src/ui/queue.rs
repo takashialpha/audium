@@ -8,7 +8,7 @@ use ratatui::{
 use super::layout::{styled_block, truncate};
 use crate::app::{AppState, Focus};
 
-pub fn render_queue(frame: &mut Frame, state: &AppState, area: Rect) {
+pub fn render_queue(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let focused = state.focus == Focus::Queue;
     let t = &state.theme;
     let block = styled_block(" Queue ", focused, t).style(t.apply_panel_bg(Style::default()));
@@ -23,7 +23,7 @@ pub fn render_queue(frame: &mut Frame, state: &AppState, area: Rect) {
         return;
     }
 
-    let items: Vec<ListItem> = state
+    let items: Vec<ListItem<'_>> = state
         .queue
         .iter()
         .enumerate()

@@ -18,7 +18,7 @@ use crate::app::AppState;
 
 const TOP_BAR_HEIGHT: u16 = 1;
 
-pub fn render(frame: &mut Frame, state: &AppState) {
+pub fn render(frame: &mut Frame<'_>, state: &AppState) {
     let area = frame.area();
 
     frame.render_widget(
@@ -55,7 +55,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
     overlay::render_overlay(frame, state);
 }
 
-fn render_top_bar(frame: &mut Frame, area: ratatui::layout::Rect, state: &AppState) {
+fn render_top_bar(frame: &mut Frame<'_>, area: ratatui::layout::Rect, state: &AppState) {
     let t = &state.theme;
     let spans = vec![
         Span::styled(

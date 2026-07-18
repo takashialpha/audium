@@ -153,7 +153,7 @@ pub enum FilePickerOutcome {
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 
-pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker, theme: &Theme) {
+pub fn render_filepicker(frame: &mut Frame<'_>, picker: &FilePicker, theme: &Theme) {
     let area = frame.area();
     let width = area.width.min(70);
     let height = area.height.saturating_sub(4).min(30);
@@ -194,7 +194,7 @@ pub fn render_filepicker(frame: &mut Frame, picker: &FilePicker, theme: &Theme) 
     };
 
     let name_max = usize::from(inner.width.saturating_sub(2)); // 2 cols for the icon
-    let items: Vec<ListItem> = picker
+    let items: Vec<ListItem<'_>> = picker
         .entries
         .iter()
         .map(|e| {

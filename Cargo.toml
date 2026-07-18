@@ -37,6 +37,23 @@ panic = "abort"
 unsafe_code = "forbid"
 warnings = "deny"
 
+# Security
+non_ascii_idents = "forbid"
+
+# Deny old style Rust
+rust_2018_idioms = { level = "deny", priority = -1 }
+macro_use_extern_crate = "deny"
+absolute_paths_not_starting_with_crate = "deny"
+
+# Easy to read style and opinionated best practices
+explicit_outlives_requirements = "warn"
+single_use_lifetimes = "warn"
+
+# General cleanliness and cleanup
+unused_macro_rules = "warn"
+unused_extern_crates = "deny"
+unused_lifetimes = "warn"
+
 [lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
@@ -77,3 +94,4 @@ semicolon_outside_block = "deny"
 undocumented_unsafe_blocks = "deny"
 unneeded_field_pattern = "deny"
 mod_module_files = "deny"
+unused_async = "deny"

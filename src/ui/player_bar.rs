@@ -11,7 +11,7 @@ use crate::app::{AppState, LoopMode};
 use crate::library::Track;
 use crate::numeric::{ratio_to_unit_count, ratio_to_whole_percent, usize_to_u16_saturating};
 
-pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
+pub fn render_player_bar(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let t = &state.theme;
 
     let outer = Block::default()
@@ -67,7 +67,7 @@ pub fn render_player_bar(frame: &mut Frame, state: &AppState, area: Rect) {
 }
 
 fn render_title_row(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     row: Rect,
     state: &AppState,
     current_track: Option<&Track>,
@@ -142,7 +142,7 @@ fn render_title_row(
     }
 }
 
-fn render_progress_row(frame: &mut Frame, row: Rect, state: &AppState, t: &Theme) {
+fn render_progress_row(frame: &mut Frame<'_>, row: Rect, state: &AppState, t: &Theme) {
     let (elapsed_str, total_str) = if state.now_playing.is_some() {
         let e = format_duration(state.elapsed().as_secs());
         let d = state
@@ -174,14 +174,14 @@ fn render_progress_row(frame: &mut Frame, row: Rect, state: &AppState, t: &Theme
     );
 }
 
-fn render_volume_bar(frame: &mut Frame, vol_area: Rect, vol: f32, t: &Theme) {
+fn render_volume_bar(frame: &mut Frame<'_>, vol_area: Rect, vol: f32, t: &Theme) {
     let vol_pct = ratio_to_whole_percent(vol);
     let bar_height = vol_area.height.saturating_sub(1);
     let filled =
         usize_to_u16_saturating(ratio_to_unit_count(f64::from(vol), usize::from(bar_height)));
     let empty = bar_height - filled;
 
-    let mut vol_lines: Vec<Line> = Vec::new();
+    let mut vol_lines: Vec<Line<'_>> = Vec::new();
     for _ in 0..empty {
         vol_lines.push(Line::from(Span::styled(
             " ░░░ ",
@@ -224,7 +224,7 @@ fn thumb_bar(width: usize, ratio: f64, t: &Theme) -> Paragraph<'static> {
     let text = t.text;
     let subtle = t.subtle;
 
-    let mut spans: Vec<Span> = Vec::with_capacity(width + 1);
+    let mut spans: Vec<Span<'_>> = Vec::with_capacity(width + 1);
     if filled > 0 {
         if filled > 1 {
             spans.push(Span::styled(

@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::{app::AppState, library::TrackId, lyrics};
 
-pub fn render_lyrics_overlay(frame: &mut Frame, state: &AppState, track_id: TrackId) {
+pub fn render_lyrics_overlay(frame: &mut Frame<'_>, state: &AppState, track_id: TrackId) {
     let Some(track) = state.library.track(track_id) else {
         return;
     };
@@ -84,7 +84,7 @@ pub fn render_lyrics_overlay(frame: &mut Frame, state: &AppState, track_id: Trac
         state.lyrics_scroll.min(total.saturating_sub(visible))
     };
 
-    let items: Vec<Line> = lines
+    let items: Vec<Line<'_>> = lines
         .iter()
         .enumerate()
         .skip(scroll)

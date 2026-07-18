@@ -9,7 +9,7 @@ use ratatui::{
 use super::layout::{styled_block, truncate};
 use crate::app::{AppState, Focus};
 
-pub fn render_tracklist(frame: &mut Frame, state: &AppState, area: Rect) {
+pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let focused = state.focus == Focus::TrackList;
     let t = &state.theme;
     let has_filter = state.filter_active || !state.tracklist_filter.is_empty();
@@ -63,7 +63,7 @@ pub fn render_tracklist(frame: &mut Frame, state: &AppState, area: Rect) {
 
     let tracks = state.active_tracks();
 
-    let items: Vec<ListItem> = tracks
+    let items: Vec<ListItem<'_>> = tracks
         .iter()
         .enumerate()
         .map(|(i, track)| {
@@ -93,7 +93,7 @@ pub fn render_tracklist(frame: &mut Frame, state: &AppState, area: Rect) {
         })
         .collect();
 
-    let all_items: Vec<ListItem> = std::iter::once(header).chain(items).collect();
+    let all_items: Vec<ListItem<'_>> = std::iter::once(header).chain(items).collect();
 
     let mut list_state = ListState::default();
     if focused {

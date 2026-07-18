@@ -678,7 +678,7 @@ impl Modal {
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 
-pub fn render_modal(frame: &mut Frame, modal: &Modal, theme: &Theme) {
+pub fn render_modal(frame: &mut Frame<'_>, modal: &Modal, theme: &Theme) {
     match modal {
         Modal::Notify { message } => render_notification(frame, "Notice", message, theme),
         Modal::Help => render_help(frame, theme),
@@ -752,7 +752,7 @@ fn modal_block<'a>(title: &'a str, theme: &Theme) -> Block<'a> {
 
 // ── Individual renderers ───────────────────────────────────────────────────
 
-fn render_notification(frame: &mut Frame, title: &str, message: &str, theme: &Theme) {
+fn render_notification(frame: &mut Frame<'_>, title: &str, message: &str, theme: &Theme) {
     let area = frame.area();
     let rect = centered_rect(50, 7, area);
     frame.render_widget(Clear, rect);
@@ -773,7 +773,7 @@ fn render_notification(frame: &mut Frame, title: &str, message: &str, theme: &Th
     );
 }
 
-fn render_confirm(frame: &mut Frame, description: &str, theme: &Theme) {
+fn render_confirm(frame: &mut Frame<'_>, description: &str, theme: &Theme) {
     let area = frame.area();
     let rect = centered_rect(52, 7, area);
     frame.render_widget(Clear, rect);
@@ -801,7 +801,7 @@ fn render_confirm(frame: &mut Frame, description: &str, theme: &Theme) {
     );
 }
 
-fn render_text_input(frame: &mut Frame, title: &str, input: &TextInput, theme: &Theme) {
+fn render_text_input(frame: &mut Frame<'_>, title: &str, input: &TextInput, theme: &Theme) {
     let area = frame.area();
     let rect = centered_rect(52, 7, area);
     frame.render_widget(Clear, rect);
@@ -848,7 +848,7 @@ fn render_text_input(frame: &mut Frame, title: &str, input: &TextInput, theme: &
 }
 
 fn render_playlist_picker(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     track_name: &str,
     choices: &[(PlaylistId, String)],
     cursor: usize,
@@ -890,7 +890,7 @@ fn render_playlist_picker(
             rows[2],
         );
     } else {
-        let items: Vec<ListItem> = choices
+        let items: Vec<ListItem<'_>> = choices
             .iter()
             .map(|(_, name)| ListItem::new(name.clone()))
             .collect();
@@ -921,7 +921,7 @@ fn render_playlist_picker(
     );
 }
 
-fn render_help(frame: &mut Frame, theme: &Theme) {
+fn render_help(frame: &mut Frame<'_>, theme: &Theme) {
     let area = frame.area();
     let rect = centered_rect(60, 38, area);
     frame.render_widget(Clear, rect);
@@ -964,7 +964,7 @@ fn render_help(frame: &mut Frame, theme: &Theme) {
         ("m", "Open menu"),
     ];
 
-    let items: Vec<Line> = bindings
+    let items: Vec<Line<'_>> = bindings
         .iter()
         .map(|(key, desc)| {
             if key.is_empty() {
@@ -981,7 +981,7 @@ fn render_help(frame: &mut Frame, theme: &Theme) {
     frame.render_widget(Paragraph::new(items), inner);
 }
 
-fn render_menu(frame: &mut Frame, cursor: usize, theme: &Theme) {
+fn render_menu(frame: &mut Frame<'_>, cursor: usize, theme: &Theme) {
     let area = frame.area();
     let rect = centered_rect(32, 9, area);
     frame.render_widget(Clear, rect);
@@ -1033,7 +1033,7 @@ fn render_menu(frame: &mut Frame, cursor: usize, theme: &Theme) {
     );
 }
 
-fn render_about(frame: &mut Frame, theme: &Theme) {
+fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
     let area = frame.area();
     let rect = centered_rect(62, 18, area);
     frame.render_widget(Clear, rect);
@@ -1065,7 +1065,7 @@ fn render_about(frame: &mut Frame, theme: &Theme) {
         ])
         .split(inner);
 
-    let logo: Vec<Line> = logo_lines
+    let logo: Vec<Line<'_>> = logo_lines
         .iter()
         .map(|l| {
             Line::from(Span::styled(
@@ -1107,7 +1107,7 @@ fn render_about(frame: &mut Frame, theme: &Theme) {
 }
 
 fn render_settings(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     cursor: usize,
     volume_pct: u32,
     seek_secs: u64,
@@ -1187,7 +1187,7 @@ fn render_settings(
 }
 
 fn render_settings_row<'a>(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     area: Rect,
     label: &'a str,
     selected: bool,
@@ -1277,7 +1277,7 @@ fn toggle_display(value: &'static str, theme: &Theme) -> Line<'static> {
 const META_LABELS: [&str; 5] = ["Name", "Artist", "Album", "Year", "Genre"];
 
 fn render_metadata_field(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     row: Rect,
     label: &str,
     input: &TextInput,
@@ -1322,7 +1322,7 @@ fn render_metadata_field(
     }
 }
 
-fn render_edit_lyrics_button(frame: &mut Frame, row: Rect, active: bool, theme: &Theme) {
+fn render_edit_lyrics_button(frame: &mut Frame<'_>, row: Rect, active: bool, theme: &Theme) {
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
@@ -1345,7 +1345,7 @@ fn render_edit_lyrics_button(frame: &mut Frame, row: Rect, active: bool, theme: 
 }
 
 fn render_edit_metadata(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     fields: &[TextInput; 5],
     active_field: usize,
     year_error: bool,
@@ -1410,7 +1410,7 @@ pub fn make_lyrics_textarea(raw: &str) -> LyricsTextArea {
     TextArea::from_text(raw)
 }
 
-fn render_edit_lyrics(frame: &mut Frame, textarea: &TextArea, theme: &Theme) {
+fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme) {
     let area = frame.area();
     let width = area.width.saturating_sub(8).max(40);
     let height = area.height.saturating_sub(4).max(12);
@@ -1453,7 +1453,7 @@ fn render_edit_lyrics(frame: &mut Frame, textarea: &TextArea, theme: &Theme) {
         .saturating_sub(visible.saturating_sub(1))
         .min(textarea.lines.len().saturating_sub(visible));
 
-    let items: Vec<Line> = textarea
+    let items: Vec<Line<'_>> = textarea
         .lines
         .iter()
         .enumerate()

@@ -8,13 +8,13 @@ use ratatui::{
 use super::layout::{styled_block, truncate};
 use crate::app::{AppState, Focus};
 
-pub fn render_sidebar(frame: &mut Frame, state: &AppState, area: Rect) {
+pub fn render_sidebar(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let focused = state.focus == Focus::Sidebar;
     let t = &state.theme;
 
     let block = styled_block(" Playlists ", focused, t).style(t.apply_sidebar_bg(Style::default()));
 
-    let items: Vec<ListItem> = state
+    let items: Vec<ListItem<'_>> = state
         .library
         .playlists
         .iter()

@@ -5,7 +5,7 @@ use crate::{app::AppState, filepicker::render_filepicker, modal::render_modal};
 
 /// Renders whichever overlay is active.
 /// Priority: file picker > modal > lyrics overlay.
-pub fn render_overlay(frame: &mut Frame, state: &AppState) {
+pub fn render_overlay(frame: &mut Frame<'_>, state: &AppState) {
     if let Some(picker) = &state.file_picker {
         render_filepicker(frame, picker, &state.theme);
     } else if let Some(modal) = &state.modal {
