@@ -1082,7 +1082,7 @@ fn render_about(frame: &mut Frame, theme: &Theme) {
     let meta: [(&str, &str); 4] = [
         ("version", version),
         ("author", "takashialpha"),
-        ("license", "Apache-2.0"),
+        ("license", "GPL-3.0-or-later"),
         ("source", "github.com/takashialpha/audium"),
     ];
 
