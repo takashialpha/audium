@@ -49,6 +49,7 @@
 - **System audio output:** audium plays through your default system output. Change the output device in your OS and audium follows, no in-app device switching, no surprises.
 - **Format agnostic:** MP3, FLAC, OGG, WAV, AAC, M4A, Opus, AIFF and more via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
 - **Tiny binary:** ~3 MB stripped release build.
+- **100% safe Rust:** zero `unsafe` blocks in the codebase.
 
 ---
 

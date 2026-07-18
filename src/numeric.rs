@@ -39,7 +39,7 @@ pub fn whole_percent_to_ratio(pct: u32) -> f32 {
 /// Rounds `ratio` (clamped to `0.0..=1.0`) times `total_units` into a count
 /// of units, capped at `total_units`. Used for volume/progress bar
 /// rendering, where `total_units` is a terminal-cell count and therefore
-/// always far below 2^53 — the point at which `usize -> f64` could start
+/// always far below 2^53, the point at which `usize -> f64` could start
 /// losing precision.
 pub fn ratio_to_unit_count(ratio: f64, total_units: usize) -> usize {
     let ratio = ratio.clamp(0.0, 1.0);
