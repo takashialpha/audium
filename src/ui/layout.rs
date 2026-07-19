@@ -1,5 +1,6 @@
 use ratatui::{
     style::{Color, Modifier, Style},
+    text::Span,
     widgets::{Block, BorderType, Borders},
 };
 
@@ -44,17 +45,12 @@ pub struct Glyphs {
     /// Left / right value-cycle arrows in the settings rows.
     pub arrow_left: &'static str,
     pub arrow_right: &'static str,
-    /// Up / down arrows for hint text.
-    pub arrow_up: &'static str,
-    pub arrow_down: &'static str,
     /// Horizontal bar fill / empty (progress, thumb, settings volume).
     pub bar_fill: &'static str,
     pub bar_empty: &'static str,
     /// 5-column vertical volume cells (padded), filled / empty.
     pub vol_fill: &'static str,
     pub vol_empty: &'static str,
-    /// Text-input caret.
-    pub caret: &'static str,
     /// Padded metadata separator (e.g. `album · year`).
     pub sep: &'static str,
     /// Music note (lyrics title, file-picker audio entries).
@@ -73,13 +69,10 @@ static UNICODE_GLYPHS: Glyphs = Glyphs {
     marker: "▶  ",
     arrow_left: "◀",
     arrow_right: "▶",
-    arrow_up: "↑",
-    arrow_down: "↓",
     bar_fill: "█",
     bar_empty: "░",
     vol_fill: " ▓▓▓ ",
     vol_empty: " ░░░ ",
-    caret: "█",
     sep: "  ·  ",
     note: "♪",
     folder: "📁",
@@ -93,13 +86,10 @@ static ASCII_GLYPHS: Glyphs = Glyphs {
     marker: ">  ",
     arrow_left: "<",
     arrow_right: ">",
-    arrow_up: "^",
-    arrow_down: "v",
     bar_fill: "#",
     bar_empty: "-",
     vol_fill: " ### ",
     vol_empty: " --- ",
-    caret: "|",
     sep: "  -  ",
     note: "*",
     folder: "[/]",
@@ -436,6 +426,29 @@ static THEMES: [Theme; 15] = [
 ];
 
 // ── Shared widget helpers ──────────────────────────────────────────────────
+
+/// Renders `value` with a vi-style block cursor: reverse-video *covering* the
+/// character at byte offset `cursor` (a trailing block at end-of-line) rather
+/// than an extra glyph inserted between characters.  Works in every color mode
+/// (`REVERSED` is a plain terminal attribute, so it renders as a real block on
+/// a tty too).
+pub fn cursor_spans(value: &str, cursor: usize, theme: &Theme) -> Vec<Span<'static>> {
+    let text = Style::default().fg(theme.text);
+    let block = Style::default()
+        .fg(theme.accent)
+        .add_modifier(Modifier::REVERSED);
+    let before = &value[..cursor];
+    let after = &value[cursor..];
+    let (under, rest) = after.chars().next().map_or_else(
+        || (" ".to_string(), ""),
+        |c| (c.to_string(), &after[c.len_utf8()..]),
+    );
+    vec![
+        Span::styled(before.to_string(), text),
+        Span::styled(under, block),
+        Span::styled(rest.to_string(), text),
+    ]
+}
 
 /// Builds a consistently styled panel block.
 pub fn styled_block<'a>(title: &'a str, focused: bool, theme: &Theme) -> Block<'a> {

@@ -92,16 +92,6 @@ impl FilePicker {
         self.entries.extend(files);
     }
 
-    fn move_down(&mut self) {
-        if !self.entries.is_empty() {
-            self.cursor = (self.cursor + 1).min(self.entries.len() - 1);
-        }
-    }
-
-    const fn move_up(&mut self) {
-        self.cursor = self.cursor.saturating_sub(1);
-    }
-
     fn selected(&self) -> Option<&DirEntry> {
         self.entries.get(self.cursor)
     }
@@ -118,15 +108,11 @@ impl FilePicker {
     }
 
     pub fn handle_key(&mut self, code: KeyCode) -> FilePickerOutcome {
+        if let Some(new) = crate::nav::list_move(code, self.cursor, self.entries.len()) {
+            self.cursor = new;
+            return FilePickerOutcome::Continue;
+        }
         match code {
-            KeyCode::Char('j') | KeyCode::Down => {
-                self.move_down();
-                FilePickerOutcome::Continue
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                self.move_up();
-                FilePickerOutcome::Continue
-            }
             KeyCode::Enter => {
                 if let Some(entry) = self.selected().cloned() {
                     if entry.is_dir {

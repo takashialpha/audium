@@ -10,7 +10,7 @@ use ratatui::{
 use crate::library::{PlaylistId, TrackId};
 use crate::numeric::usize_to_u16_saturating;
 use crate::settings::ColorMode;
-use crate::ui::layout::{Theme, format_duration, themes};
+use crate::ui::layout::{Theme, cursor_spans, format_duration, themes};
 
 // ── Text-input widget ──────────────────────────────────────────────────────
 
@@ -240,6 +240,8 @@ pub enum Modal {
     },
     NewPlaylist {
         input: TextInput,
+        /// If set, the track to drop into the playlist right after it's created.
+        add_track: Option<TrackId>,
     },
     AddToPlaylist {
         track_id: TrackId,
@@ -265,8 +267,9 @@ pub enum Modal {
         /// [0]=name [1]=artist [2]=album [3]=year [4]=genre
         fields: [TextInput; 5],
         active_field: usize,
-        /// Set when Enter/Esc is pressed but the Year field is non-numeric.
-        year_error: bool,
+        /// Restored if the name field is cleared, so closing always writes a
+        /// valid name (the editor never traps you).
+        original_name: String,
     },
     /// Multi-line editor for raw LRC (or plain) lyrics text.
     EditLyrics {
@@ -295,6 +298,7 @@ pub enum ModalConfirm {
     },
     NewPlaylist {
         name: String,
+        add_track: Option<TrackId>,
     },
     AddToPlaylist {
         track_id: TrackId,
@@ -443,8 +447,16 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
             }
             ModalOutcome::Consumed
         }
-        KeyCode::Left | KeyCode::Right => {
-            let left = matches!(code, KeyCode::Left);
+        KeyCode::Char('g') | KeyCode::Home | KeyCode::PageUp => {
+            s.cursor = 0; // first row is always enabled
+            ModalOutcome::Consumed
+        }
+        KeyCode::Char('G') | KeyCode::End | KeyCode::PageDown => {
+            s.cursor = enabled.iter().rposition(|&e| e).unwrap_or(0);
+            ModalOutcome::Consumed
+        }
+        KeyCode::Left | KeyCode::Right | KeyCode::Char('h' | 'l') => {
+            let left = matches!(code, KeyCode::Left | KeyCode::Char('h'));
             match s.cursor {
                 SET_VOLUME => {
                     if left {
@@ -487,42 +499,45 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
                 }
             }
         }
-        // Esc and q both save and close.
-        KeyCode::Esc | KeyCode::Char('q') => ModalOutcome::Confirm(ModalConfirm::SaveSettings {
-            volume_pct: s.volume_pct,
-            seek_secs: s.seek_secs,
-            theme_name: themes()[s.preview_theme_idx].name.to_string(),
-            transparent: s.transparent,
-            color_mode: s.color_mode,
-        }),
+        // Enter, Esc and q all save and close.
+        KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') => {
+            ModalOutcome::Confirm(ModalConfirm::SaveSettings {
+                volume_pct: s.volume_pct,
+                seek_secs: s.seek_secs,
+                theme_name: themes()[s.preview_theme_idx].name.to_string(),
+                transparent: s.transparent,
+                color_mode: s.color_mode,
+            })
+        }
         _ => ModalOutcome::Consumed,
     }
 }
+
+const META_YEAR: usize = 3;
 
 fn handle_edit_metadata_key(
     code: KeyCode,
     track_id: TrackId,
     fields: &mut [TextInput; 5],
     active_field: &mut usize,
-    year_error: &mut bool,
+    original_name: &str,
 ) -> ModalOutcome {
     // Rows 0-4 are text inputs; row 5 is the "Edit Lyrics →" button.
     const ROWS: usize = 6;
     match code {
+        // Esc/Enter close and write.  Every field is already valid (year takes
+        // digits only), and a cleared name falls back to the original, so the
+        // editor always commits and never traps.
         KeyCode::Esc | KeyCode::Enter => {
-            let year_str = fields[3].value.trim().to_string();
-            if !year_str.is_empty() && year_str.parse::<u32>().is_err() {
-                *year_error = true;
-                return ModalOutcome::Consumed;
-            }
-            *year_error = false;
-            let name = fields[0].value.trim().to_string();
-            if name.is_empty() {
-                return ModalOutcome::Consumed;
-            }
+            let typed = fields[0].value.trim();
+            let name = if typed.is_empty() {
+                original_name.to_string()
+            } else {
+                typed.to_string()
+            };
             let artist = nonempty_opt(&fields[1].value);
             let album = nonempty_opt(&fields[2].value);
-            let year = year_str.parse().ok();
+            let year = fields[META_YEAR].value.trim().parse().ok();
             let genre = nonempty_opt(&fields[4].value);
             if matches!(code, KeyCode::Enter) && *active_field == 5 {
                 ModalOutcome::Confirm(ModalConfirm::SaveMetadataAndEditLyrics {
@@ -546,22 +561,21 @@ fn handle_edit_metadata_key(
         }
         KeyCode::Tab | KeyCode::Down => {
             *active_field = (*active_field + 1) % ROWS;
-            *year_error = false;
             ModalOutcome::Consumed
         }
         KeyCode::BackTab | KeyCode::Up => {
             *active_field = (*active_field + ROWS - 1) % ROWS;
-            *year_error = false;
             ModalOutcome::Consumed
         }
         // Text-input keys only apply to the 5 text fields (rows 0-4).
+        // The year field accepts digits only, so it is never invalid.
         KeyCode::Char(c) if *active_field < 5 => {
-            *year_error = false;
-            fields[*active_field].push(c);
+            if *active_field != META_YEAR || c.is_ascii_digit() {
+                fields[*active_field].push(c);
+            }
             ModalOutcome::Consumed
         }
         KeyCode::Backspace if *active_field < 5 => {
-            *year_error = false;
             fields[*active_field].backspace();
             ModalOutcome::Consumed
         }
@@ -609,17 +623,11 @@ fn handle_add_to_playlist_key(
     cursor: &mut usize,
     track_id: TrackId,
 ) -> ModalOutcome {
+    if let Some(new) = crate::nav::list_move(code, *cursor, choices.len()) {
+        *cursor = new;
+        return ModalOutcome::Consumed;
+    }
     match code {
-        KeyCode::Char('j') | KeyCode::Down => {
-            if !choices.is_empty() {
-                *cursor = (*cursor + 1).min(choices.len() - 1);
-            }
-            ModalOutcome::Consumed
-        }
-        KeyCode::Char('k') | KeyCode::Up => {
-            *cursor = cursor.saturating_sub(1);
-            ModalOutcome::Consumed
-        }
         KeyCode::Enter => {
             if let Some((playlist_id, _)) = choices.get(*cursor) {
                 ModalOutcome::Confirm(ModalConfirm::AddToPlaylist {
@@ -635,63 +643,93 @@ fn handle_add_to_playlist_key(
     }
 }
 
+/// Uniform yes/no decision shared by every confirmation dialog.
+enum Confirm {
+    Yes,
+    No,
+    Ignore,
+}
+
+const fn confirm_key(code: KeyCode) -> Confirm {
+    match code {
+        KeyCode::Char('y' | 'Y') | KeyCode::Enter => Confirm::Yes,
+        KeyCode::Char('n' | 'N' | 'q') | KeyCode::Esc => Confirm::No,
+        _ => Confirm::Ignore,
+    }
+}
+
 impl Modal {
     pub fn handle_key(&mut self, code: KeyCode, _modifiers: KeyModifiers) -> ModalOutcome {
         match self {
             Self::Notify { .. } | Self::Help | Self::About => ModalOutcome::Dismissed,
 
-            Self::ConfirmQuit => match code {
-                KeyCode::Char('y' | 'Y' | 'q') => ModalOutcome::Confirm(ModalConfirm::Quit),
-                _ => ModalOutcome::Dismissed,
+            Self::ConfirmQuit => match confirm_key(code) {
+                Confirm::Yes => ModalOutcome::Confirm(ModalConfirm::Quit),
+                Confirm::No => ModalOutcome::Dismissed,
+                Confirm::Ignore => ModalOutcome::Consumed,
             },
 
-            Self::Menu { cursor } => match code {
-                KeyCode::Char('j') | KeyCode::Down => {
-                    *cursor = (*cursor + 1).min(MENU_ENTRIES - 1);
-                    ModalOutcome::Consumed
+            Self::Menu { cursor } => {
+                if let Some(new) = crate::nav::list_move(code, *cursor, MENU_ENTRIES) {
+                    *cursor = new;
+                    return ModalOutcome::Consumed;
                 }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    *cursor = cursor.saturating_sub(1);
-                    ModalOutcome::Consumed
+                match code {
+                    KeyCode::Enter => match *cursor {
+                        0 => ModalOutcome::Confirm(ModalConfirm::OpenSettings),
+                        1 => ModalOutcome::Confirm(ModalConfirm::OpenAbout),
+                        _ => ModalOutcome::Confirm(ModalConfirm::Quit),
+                    },
+                    KeyCode::Esc | KeyCode::Char('q') => ModalOutcome::Dismissed,
+                    _ => ModalOutcome::Consumed,
                 }
-                KeyCode::Enter => match *cursor {
-                    0 => ModalOutcome::Confirm(ModalConfirm::OpenSettings),
-                    1 => ModalOutcome::Confirm(ModalConfirm::OpenAbout),
-                    _ => ModalOutcome::Confirm(ModalConfirm::Quit),
-                },
-                KeyCode::Esc | KeyCode::Char('q') => ModalOutcome::Dismissed,
-                _ => ModalOutcome::Consumed,
-            },
+            }
 
-            Self::ShufflePlaylist { playlist_id, .. } => match code {
-                KeyCode::Char('y' | 'Y') => ModalOutcome::Confirm(ModalConfirm::ShufflePlaylist {
+            Self::ShufflePlaylist { playlist_id, .. } => match confirm_key(code) {
+                Confirm::Yes => ModalOutcome::Confirm(ModalConfirm::ShufflePlaylist {
                     playlist_id: *playlist_id,
                 }),
-                KeyCode::Esc | KeyCode::Char('n' | 'N' | 'q') => ModalOutcome::Dismissed,
-                _ => ModalOutcome::Consumed,
+                Confirm::No => ModalOutcome::Dismissed,
+                Confirm::Ignore => ModalOutcome::Consumed,
             },
 
             Self::Settings(state) => handle_settings_key(code, state),
 
-            Self::ConfirmRemove { target, .. } => match code {
-                KeyCode::Char('y' | 'Y') => ModalOutcome::Confirm(ModalConfirm::Remove(*target)),
-                KeyCode::Esc | KeyCode::Char('n' | 'N' | 'q') => ModalOutcome::Dismissed,
-                _ => ModalOutcome::Consumed,
+            Self::ConfirmRemove { target, .. } => match confirm_key(code) {
+                Confirm::Yes => ModalOutcome::Confirm(ModalConfirm::Remove(*target)),
+                Confirm::No => ModalOutcome::Dismissed,
+                Confirm::Ignore => ModalOutcome::Consumed,
             },
 
+            // Renaming edits existing data, so Enter and Esc both write the
+            // change; a blank name keeps the original (nothing is lost).
             Self::Rename { kind, id, input } => match handle_text_key(input, code) {
                 TextInputResult::Submitted(name) => ModalOutcome::Confirm(ModalConfirm::Rename {
                     kind: kind.clone(),
                     id: *id,
                     new_name: name,
                 }),
-                TextInputResult::Dismissed => ModalOutcome::Dismissed,
+                TextInputResult::Dismissed => {
+                    let name = input.value.trim();
+                    if name.is_empty() {
+                        ModalOutcome::Dismissed
+                    } else {
+                        ModalOutcome::Confirm(ModalConfirm::Rename {
+                            kind: kind.clone(),
+                            id: *id,
+                            new_name: name.to_string(),
+                        })
+                    }
+                }
                 TextInputResult::Consumed => ModalOutcome::Consumed,
             },
 
-            Self::NewPlaylist { input } => match handle_text_key(input, code) {
+            Self::NewPlaylist { input, add_track } => match handle_text_key(input, code) {
                 TextInputResult::Submitted(name) => {
-                    ModalOutcome::Confirm(ModalConfirm::NewPlaylist { name })
+                    ModalOutcome::Confirm(ModalConfirm::NewPlaylist {
+                        name,
+                        add_track: *add_track,
+                    })
                 }
                 TextInputResult::Dismissed => ModalOutcome::Dismissed,
                 TextInputResult::Consumed => ModalOutcome::Consumed,
@@ -708,8 +746,8 @@ impl Modal {
                 track_id,
                 fields,
                 active_field,
-                year_error,
-            } => handle_edit_metadata_key(code, *track_id, fields, active_field, year_error),
+                original_name,
+            } => handle_edit_metadata_key(code, *track_id, fields, active_field, original_name),
 
             Self::EditLyrics { track_id, textarea } => {
                 handle_edit_lyrics_key(code, *track_id, textarea)
@@ -729,9 +767,22 @@ pub fn render_modal(frame: &mut Frame<'_>, modal: &Modal, theme: &Theme) {
         Modal::Menu { cursor } => render_menu(frame, *cursor, theme),
         Modal::ConfirmRemove { description, .. } => render_confirm(frame, description, theme),
         Modal::Rename { kind, input, .. } => {
-            render_text_input(frame, &format!("Rename {kind}"), input, theme);
+            render_text_input(
+                frame,
+                &format!("Rename {kind}"),
+                input,
+                "[Enter / Esc] rename",
+                theme,
+            );
         }
-        Modal::NewPlaylist { input } => render_text_input(frame, "New Playlist", input, theme),
+        Modal::NewPlaylist { input, add_track } => {
+            let (title, hint) = if add_track.is_some() {
+                ("Add to New Playlist", "[Enter] create & add   [Esc] cancel")
+            } else {
+                ("New Playlist", "[Enter] create   [Esc] cancel")
+            };
+            render_text_input(frame, title, input, hint, theme);
+        }
         Modal::AddToPlaylist {
             track_name,
             choices,
@@ -747,9 +798,8 @@ pub fn render_modal(frame: &mut Frame<'_>, modal: &Modal, theme: &Theme) {
         Modal::EditMetadata {
             fields,
             active_field,
-            year_error,
             ..
-        } => render_edit_metadata(frame, fields, *active_field, *year_error, theme),
+        } => render_edit_metadata(frame, fields, *active_field, theme),
         Modal::EditLyrics { textarea, .. } => render_edit_lyrics(frame, textarea, theme),
     }
 }
@@ -811,7 +861,7 @@ fn render_confirm(frame: &mut Frame<'_>, description: &str, theme: &Theme) {
             Line::from(""),
             Line::from(vec![
                 Span::styled(
-                    "[Y]",
+                    "[Y / Enter]",
                     Style::default()
                         .fg(theme.danger)
                         .add_modifier(Modifier::BOLD),
@@ -828,7 +878,13 @@ fn render_confirm(frame: &mut Frame<'_>, description: &str, theme: &Theme) {
     );
 }
 
-fn render_text_input(frame: &mut Frame<'_>, title: &str, input: &TextInput, theme: &Theme) {
+fn render_text_input(
+    frame: &mut Frame<'_>,
+    title: &str,
+    input: &TextInput,
+    hint: &str,
+    theme: &Theme,
+) {
     let area = frame.area();
     let rect = centered_rect(52, 7, area);
     frame.render_widget(Clear, rect);
@@ -854,22 +910,13 @@ fn render_text_input(frame: &mut Frame<'_>, title: &str, input: &TextInput, them
         rows[0],
     );
 
-    let before = &input.value[..input.cursor];
-    let after = &input.value[input.cursor..];
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(before.to_string(), Style::default().fg(theme.text)),
-            Span::styled(theme.glyphs().caret, Style::default().fg(theme.accent)),
-            Span::styled(after.to_string(), Style::default().fg(theme.text)),
-        ])),
+        Paragraph::new(Line::from(cursor_spans(&input.value, input.cursor, theme))),
         rows[1],
     );
 
     frame.render_widget(
-        Paragraph::new(Span::styled(
-            "[Enter] confirm  [Esc] cancel",
-            Style::default().fg(theme.subtle),
-        )),
+        Paragraph::new(Span::styled(hint, Style::default().fg(theme.subtle))),
         rows[2],
     );
 }
@@ -911,7 +958,7 @@ fn render_playlist_picker(
     if choices.is_empty() {
         frame.render_widget(
             Paragraph::new(Span::styled(
-                "No playlists yet.  Press c to create one.",
+                "No playlists yet.",
                 Style::default().fg(theme.subtle),
             )),
             rows[2],
@@ -957,22 +1004,20 @@ fn render_help(frame: &mut Frame<'_>, theme: &Theme) {
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
-    let g = theme.glyphs();
-    let down = format!("j / {}", g.arrow_down);
-    let up = format!("k / {}", g.arrow_up);
-    let seek = format!("{} / {}", g.arrow_left, g.arrow_right);
     let bindings: &[(&str, &str)] = &[
         ("q", "Quit"),
         ("Tab", "Cycle panel focus"),
         ("?", "Toggle this help"),
         ("", ""),
-        (&down, "Move cursor down"),
-        (&up, "Move cursor up"),
+        ("j / Down", "Move cursor down"),
+        ("k / Up", "Move cursor up"),
+        ("g / G", "Jump to top / bottom"),
+        ("PgUp / PgDn", "Page up / down"),
         ("", ""),
         ("Space", "Play / Pause"),
         ("n", "Next track"),
         ("N", "Previous track"),
-        (&seek, "Seek backward / forward"),
+        ("Left / Right", "Seek backward / forward"),
         ("+ / =", "Volume up"),
         ("-", "Volume down"),
         ("l", "Cycle loop mode"),
@@ -1275,13 +1320,9 @@ fn render_settings_header(
         .alignment(Alignment::Center),
         banner_area,
     );
-    let g = theme.glyphs();
     frame.render_widget(
         Paragraph::new(Span::styled(
-            format!(
-                "j/k select   {} {} adjust   Esc/q save & close",
-                g.arrow_left, g.arrow_right
-            ),
+            "j/k select   h/l adjust   Enter/Esc close",
             Style::default().fg(theme.text_dim),
         ))
         .alignment(Alignment::Center),
@@ -1444,14 +1485,8 @@ fn render_metadata_field(
     );
 
     if is_active {
-        let before = &input.value[..input.cursor];
-        let after = &input.value[input.cursor..];
         frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(before.to_string(), Style::default().fg(theme.text)),
-                Span::styled(theme.glyphs().caret, Style::default().fg(theme.accent)),
-                Span::styled(after.to_string(), Style::default().fg(theme.text)),
-            ])),
+            Paragraph::new(Line::from(cursor_spans(&input.value, input.cursor, theme))),
             cols[1],
         );
     } else {
@@ -1490,11 +1525,10 @@ fn render_edit_metadata(
     frame: &mut Frame<'_>,
     fields: &[TextInput; 5],
     active_field: usize,
-    year_error: bool,
     theme: &Theme,
 ) {
     let area = frame.area();
-    let rect = centered_rect(62, 15, area);
+    let rect = centered_rect(62, 14, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Edit Track", theme);
@@ -1512,18 +1546,13 @@ fn render_edit_metadata(
             Constraint::Length(1), // Year
             Constraint::Length(1), // Genre
             Constraint::Length(1), // Edit Lyrics → button
-            Constraint::Length(1), // spacer
-            Constraint::Min(0),    // error / padding
+            Constraint::Min(0),    // padding
         ])
         .split(inner);
 
-    let g = theme.glyphs();
     frame.render_widget(
         Paragraph::new(Span::styled(
-            format!(
-                "Tab/{}{}  next field   {}{}  cursor   Esc/Enter  save",
-                g.arrow_up, g.arrow_down, g.arrow_left, g.arrow_right
-            ),
+            "Tab  next field    arrows  move cursor    Esc/Enter  close",
             Style::default().fg(theme.subtle),
         ))
         .alignment(Alignment::Center),
@@ -1536,17 +1565,6 @@ fn render_edit_metadata(
     }
 
     render_edit_lyrics_button(frame, rows[7], active_field == 5, theme);
-
-    if year_error {
-        frame.render_widget(
-            Paragraph::new(Span::styled(
-                "Year must be a number (e.g. 2024)",
-                Style::default().fg(theme.danger),
-            ))
-            .alignment(Alignment::Center),
-            rows[9],
-        );
-    }
 }
 
 // ── EditLyrics / tui-textarea renderer ────────────────────────────────────
@@ -1576,13 +1594,9 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
         ])
         .split(inner);
 
-    let g = theme.glyphs();
     frame.render_widget(
         Paragraph::new(Span::styled(
-            format!(
-                "{}{}{}{}  navigate   Home/End  line start/end",
-                g.arrow_up, g.arrow_down, g.arrow_left, g.arrow_right
-            ),
+            "arrows  navigate    Home/End  line start/end",
             Style::default().fg(theme.subtle),
         ))
         .alignment(Alignment::Center),
@@ -1611,13 +1625,7 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
         .take(visible)
         .map(|(row, line)| {
             if row == textarea.cursor_row {
-                let before = &line[..textarea.cursor_col];
-                let after = &line[textarea.cursor_col..];
-                Line::from(vec![
-                    Span::styled(before.to_string(), Style::default().fg(theme.text)),
-                    Span::styled(theme.glyphs().caret, Style::default().fg(theme.accent)),
-                    Span::styled(after.to_string(), Style::default().fg(theme.text)),
-                ])
+                Line::from(cursor_spans(line, textarea.cursor_col, theme))
             } else {
                 Line::from(Span::styled(
                     line.as_str(),

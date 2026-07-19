@@ -4,6 +4,7 @@ mod filepicker;
 mod library;
 mod lyrics;
 mod modal;
+mod nav;
 mod numeric;
 mod player;
 mod settings;

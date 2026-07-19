@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{List, ListItem, ListState, Paragraph},
 };
 
-use super::layout::{styled_block, truncate};
+use super::layout::{cursor_spans, styled_block, truncate};
 use crate::app::{AppState, Focus};
 
 pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
@@ -42,21 +42,21 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
         } else {
             Style::default().fg(t.text_dim)
         };
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled("/ ", prefix_style),
-                Span::styled(state.tracklist_filter.as_str(), Style::default().fg(t.text)),
-                Span::styled(
-                    if state.filter_active {
-                        t.glyphs().caret
-                    } else {
-                        ""
-                    },
-                    Style::default().fg(t.accent),
-                ),
-            ])),
-            fr,
-        );
+        let mut spans = vec![Span::styled("/ ", prefix_style)];
+        if state.filter_active {
+            // Cursor sits at the end of the filter text (no in-place editing).
+            spans.extend(cursor_spans(
+                &state.tracklist_filter,
+                state.tracklist_filter.len(),
+                t,
+            ));
+        } else {
+            spans.push(Span::styled(
+                state.tracklist_filter.as_str(),
+                Style::default().fg(t.text),
+            ));
+        }
+        frame.render_widget(Paragraph::new(Line::from(spans)), fr);
     }
 
     // ── Track list ──────────────────────────────────────────────────────

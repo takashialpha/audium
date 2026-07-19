@@ -13,7 +13,7 @@ use crate::{
         Modal, ModalConfirm, ModalOutcome, RemoveTarget, SettingsState, TextInput,
         make_lyrics_textarea,
     },
-    numeric,
+    nav, numeric,
     player::{PlayerEvent, PlayerHandle, resolve_duration, spawn_audio_thread},
     settings::{ColorMode, Settings},
     ui,
@@ -435,19 +435,15 @@ impl AppState {
     }
 
     // ── Lyrics overlay intercepts when visible, no modal open ─────────────
-    const fn handle_lyrics_overlay_key(&mut self, code: KeyCode) -> bool {
+    fn handle_lyrics_overlay_key(&mut self, code: KeyCode) -> bool {
         if !self.show_lyrics || self.modal.is_some() || self.file_picker.is_some() {
             return false;
         }
+        if let Some(new) = nav::list_move(code, self.lyrics_scroll, self.lyrics_lines.len()) {
+            self.lyrics_scroll = new;
+            return true;
+        }
         match code {
-            KeyCode::Char('j') | KeyCode::Down => {
-                self.lyrics_scroll = self.lyrics_scroll.saturating_add(1);
-                true
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                self.lyrics_scroll = self.lyrics_scroll.saturating_sub(1);
-                true
-            }
             KeyCode::Esc | KeyCode::Char('y') => {
                 self.show_lyrics = false;
                 true
@@ -514,8 +510,15 @@ impl AppState {
                 self.tracklist_cursor = 0;
                 self.rebuild_filter_cache();
             }
-            KeyCode::Char('j') | KeyCode::Down => self.cursor_down(),
-            KeyCode::Char('k') | KeyCode::Up => self.cursor_up(),
+            KeyCode::Char('j' | 'k' | 'g' | 'G')
+            | KeyCode::Up
+            | KeyCode::Down
+            | KeyCode::Home
+            | KeyCode::End
+            | KeyCode::PageUp
+            | KeyCode::PageDown => {
+                self.move_cursor(code);
+            }
 
             // Context actions
             KeyCode::Enter => self.action_enter(),
@@ -543,43 +546,26 @@ impl AppState {
 
     // ── Cursor movement ───────────────────────────────────────────────────
 
-    fn cursor_down(&mut self) {
+    /// Moves the focused panel's cursor per the shared list keymap.
+    /// Returns `true` if `code` was a navigation key.
+    fn move_cursor(&mut self, code: KeyCode) -> bool {
+        let (cursor, len) = match self.focus {
+            Focus::Sidebar => (self.sidebar_cursor, self.library.playlists.len()),
+            Focus::TrackList => (self.tracklist_cursor, self.active_tracks().len()),
+            Focus::Queue => (self.queue_cursor, self.queue.len()),
+        };
+        let Some(new) = nav::list_move(code, cursor, len) else {
+            return false;
+        };
         match self.focus {
             Focus::Sidebar => {
-                let len = self.library.playlists.len();
-                if len > 0 {
-                    self.sidebar_cursor = (self.sidebar_cursor + 1).min(len - 1);
-                    self.sync_active_playlist();
-                }
-            }
-            Focus::TrackList => {
-                let len = self.active_tracks().len();
-                if len > 0 {
-                    self.tracklist_cursor = (self.tracklist_cursor + 1).min(len - 1);
-                }
-            }
-            Focus::Queue => {
-                let len = self.queue.len();
-                if len > 0 {
-                    self.queue_cursor = (self.queue_cursor + 1).min(len - 1);
-                }
-            }
-        }
-    }
-
-    fn cursor_up(&mut self) {
-        match self.focus {
-            Focus::Sidebar => {
-                self.sidebar_cursor = self.sidebar_cursor.saturating_sub(1);
+                self.sidebar_cursor = new;
                 self.sync_active_playlist();
             }
-            Focus::TrackList => {
-                self.tracklist_cursor = self.tracklist_cursor.saturating_sub(1);
-            }
-            Focus::Queue => {
-                self.queue_cursor = self.queue_cursor.saturating_sub(1);
-            }
+            Focus::TrackList => self.tracklist_cursor = new,
+            Focus::Queue => self.queue_cursor = new,
         }
+        true
     }
 
     /// Keeps `active_playlist` in sync with `sidebar_cursor`.
@@ -683,11 +669,20 @@ impl AppState {
                 .map(|p| (p.id, p.name.clone()))
                 .collect();
 
-            self.modal = Some(Modal::AddToPlaylist {
-                track_id: track.id,
-                track_name: track.name,
-                choices,
-                cursor: 0,
+            // No playlists yet: skip the empty picker and go straight to
+            // creating one, then drop this track into it.
+            self.modal = Some(if choices.is_empty() {
+                Modal::NewPlaylist {
+                    input: TextInput::default(),
+                    add_track: Some(track.id),
+                }
+            } else {
+                Modal::AddToPlaylist {
+                    track_id: track.id,
+                    track_name: track.name,
+                    choices,
+                    cursor: 0,
+                }
             });
         }
     }
@@ -774,6 +769,7 @@ impl AppState {
     fn action_new_playlist(&mut self) {
         self.modal = Some(Modal::NewPlaylist {
             input: TextInput::default(),
+            add_track: None,
         });
     }
 
@@ -878,7 +874,7 @@ impl AppState {
                     TextInput::with_value(t.genre.as_deref().unwrap_or("")),
                 ],
                 active_field: 0,
-                year_error: false,
+                original_name: t.name,
             });
         }
     }
@@ -1054,8 +1050,13 @@ impl AppState {
 
             ModalConfirm::Rename { kind, id, new_name } => self.apply_rename(&kind, id, new_name),
 
-            ModalConfirm::NewPlaylist { name } => {
-                let _ = self.library.create_playlist(name);
+            ModalConfirm::NewPlaylist { name, add_track } => {
+                if let Ok(playlist_id) = self.library.create_playlist(name)
+                    && let Some(track_id) = add_track
+                {
+                    let _ = self.library.playlist_add_track(playlist_id, track_id);
+                    self.rebuild_filter_cache();
+                }
             }
 
             ModalConfirm::AddToPlaylist {
