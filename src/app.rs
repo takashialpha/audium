@@ -358,9 +358,11 @@ impl AppState {
     }
 
     /// Name of the active view, for the tracklist panel title.
+    /// Name for the tracklist panel. The library view says "All tracks"
+    /// rather than "Library", which is already the sidebar frame's title.
     pub fn active_view_name(&self) -> &str {
         match self.active_view {
-            SidebarItem::Library => "Library",
+            SidebarItem::Library => "All tracks",
             SidebarItem::Playlist(id) => self
                 .library
                 .playlist(id)
@@ -446,6 +448,14 @@ impl AppState {
 
     pub fn handle_key(&mut self, code: KeyCode, modifiers: KeyModifiers) {
         if self.handle_quit_shortcut(code, modifiers) {
+            return;
+        }
+        // Ctrl+C is the only chord audium binds; every other handler matches on
+        // the key alone, so without this a Ctrl or Alt chord lands on the same
+        // arm as the bare key. Ctrl+D in particular opened the destructive
+        // "remove from library" prompt, and Ctrl+D is what a terminal habit
+        // sends at EOF.
+        if modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER) {
             return;
         }
         if self.handle_file_picker_key(code) {

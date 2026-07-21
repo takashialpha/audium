@@ -2,10 +2,11 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::{Modifier, Style},
-    widgets::{List, ListItem, ListState, Paragraph},
+    text::{Line, Span},
+    widgets::{List, ListItem, ListState},
 };
 
-use super::layout::{styled_block, truncate};
+use super::layout::{Columns, GAP_S, NUM_W, format_duration, render_empty_state, styled_block};
 use crate::app::{AppState, Focus};
 
 pub fn render_queue(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
@@ -14,14 +15,23 @@ pub fn render_queue(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let block = styled_block(" Queue ", focused, t).style(t.apply_panel_bg(Style::default()));
 
     if state.queue.is_empty() {
-        frame.render_widget(
-            Paragraph::new("  No tracks in queue.  'a' on a track or playlist to add.")
-                .style(Style::default().fg(t.subtle))
-                .block(block),
-            area,
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        render_empty_state(
+            frame,
+            inner,
+            "Nothing queued",
+            "a",
+            "to add a track or list",
+            t,
         );
         return;
     }
+
+    // Same table shape as the tracklist, so a track reads the same wherever
+    // it appears rather than as `artist - title` in one place and columns in
+    // the other.
+    let cols = Columns::for_width(usize::from(area.width).saturating_sub(2));
 
     let items: Vec<ListItem<'_>> = state
         .queue
@@ -29,24 +39,42 @@ pub fn render_queue(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
         .enumerate()
         .map(|(i, track)| {
             let is_current = state.now_playing == Some(i);
-            let style = if is_current {
+
+            let marker = if is_current {
+                t.glyphs().play.to_string()
+            } else {
+                (i + 1).to_string()
+            };
+            let num = Span::styled(
+                format!("{marker:>NUM_W$}{GAP_S}"),
+                Style::default().fg(if is_current { t.accent } else { t.subtle }),
+            );
+
+            let title_style = if is_current {
                 Style::default()
                     .fg(t.now_playing)
                     .add_modifier(Modifier::BOLD)
-            } else if i == state.queue_cursor && focused {
-                Style::default().fg(t.text).add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(t.text_dim)
+                Style::default().fg(t.text)
             };
+            let meta_style = Style::default().fg(t.text_dim);
 
-            let prefix = if is_current { "> " } else { "  " };
-            let label = format!(
-                "{}{:<3} {}",
-                prefix,
-                i + 1,
-                truncate(&track.display(), usize::from(area.width).saturating_sub(8))
-            );
-            ListItem::new(label).style(style)
+            let mut spans = vec![num];
+            for (n, cell) in cols
+                .cells(
+                    &track.name,
+                    track.artist.as_deref().unwrap_or(""),
+                    track.album.as_deref().unwrap_or(""),
+                    &track
+                        .duration_secs
+                        .map_or_else(String::new, format_duration),
+                )
+                .into_iter()
+                .enumerate()
+            {
+                spans.push(cell.style(if n == 0 { title_style } else { meta_style }));
+            }
+            ListItem::new(Line::from(spans))
         })
         .collect();
 

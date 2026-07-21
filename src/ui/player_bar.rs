@@ -81,16 +81,29 @@ fn render_title_row(
         t.glyphs().play
     };
 
-    let title_owned;
-    // Deferred-init pattern needs `if let` block scoping; `map_or` can't express
-    // a closure that both assigns an outer binding and returns a ref into it.
-    #[allow(clippy::option_if_let_else)]
-    let title: &str = if let Some(tr) = current_track {
-        title_owned = tr.display();
-        &title_owned
-    } else {
-        "-- Nothing playing --"
-    };
+    // Title first and bold, artist a step behind it: the same hierarchy the
+    // track table uses, rather than running them together with a dash.
+    let title_spans: Vec<Span<'_>> = current_track.map_or_else(
+        || {
+            vec![Span::styled(
+                "Nothing playing",
+                Style::default().fg(t.subtle),
+            )]
+        },
+        |tr| {
+            let mut spans = vec![Span::styled(
+                tr.name.clone(),
+                Style::default().fg(t.text).add_modifier(Modifier::BOLD),
+            )];
+            if let Some(artist) = tr.artist.as_deref().filter(|a| !a.is_empty()) {
+                spans.push(Span::styled(
+                    format!("{}{artist}", t.glyphs().sep),
+                    Style::default().fg(t.text_dim),
+                ));
+            }
+            spans
+        },
+    );
 
     let loop_label = match state.loop_mode {
         LoopMode::Off => "",
@@ -123,10 +136,7 @@ fn render_title_row(
         Paragraph::new(status).style(Style::default().fg(t.accent).add_modifier(Modifier::BOLD)),
         title_cols[0],
     );
-    frame.render_widget(
-        Paragraph::new(title).style(Style::default().fg(t.text).add_modifier(Modifier::BOLD)),
-        title_cols[1],
-    );
+    frame.render_widget(Paragraph::new(Line::from(title_spans)), title_cols[1]);
     if speed_width > 0 {
         frame.render_widget(
             Paragraph::new(speed_label.as_str())

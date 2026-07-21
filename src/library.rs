@@ -57,6 +57,11 @@ pub struct Track {
     /// Raw LRC text or plain lyrics, set by the user in-app.
     #[serde(default)]
     pub lyrics: Option<String>,
+    /// Track length in seconds, read from the file's own headers at import.
+    /// `None` for tracks registered before this was recorded, or for formats
+    /// whose headers do not carry it.
+    #[serde(default)]
+    pub duration_secs: Option<u64>,
 }
 
 impl Track {
@@ -80,6 +85,7 @@ struct FileTags {
     album: Option<String>,
     year: Option<u32>,
     genre: Option<String>,
+    duration_secs: Option<u64>,
 }
 
 /// Builds a `Track` for `path`, reading metadata tags if available and
@@ -99,19 +105,36 @@ fn track_from_file(id: TrackId, path: PathBuf) -> Track {
         year: tags.as_ref().and_then(|t| t.year),
         genre: tags.as_ref().and_then(|t| t.genre.clone()),
         lyrics: None,
+        duration_secs: tags.as_ref().and_then(|t| t.duration_secs),
         path,
     }
 }
 
 fn read_file_tags(path: &Path) -> Option<FileTags> {
     use lofty::config::ParseOptions;
+    use lofty::file::AudioFile;
     use lofty::probe::Probe;
     let tagged = Probe::open(path)
         .ok()?
         .options(ParseOptions::new().read_cover_art(false))
         .read()
         .ok()?;
-    let tag = tagged.primary_tag().or_else(|| tagged.first_tag())?;
+
+    // Length comes from the container headers, which this probe already
+    // parsed; it costs nothing extra and needs no decoding.
+    let duration_secs = Some(tagged.properties().duration().as_secs()).filter(|&d| d > 0);
+
+    let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
+        // No tags at all, but the length is still worth keeping.
+        return Some(FileTags {
+            title: None,
+            artist: None,
+            album: None,
+            year: None,
+            genre: None,
+            duration_secs,
+        });
+    };
     let nonempty = |s: String| if s.is_empty() { None } else { Some(s) };
     Some(FileTags {
         title: tag
@@ -131,6 +154,7 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
             .map(std::borrow::Cow::into_owned)
             .and_then(nonempty),
         year: tag.date().map(|ts| u32::from(ts.year)),
+        duration_secs,
     })
 }
 
@@ -345,6 +369,18 @@ impl Library {
                 let id = lib.next_track_id;
                 lib.next_track_id += 1;
                 lib.tracks.push(track_from_file(id, path));
+                changed = true;
+            }
+        }
+
+        // Backfill lengths for tracks registered before they were recorded.
+        // Only files still missing one are probed (~0.1 ms each), so this is a
+        // one-off cost that the next save makes permanent.
+        for track in &mut lib.tracks {
+            if track.duration_secs.is_none()
+                && let Some(secs) = read_file_tags(&track.path).and_then(|f| f.duration_secs)
+            {
+                track.duration_secs = Some(secs);
                 changed = true;
             }
         }
@@ -594,6 +630,7 @@ mod tests {
             year: None,
             genre: None,
             lyrics: None,
+            duration_secs: None,
         }
     }
 

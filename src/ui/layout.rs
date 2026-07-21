@@ -1,7 +1,9 @@
 use ratatui::{
+    Frame,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Span,
-    widgets::{Block, BorderType, Borders},
+    text::{Line, Span},
+    widgets::{Block, BorderType, Borders, Paragraph},
 };
 
 // -- Theme ------------------------------------------------------------------
@@ -61,6 +63,8 @@ pub struct Glyphs {
     pub bullet: &'static str,
     /// Playback-speed multiplier sign.
     pub times: &'static str,
+    /// Horizontal rule fill, used under the track table's header row.
+    pub rule: &'static str,
 }
 
 static UNICODE_GLYPHS: Glyphs = Glyphs {
@@ -78,6 +82,7 @@ static UNICODE_GLYPHS: Glyphs = Glyphs {
     folder: "📁",
     bullet: "●",
     times: "×",
+    rule: "─",
 };
 
 static ASCII_GLYPHS: Glyphs = Glyphs {
@@ -95,6 +100,7 @@ static ASCII_GLYPHS: Glyphs = Glyphs {
     folder: "[/]",
     bullet: "*",
     times: "x",
+    rule: "-",
 };
 
 impl Theme {
@@ -554,6 +560,140 @@ pub fn cursor_spans_windowed(
         .map_or(window.len(), |(i, _)| i);
 
     cursor_spans(&window, window_cursor, theme)
+}
+
+/// Centred two-line prompt for an empty panel: a statement of what is missing,
+/// then the key that fixes it.  Shared so every empty panel reads the same
+/// way instead of each inventing its own one-liner.
+pub fn render_empty_state(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    headline: &str,
+    key: &str,
+    action: &str,
+    t: &Theme,
+) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1), // headline
+            Constraint::Length(1), // "press <key> to ..."
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    frame.render_widget(
+        Paragraph::new(Span::styled(
+            headline.to_string(),
+            Style::default().fg(t.text_dim),
+        ))
+        .alignment(Alignment::Center),
+        rows[1],
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("press ", Style::default().fg(t.subtle)),
+            Span::styled(key.to_string(), Style::default().fg(t.accent)),
+            Span::styled(format!(" {action}"), Style::default().fg(t.subtle)),
+        ]))
+        .alignment(Alignment::Center),
+        rows[2],
+    );
+}
+
+/// Width of the index column, and the gap between every column.
+pub const NUM_W: usize = 3;
+const GAP: usize = 2;
+pub const GAP_S: &str = "  ";
+
+/// Column widths for one tracklist row.
+///
+/// A library reads as a table, not as `artist - title` run together. Narrow
+/// panels drop columns from the right rather than squeezing all three into
+/// illegibility, so the title always keeps a usable width.
+pub struct Columns {
+    title: usize,
+    artist: usize,
+    album: usize,
+    time: usize,
+}
+
+impl Columns {
+    const MIN_TITLE: usize = 16;
+    const MIN_META: usize = 10;
+    /// Enough for `mm:ss` up to 99 minutes; longer runs simply widen the cell.
+    const TIME_W: usize = 5;
+
+    pub const fn for_width(width: usize) -> Self {
+        let body = width.saturating_sub(NUM_W + GAP);
+        let meta2 = (GAP + Self::MIN_META) * 2;
+        let time = GAP + Self::TIME_W;
+
+        if body >= Self::MIN_TITLE + meta2 + time {
+            let rest = body - time;
+            let title = rest * 2 / 5;
+            let artist = rest * 3 / 10;
+            Self {
+                title,
+                artist,
+                album: rest - title - artist - GAP * 2,
+                time: Self::TIME_W,
+            }
+        } else if body >= Self::MIN_TITLE + GAP + Self::MIN_META + time {
+            let rest = body - time;
+            let title = rest * 3 / 5;
+            Self {
+                title,
+                artist: rest - title - GAP,
+                album: 0,
+                time: Self::TIME_W,
+            }
+        } else if body >= Self::MIN_TITLE + GAP + Self::MIN_META {
+            let title = body * 3 / 5;
+            Self {
+                title,
+                artist: body - title - GAP,
+                album: 0,
+                time: 0,
+            }
+        } else {
+            Self {
+                title: body,
+                artist: 0,
+                album: 0,
+                time: 0,
+            }
+        }
+    }
+
+    /// One span per visible column, each padded to its width so the columns
+    /// line up whatever the contents are.
+    pub fn cells(&self, title: &str, artist: &str, album: &str, time: &str) -> Vec<Span<'static>> {
+        let mut out = vec![Span::raw(pad(title, self.title))];
+        if self.artist > 0 {
+            out.push(Span::raw(format!("{GAP_S}{}", pad(artist, self.artist))));
+        }
+        if self.album > 0 {
+            out.push(Span::raw(format!("{GAP_S}{}", pad(album, self.album))));
+        }
+        if self.time > 0 {
+            // Right-aligned: durations line up on the colon.
+            out.push(Span::raw(format!(
+                "{GAP_S}{time:>w$}",
+                w = self.time.max(time.chars().count())
+            )));
+        }
+        out
+    }
+}
+
+/// Truncates to `width` and pads back out to it, so a short value still
+/// occupies its whole column.
+fn pad(s: &str, width: usize) -> String {
+    let s = truncate(s, width);
+    let fill = width.saturating_sub(s.chars().count());
+    format!("{s}{blank:fill$}", blank = "")
 }
 
 /// Builds a consistently styled panel block.

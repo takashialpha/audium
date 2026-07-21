@@ -1,12 +1,12 @@
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, ListState, Paragraph},
 };
 
-use super::layout::{Theme, styled_block, truncate};
+use super::layout::{Theme, render_empty_state, styled_block, truncate};
 use crate::app::{AppState, Focus, SidebarItem};
 
 /// Columns a list row spends on its selection marker.
@@ -71,7 +71,7 @@ fn render_playlists(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     frame.render_widget(block, area);
 
     if state.library.playlists.is_empty() {
-        render_empty_hint(frame, t, inner);
+        render_empty_state(frame, inner, "No playlists yet", "c", "to create one", t);
         return;
     }
 
@@ -99,38 +99,6 @@ fn render_playlists(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
             .highlight_symbol(MARKER),
         inner,
         &mut list_state,
-    );
-}
-
-/// Centred two-line prompt, so an empty sidebar reads as an invitation rather
-/// than a stray list row.
-fn render_empty_hint(frame: &mut Frame<'_>, t: &Theme, inner: Rect) {
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(0),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ])
-        .split(inner);
-
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            "No playlists yet",
-            Style::default().fg(t.text_dim),
-        ))
-        .alignment(Alignment::Center),
-        rows[1],
-    );
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("press ", Style::default().fg(t.subtle)),
-            Span::styled("c", Style::default().fg(t.accent)),
-            Span::styled(" to create one", Style::default().fg(t.subtle)),
-        ]))
-        .alignment(Alignment::Center),
-        rows[2],
     );
 }
 
