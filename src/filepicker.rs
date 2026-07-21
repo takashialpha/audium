@@ -32,7 +32,7 @@ pub fn is_audio(path: &Path) -> bool {
         .is_some_and(|e| AUDIO_EXTS.contains(&e.to_ascii_lowercase().as_str()))
 }
 
-// ── Entry ──────────────────────────────────────────────────────────────────
+// -- Entry ------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct DirEntry {
@@ -41,7 +41,7 @@ pub struct DirEntry {
     pub is_dir: bool,
 }
 
-// ── State ──────────────────────────────────────────────────────────────────
+// -- State ------------------------------------------------------------------
 
 pub struct FilePicker {
     pub current_dir: PathBuf,
@@ -145,7 +145,7 @@ pub enum FilePickerOutcome {
     Dismissed,
 }
 
-// ── Rendering ──────────────────────────────────────────────────────────────
+// -- Rendering --------------------------------------------------------------
 
 pub fn render_filepicker(frame: &mut Frame<'_>, picker: &FilePicker, theme: &Theme) {
     let area = frame.area();
@@ -160,7 +160,7 @@ pub fn render_filepicker(frame: &mut Frame<'_>, picker: &FilePicker, theme: &The
 
     frame.render_widget(Clear, rect);
 
-    // icon (≤3 cols) + surrounding spaces (3) + corners (2) = 8 overhead
+    // icon (<=3 cols) + surrounding spaces (3) + corners (2) = 8 overhead
     let path_max = usize::from(width.saturating_sub(8));
     let path_str = picker.current_dir.to_string_lossy();
     let title = format!(

@@ -47,6 +47,7 @@ macro_use_extern_crate = "deny"
 absolute_paths_not_starting_with_crate = "deny"
 
 # Easy to read style and opinionated best practices
+unused_qualifications = "deny"
 explicit_outlives_requirements = "warn"
 single_use_lifetimes = "warn"
 

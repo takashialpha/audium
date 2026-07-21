@@ -31,7 +31,7 @@ pub fn render_player_bar(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let main_area = cols[0];
     let vol_area = cols[1];
 
-    // ── Title + progress ─────────────────────────────────────────────────
+    // -- Title + progress -------------------------------------------------
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -45,7 +45,7 @@ pub fn render_player_bar(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     render_title_row(frame, rows[0], state, current_track, t);
     render_progress_row(frame, rows[1], state, t);
 
-    // ── Metadata line (album · year · genre) ─────────────────────────────
+    // -- Metadata line (album - year - genre) -----------------------------
     if let Some(tr) = current_track {
         let parts: Vec<String> = [
             tr.album.clone(),
@@ -212,7 +212,7 @@ fn render_volume_bar(frame: &mut Frame<'_>, vol_area: Rect, vol: f32, t: &Theme)
     );
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// -- Helpers ----------------------------------------------------------------
 
 fn thumb_bar(width: usize, ratio: f64, t: &Theme) -> Paragraph<'static> {
     if width == 0 {

@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// ── Identity ───────────────────────────────────────────────────────────────
+// -- Identity ---------------------------------------------------------------
 
 /// Opaque, stable identifier for a track.  Auto-incremented; never reused.
 pub type TrackId = u64;
@@ -32,7 +32,7 @@ const FORMAT_VERSION: u32 = 1;
 /// downgrading) can never half-load a foreign index.
 const INDEX_FILE: &str = "audium.json";
 
-// ── Track ──────────────────────────────────────────────────────────────────
+// -- Track ------------------------------------------------------------------
 
 /// A single audio file registered in the library.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,7 +72,7 @@ impl Track {
     }
 }
 
-// ── Tag reading ────────────────────────────────────────────────────────────
+// -- Tag reading ------------------------------------------------------------
 
 struct FileTags {
     title: Option<String>,
@@ -134,7 +134,7 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
     })
 }
 
-// ── Playlist ───────────────────────────────────────────────────────────────
+// -- Playlist ---------------------------------------------------------------
 
 /// A named, ordered collection of track references.
 ///
@@ -158,7 +158,7 @@ impl Playlist {
     }
 }
 
-// ── Library ────────────────────────────────────────────────────────────────
+// -- Library ----------------------------------------------------------------
 
 /// Top-level persistent state: a registry of tracks + a set of playlists.
 ///
@@ -209,7 +209,7 @@ impl Default for Library {
 }
 
 impl Library {
-    // ── Filesystem paths ─────────────────────────────────────────────────
+    // -- Filesystem paths -------------------------------------------------
 
     /// `$XDG_DATA_HOME/audium` -- the index and the imported audio files.
     pub fn data_dir() -> Result<PathBuf> {
@@ -251,7 +251,7 @@ impl Library {
         Ok(Self::data_dir()?.join(INDEX_FILE))
     }
 
-    // ── Persistence ──────────────────────────────────────────────────────
+    // -- Persistence ------------------------------------------------------
 
     /// Loads (or creates) the index from `$XDG_DATA_HOME/audium/audium.json`.
     /// Silently prunes tracks whose files have been deleted externally.
@@ -369,7 +369,7 @@ impl Library {
         Ok(())
     }
 
-    // ── Track management ─────────────────────────────────────────────────
+    // -- Track management -------------------------------------------------
 
     /// Copies `source` into `$XDG_DATA_HOME/audium/music/` (if not already
     /// there) and registers it in the library.
@@ -512,7 +512,7 @@ impl Library {
             .collect();
     }
 
-    // ── Playlist management ──────────────────────────────────────────────
+    // -- Playlist management ----------------------------------------------
 
     /// Creates a new user playlist.  Returns its id.
     pub fn create_playlist(&mut self, name: impl Into<String>) -> Result<PlaylistId> {

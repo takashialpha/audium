@@ -17,10 +17,10 @@ use crate::{
     player::{PlayerEvent, PlayerHandle, resolve_duration, spawn_audio_thread},
     settings::{ColorMode, Settings},
     ui,
-    ui::layout::{Theme, console_theme, theme_by_name},
+    ui::layout::{Theme, console_theme, theme_by_name, themes},
 };
 
-// ── Terminal color detection ───────────────────────────────────────────────
+// -- Terminal color detection -----------------------------------------------
 
 /// Best-effort detection of 24-bit truecolor support.
 ///
@@ -57,7 +57,7 @@ fn resolve_theme(theme_name: &str, transparent: bool, truecolor: bool) -> Theme 
     }
 }
 
-// ── Playback speed ─────────────────────────────────────────────────────────
+// -- Playback speed ---------------------------------------------------------
 
 const SPEED_STEP: f32 = 0.01;
 const SPEED_MIN: f32 = 0.05;
@@ -86,7 +86,7 @@ impl LoopMode {
     }
 }
 
-// ── Focus ──────────────────────────────────────────────────────────────────
+// -- Focus ------------------------------------------------------------------
 
 /// Which panel currently owns keyboard focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,7 +124,7 @@ impl Focus {
     }
 }
 
-// ── AppState ───────────────────────────────────────────────────────────────
+// -- AppState ---------------------------------------------------------------
 
 /// What the sidebar cursor can point at. The library is not a playlist, so it
 /// gets its own variant instead of a reserved playlist id.
@@ -138,7 +138,7 @@ pub struct AppState {
     pub library: Library,
     pub player: PlayerHandle,
 
-    // ── UI ──────────────────────────────────────────────────────────────
+    // -- UI --------------------------------------------------------------
     pub focus: Focus,
 
     /// What the tracklist panel is currently showing.
@@ -151,18 +151,18 @@ pub struct AppState {
     /// Cursor inside the queue panel.
     pub queue_cursor: usize,
 
-    // ── Playback queue ──────────────────────────────────────────────────
+    // -- Playback queue --------------------------------------------------
     /// Ephemeral ordered list of tracks waiting to be played.
     pub queue: Vec<Track>,
     /// Index of the currently playing track inside `queue`, if any.
     pub now_playing: Option<usize>,
 
-    // ── Progress tracking ───────────────────────────────────────────────
+    // -- Progress tracking -----------------------------------------------
     pub track_start: Option<Instant>,
     pub seek_offset: Duration,
     pub track_duration: Option<Duration>,
 
-    // ── Overlay state ───────────────────────────────────────────────────
+    // -- Overlay state ---------------------------------------------------
     pub modal: Option<Modal>,
     pub file_picker: Option<FilePicker>,
     pub loop_mode: LoopMode,
@@ -170,13 +170,13 @@ pub struct AppState {
     pub settings: Settings,
     pub should_quit: bool,
 
-    // ── Tracklist filter ─────────────────────────────────────────────────
+    // -- Tracklist filter -------------------------------------------------
     /// Current filter string applied to the active playlist's track list.
     pub tracklist_filter: String,
     /// Whether the filter bar is currently receiving keyboard input.
     pub filter_active: bool,
 
-    // ── Lyrics overlay ───────────────────────────────────────────────────
+    // -- Lyrics overlay ---------------------------------------------------
     /// Whether the lyrics overlay is visible.
     pub show_lyrics: bool,
     /// Manual scroll offset for plain-text (unsynced) lyrics.
@@ -224,7 +224,7 @@ impl AppState {
         s
     }
 
-    // ── Progress ─────────────────────────────────────────────────────────
+    // -- Progress ---------------------------------------------------------
 
     pub fn elapsed(&self) -> Duration {
         if self.now_playing.is_none() {
@@ -245,7 +245,7 @@ impl AppState {
         }
     }
 
-    // ── Queue helpers ─────────────────────────────────────────────────────
+    // -- Queue helpers -----------------------------------------------------
 
     pub fn enqueue(&mut self, track: Track) {
         self.queue.push(track);
@@ -332,7 +332,7 @@ impl AppState {
         self.player.stop();
     }
 
-    // ── Sidebar / active view helpers ────────────────────────────────────
+    // -- Sidebar / active view helpers ------------------------------------
 
     /// The playlist under the playlists-frame cursor.
     fn cursor_playlist_id(&self) -> Option<PlaylistId> {
@@ -412,7 +412,7 @@ impl AppState {
             .map(|t| (*t).clone())
     }
 
-    // ── Tick ─────────────────────────────────────────────────────────────
+    // -- Tick -------------------------------------------------------------
 
     /// Processes player events and auto-advances on natural track end.
     /// Returns whether anything changed, so the caller can skip a redraw.
@@ -436,7 +436,7 @@ impl AppState {
         self.now_playing.is_some() && !self.player.is_paused
     }
 
-    // ── Input ─────────────────────────────────────────────────────────────
+    // -- Input -------------------------------------------------------------
 
     pub fn handle_key(&mut self, code: KeyCode, modifiers: KeyModifiers) {
         if self.handle_quit_shortcut(code, modifiers) {
@@ -457,7 +457,7 @@ impl AppState {
         self.handle_global_key(code);
     }
 
-    // ── Ctrl-C: same as 'q' (ask to quit, confirm on a second press) ──────
+    // -- Ctrl-C: same as 'q' (ask to quit, confirm on a second press) ------
     fn handle_quit_shortcut(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
         if code != KeyCode::Char('c') || !modifiers.contains(KeyModifiers::CONTROL) {
             return false;
@@ -472,7 +472,7 @@ impl AppState {
         true
     }
 
-    // ── File picker takes priority over everything else ───────────────────
+    // -- File picker takes priority over everything else -------------------
     fn handle_file_picker_key(&mut self, code: KeyCode) -> bool {
         let Some(picker) = &mut self.file_picker else {
             return false;
@@ -488,7 +488,7 @@ impl AppState {
         true
     }
 
-    // ── Modal intercepts next ──────────────────────────────────────────────
+    // -- Modal intercepts next ----------------------------------------------
     fn handle_modal_key(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
         let Some(modal) = &mut self.modal else {
             return false;
@@ -506,7 +506,7 @@ impl AppState {
         true
     }
 
-    // ── Lyrics overlay intercepts when visible, no modal open ─────────────
+    // -- Lyrics overlay intercepts when visible, no modal open -------------
     fn handle_lyrics_overlay_key(&mut self, code: KeyCode) -> bool {
         if !self.show_lyrics || self.modal.is_some() || self.file_picker.is_some() {
             return false;
@@ -524,7 +524,7 @@ impl AppState {
         }
     }
 
-    // ── Filter input (captures printable chars when active) ───────────────
+    // -- Filter input (captures printable chars when active) ---------------
     fn handle_filter_key(&mut self, code: KeyCode) -> bool {
         if !self.filter_active {
             return false;
@@ -559,7 +559,7 @@ impl AppState {
         }
     }
 
-    // ── Global keybindings ─────────────────────────────────────────────────
+    // -- Global keybindings -------------------------------------------------
     fn handle_global_key(&mut self, code: KeyCode) {
         match code {
             KeyCode::Char('q') => self.modal = Some(Modal::ConfirmQuit),
@@ -622,7 +622,7 @@ impl AppState {
         }
     }
 
-    // ── Cursor movement ───────────────────────────────────────────────────
+    // -- Cursor movement ---------------------------------------------------
 
     /// Moves the focused panel's cursor per the shared list keymap.
     /// Returns `true` if `code` was a navigation key.
@@ -668,7 +668,7 @@ impl AppState {
         self.rebuild_filter_cache();
     }
 
-    // ── Actions ───────────────────────────────────────────────────────────
+    // -- Actions -----------------------------------------------------------
 
     fn action_toggle_play(&mut self) {
         if self.now_playing.is_none() {
@@ -676,11 +676,11 @@ impl AppState {
                 self.play_queue_index(0);
             }
         } else if self.player.is_paused {
-            // Currently paused → resume.
+            // Currently paused -> resume.
             self.track_start = Some(Instant::now());
             self.player.resume();
         } else {
-            // Currently playing → pause.
+            // Currently playing -> pause.
             // Snapshot elapsed before setting is_paused so elapsed() still
             // accumulates track_start.elapsed() during this call.
             self.seek_offset = self.elapsed();
@@ -720,8 +720,8 @@ impl AppState {
         self.player.seek(path, target, self.player.is_paused);
     }
 
-    /// Enter on tracklist  →  play immediately (inserts after current).
-    /// Enter on queue      →  play that queue entry immediately.
+    /// Enter on tracklist  ->  play immediately (inserts after current).
+    /// Enter on queue      ->  play that queue entry immediately.
     fn action_enter(&mut self) {
         match self.focus {
             Focus::Library | Focus::Playlists => {
@@ -881,7 +881,7 @@ impl AppState {
 
     fn open_settings(&mut self) {
         let vol_pct = numeric::ratio_to_whole_percent(self.settings.default_volume);
-        let preview_theme_idx = crate::ui::layout::themes()
+        let preview_theme_idx = themes()
             .iter()
             .position(|t| t.name == self.settings.theme_name.as_str())
             .unwrap_or(0);
@@ -911,7 +911,7 @@ impl AppState {
         });
     }
 
-    // ── Playback speed ────────────────────────────────────────────────────
+    // -- Playback speed ----------------------------------------------------
 
     fn action_speed_up(&mut self) {
         let new = ((self.player.playback_speed + SPEED_STEP) * 100.0).round() / 100.0;
@@ -947,7 +947,7 @@ impl AppState {
         }
     }
 
-    // ── Metadata / lyrics actions ─────────────────────────────────────────
+    // -- Metadata / lyrics actions -----------------------------------------
 
     /// The track under the cursor in the focused panel. The sidebar selects
     /// playlists, not tracks, so it has none.
@@ -1070,7 +1070,7 @@ impl AppState {
         }
     }
 
-    // ── Modal confirm handler ─────────────────────────────────────────────
+    // -- Modal confirm handler ---------------------------------------------
 
     fn apply_remove(&mut self, target: RemoveTarget) {
         match target {
@@ -1277,7 +1277,7 @@ impl AppState {
         }
     }
 
-    // ── File import ───────────────────────────────────────────────────────
+    // -- File import -------------------------------------------------------
 
     fn import_file(&mut self, path: &std::path::Path) {
         match self.library.add_file(path) {
@@ -1338,7 +1338,7 @@ impl AppState {
         self.play_queue_index(0);
     }
 }
-// ── Entry point ────────────────────────────────────────────────────────────
+// -- Entry point ------------------------------------------------------------
 
 pub fn run(cli: Cli) -> Result<()> {
     let mut library = Library::load()?;

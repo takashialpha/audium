@@ -9,7 +9,7 @@ pub struct LyricLine {
 /// Parses raw LRC text or plain text into lyric lines.
 ///
 /// If the input contains any `[mm:ss.xx]` timestamp tags those lines are
-/// extracted and returned sorted by time; metadata tags like `[ti:…]` are
+/// extracted and returned sorted by time; metadata tags like `[ti:...]` are
 /// skipped.  If no timed lines are found every non-empty input line is
 /// returned with `time_ms: None`.
 pub fn parse_lrc(raw: &str) -> Vec<LyricLine> {
@@ -73,7 +73,7 @@ fn try_timed(line: &str) -> Option<LyricLine> {
     })
 }
 
-/// Returns the index of the last timed line whose timestamp ≤ `elapsed`.
+/// Returns the index of the last timed line whose timestamp <= `elapsed`.
 pub fn active_idx(lines: &[LyricLine], elapsed: Duration) -> Option<usize> {
     let elapsed_ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
     lines

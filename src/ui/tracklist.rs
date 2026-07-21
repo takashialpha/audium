@@ -30,7 +30,7 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
         (inner, None)
     };
 
-    // ── Filter bar ──────────────────────────────────────────────────────
+    // -- Filter bar ------------------------------------------------------
     if let Some(fr) = filter_rect {
         let prefix_style = if state.filter_active {
             Style::default().fg(t.accent).add_modifier(Modifier::BOLD)
@@ -54,7 +54,7 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
         frame.render_widget(Paragraph::new(Line::from(spans)), fr);
     }
 
-    // ── Track list ──────────────────────────────────────────────────────
+    // -- Track list ------------------------------------------------------
     let header = ListItem::new(Line::from(Span::styled(
         format!(" {:<4}  {:<}", "#", "Track"),
         Style::default().fg(t.subtle).add_modifier(Modifier::BOLD),

@@ -4,7 +4,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders},
 };
 
-// ── Theme ──────────────────────────────────────────────────────────────────
+// -- Theme ------------------------------------------------------------------
 
 /// All semantic color roles used across the UI.
 /// Passed by reference to every render function that needs colors.
@@ -28,7 +28,7 @@ pub struct Theme {
     pub ascii: bool,
 }
 
-// ── Glyphs ──────────────────────────────────────────────────────────────────
+// -- Glyphs ------------------------------------------------------------------
 
 /// Semantic UI glyphs, chosen per-terminal so a tty / limited console gets
 /// ASCII fallbacks instead of unrenderable Unicode.  One table is selected via
@@ -51,7 +51,7 @@ pub struct Glyphs {
     /// 5-column vertical volume cells (padded), filled / empty.
     pub vol_fill: &'static str,
     pub vol_empty: &'static str,
-    /// Padded metadata separator (e.g. `album · year`).
+    /// Padded metadata separator (e.g. `album - year`).
     pub sep: &'static str,
     /// Music note (lyrics title, file-picker audio entries).
     pub note: &'static str,
@@ -128,7 +128,7 @@ impl Theme {
     }
 }
 
-// ── Built-in themes ────────────────────────────────────────────────────────
+// -- Built-in themes --------------------------------------------------------
 
 pub fn themes() -> &'static [Theme] {
     &THEMES
@@ -253,7 +253,7 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 6: rosé pine
+    // 6: rose pine
     Theme {
         name: "rosepine",
         bg: Color::Rgb(25, 23, 36),
@@ -270,7 +270,7 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 7: rosé pine dawn
+    // 7: rose pine dawn
     Theme {
         name: "rosepine_dawn",
         bg: Color::Rgb(250, 244, 237),
@@ -425,7 +425,7 @@ static THEMES: [Theme; 15] = [
     },
 ];
 
-// ── Shared widget helpers ──────────────────────────────────────────────────
+// -- Shared widget helpers --------------------------------------------------
 
 /// Renders `value` with a vi-style block cursor: reverse-video *covering* the
 /// character at byte offset `cursor` (a trailing block at end-of-line) rather

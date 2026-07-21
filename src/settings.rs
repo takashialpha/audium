@@ -66,7 +66,7 @@ impl ColorMode {
 pub struct Settings {
     /// Initial volume applied when audium starts (0.0-1.0).
     pub default_volume: f32,
-    /// How many seconds ← / → seek by.
+    /// How many seconds <- / -> seek by.
     pub seek_step_secs: u64,
     /// Name of the active theme.  Must match one of the built-in theme names;
     /// unknown values fall back to "dark" silently on load.
@@ -94,8 +94,8 @@ impl Default for Settings {
 impl Settings {
     const FILE: &'static str = "settings.json";
 
-    /// Loads settings from disk.  Missing file → `Default`.
-    /// Corrupt file → `Default` (non-fatal; we just overwrite on next save).
+    /// Loads settings from disk.  Missing file -> `Default`.
+    /// Corrupt file -> `Default` (non-fatal; we just overwrite on next save).
     pub fn load() -> Self {
         let Some(path) = Library::find_config_file(Self::FILE) else {
             return Self::default();
@@ -116,7 +116,7 @@ impl Settings {
         Ok(())
     }
 
-    // ── Validated setters ─────────────────────────────────────────────────
+    // -- Validated setters -------------------------------------------------
 
     pub const fn set_default_volume(&mut self, v: f32) {
         self.default_volume = v.clamp(0.0, 1.0);

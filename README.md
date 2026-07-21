@@ -171,14 +171,14 @@ Please open an issue before starting work on a large change.
 Use `rustc_hash::FxHashMap` / `FxHashSet` throughout; there are no
 `std::collections` hash containers left in the tree. FxHash is materially
 faster than std's SipHash for the small keys audium hashes (`TrackId` is a
-`u64`), and every key is locally generated — track ids and paths under our own
-music directory — so std's DoS resistance buys nothing here. Keeping one
+`u64`), and every key is locally generated (track ids, and paths under our own
+music directory), so std's DoS resistance buys nothing here. Keeping one
 hasher project-wide also means no one has to wonder why two exist.
 
 ### UI conventions
 
 **Modal spacing is centralised, never hand-rolled.** `modal_block()` applies a
-fixed inset — `MODAL_PAD_X` columns (2) and `MODAL_PAD_Y` rows (1) — on all four
+fixed inset of `MODAL_PAD_X` columns (2) and `MODAL_PAD_Y` rows (1) on all four
 sides of every dialog. A renderer lays out *content only*: no leading blank
 line, no trailing `Constraint::Min(0)` standing in for a bottom margin, no
 `format!("  {label}")` gutters. This is the rule that keeps the gap identical
@@ -189,7 +189,7 @@ usable width is `width - 2 - 2 * MODAL_PAD_X`. Size dialogs from their content
 using that constant rather than a literal; a hardcoded height silently drifts
 into a lopsided gap the moment a row is added or removed.
 
-Blank rows *between* content groups are still the renderer's business — the
+Blank rows *between* content groups are still the renderer's business: the
 rule governs margins, not internal separators.
 
 A gap row must be guaranteed, never left over. Use `Min(1)` when the content
@@ -199,7 +199,7 @@ moment the dialog is sized correctly from its content.
 
 **Key hints go at the bottom, as `[key] action` pairs.** Build them with
 `hint()` / `danger_hint()` and render with `render_hints()`; never hand-write
-a hint string. The brackets are what make the pairing legible — spacing alone
+a hint string. The brackets are what make the pairing legible: spacing alone
 cannot distinguish a gap *inside* a pair from a gap *between* two, and the
 color difference vanishes on a monochrome tty. `danger_hint()` marks a key
 that destroys something.
@@ -210,7 +210,7 @@ a row instead of being cut off mid-word. Ask `hint_height()` for the row count
 
 Only the keybindings dialog has no footer: the whole dialog is one.
 
-Both rules cover *every* overlay, not just the modals in `modal.rs` — the file
+Both rules cover *every* overlay, not just the modals in `modal.rs`. The file
 picker and the lyrics overlay go through `modal_block()` and `render_hints()`
 too. The file picker is the one dialog that overrides anything, left-aligning
 its title because a long path reads better anchored to the left.

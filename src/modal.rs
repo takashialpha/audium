@@ -16,7 +16,7 @@ use crate::ui::layout::{
     Theme, cursor_spans, cursor_spans_windowed, format_duration, themes, truncate,
 };
 
-// ── Text-input widget ──────────────────────────────────────────────────────
+// -- Text-input widget ------------------------------------------------------
 
 #[derive(Debug, Default, Clone)]
 pub struct TextInput {
@@ -71,7 +71,7 @@ impl TextInput {
     }
 }
 
-// ── Multi-line text editor ─────────────────────────────────────────────────
+// -- Multi-line text editor -------------------------------------------------
 
 #[derive(Debug, Default, Clone)]
 pub struct TextArea {
@@ -199,7 +199,7 @@ fn clamp_col(line: &str, col: usize) -> usize {
 /// A `TextArea` wrapped with a name so app.rs can import it as `LyricsTextArea`.
 pub type LyricsTextArea = TextArea;
 
-// ── RemoveTarget ───────────────────────────────────────────────────────────
+// -- RemoveTarget -----------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
 pub enum RemoveTarget {
@@ -219,7 +219,7 @@ pub enum RemoveTarget {
     Queue,
 }
 
-// ── Settings modal state ───────────────────────────────────────────────────
+// -- Settings modal state ---------------------------------------------------
 
 /// Live state of the settings modal, mutated in place while it is open.
 #[derive(Debug, Clone)]
@@ -236,7 +236,7 @@ pub struct SettingsState {
     pub detected_truecolor: bool,
 }
 
-// ── Modal variants ─────────────────────────────────────────────────────────
+// -- Modal variants ---------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub enum Modal {
@@ -294,7 +294,7 @@ pub enum Modal {
 
 const MENU_ENTRIES: usize = 3;
 
-// ── ModalOutcome ───────────────────────────────────────────────────────────
+// -- ModalOutcome -----------------------------------------------------------
 
 pub enum ModalOutcome {
     Consumed,
@@ -358,7 +358,7 @@ pub enum ModalConfirm {
     },
 }
 
-// ── Shared helpers ─────────────────────────────────────────────────────────
+// -- Shared helpers ---------------------------------------------------------
 
 fn nonempty_opt(s: &str) -> Option<String> {
     let t = s.trim();
@@ -369,7 +369,7 @@ fn nonempty_opt(s: &str) -> Option<String> {
     }
 }
 
-// ── Text-input key helper ──────────────────────────────────────────────────
+// -- Text-input key helper --------------------------------------------------
 
 enum TextInputResult {
     Consumed,
@@ -408,7 +408,7 @@ fn handle_text_key(input: &mut TextInput, code: KeyCode) -> TextInputResult {
     }
 }
 
-// ── Input handling ─────────────────────────────────────────────────────────
+// -- Input handling ---------------------------------------------------------
 
 // Settings rows, in display order.
 const SET_VOLUME: usize = 0;
@@ -533,7 +533,7 @@ fn handle_edit_metadata_key(
     active_field: &mut usize,
     original_name: &str,
 ) -> ModalOutcome {
-    // Rows 0-4 are text inputs; row 5 is the "Edit Lyrics →" button.
+    // Rows 0-4 are text inputs; row 5 is the "Edit Lyrics ->" button.
     const ROWS: usize = 6;
     match code {
         // Esc/Enter close and write.  Every field is already valid (year takes
@@ -765,7 +765,7 @@ impl Modal {
     }
 }
 
-// ── Rendering ──────────────────────────────────────────────────────────────
+// -- Rendering --------------------------------------------------------------
 
 pub fn render_modal(frame: &mut Frame<'_>, modal: &Modal, theme: &Theme) {
     match modal {
@@ -819,7 +819,7 @@ pub fn render_modal(frame: &mut Frame<'_>, modal: &Modal, theme: &Theme) {
     }
 }
 
-// ── Overlay helpers ────────────────────────────────────────────────────────
+// -- Overlay helpers --------------------------------------------------------
 
 fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     let x = area.x + area.width.saturating_sub(width) / 2;
@@ -845,7 +845,7 @@ pub const MODAL_PAD_Y: u16 = 1;
 /// Rows and columns a modal spends on its border plus the inset above.
 pub const MODAL_CHROME_H: u16 = 2 + 2 * MODAL_PAD_Y;
 
-// ── Dialog hint footer ─────────────────────────────────────────────────────
+// -- Dialog hint footer -----------------------------------------------------
 
 /// One key hint in a dialog footer.
 #[derive(Clone, Copy)]
@@ -873,7 +873,7 @@ const fn danger_hint<'a>(key: &'a str, action: &'a str) -> Hint<'a> {
 }
 
 /// Renders a dialog's hints as `[key] action` pairs joined by the theme
-/// separator, e.g. `[Tab] next field  ·  [Esc] close`.
+/// separator, e.g. `[Tab] next field  -  [Esc] close`.
 ///
 /// The brackets carry the key/action boundary. Spacing alone cannot: a reader
 /// has no way to tell a wide gap *within* a pair from the gap *between* two,
@@ -983,7 +983,7 @@ pub fn modal_block<'a>(title: &'a str, theme: &Theme) -> Block<'a> {
         .style(theme.apply_bg(Style::default()))
 }
 
-// ── Individual renderers ───────────────────────────────────────────────────
+// -- Individual renderers ---------------------------------------------------
 
 fn render_notification(frame: &mut Frame<'_>, title: &str, message: &str, theme: &Theme) {
     const WIDTH: u16 = 50;
@@ -1391,7 +1391,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
         hint("Enter / Esc", "close"),
     ];
     let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
-    // banner(1) + spacer(1) + 5×row(3) + footnote(2) + spacer(1), then hints.
+    // banner(1) + spacer(1) + 5xrow(3) + footnote(2) + spacer(1), then hints.
     let rect = centered_rect(WIDTH, 20 + hint_h + MODAL_CHROME_H, area);
     frame.render_widget(Clear, rect);
 
@@ -1647,7 +1647,7 @@ fn locked_display(value: &'static str, theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(value, Style::default().fg(theme.subtle)))
 }
 
-// ── EditMetadata renderer ──────────────────────────────────────────────────
+// -- EditMetadata renderer --------------------------------------------------
 
 const META_LABELS: [&str; 5] = ["Name", "Artist", "Album", "Year", "Genre"];
 
@@ -1753,7 +1753,7 @@ fn render_edit_metadata(
             Constraint::Length(1),      // Year
             Constraint::Length(1),      // Genre
             Constraint::Length(1),      // spacer
-            Constraint::Length(1),      // Edit Lyrics → button
+            Constraint::Length(1),      // Edit Lyrics -> button
             Constraint::Min(1),         // gap above the hints
             Constraint::Length(hint_h), // hints
         ])
@@ -1767,7 +1767,7 @@ fn render_edit_metadata(
     render_hints(frame, rows[8], &hints, theme);
 }
 
-// ── EditLyrics / tui-textarea renderer ────────────────────────────────────
+// -- EditLyrics / tui-textarea renderer ------------------------------------
 
 /// Creates a `TextArea` (lyrics editor) pre-populated with `raw`.
 pub fn make_lyrics_textarea(raw: &str) -> LyricsTextArea {

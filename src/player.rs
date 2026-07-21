@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-// ── Channel types ──────────────────────────────────────────────────────────
+// -- Channel types ----------------------------------------------------------
 
 /// Commands sent from the UI thread to the audio thread.
 #[derive(Debug)]
@@ -43,13 +43,13 @@ pub enum PlayerEvent {
     Error(String),
 }
 
-// ── Volume constants ───────────────────────────────────────────────────────
+// -- Volume constants -------------------------------------------------------
 
 const VOLUME_STEP: f32 = 0.01;
 const VOLUME_MIN: f32 = 0.0;
 const VOLUME_MAX: f32 = 1.0;
 
-// ── Handle (UI-side) ───────────────────────────────────────────────────────
+// -- Handle (UI-side) -------------------------------------------------------
 
 /// Owned by `AppState`.  Sends commands to the audio thread and receives
 /// events from it.  Also tracks UI-side volume and pause state so the UI
@@ -136,7 +136,7 @@ impl Drop for PlayerHandle {
     }
 }
 
-// ── Audio thread ───────────────────────────────────────────────────────────
+// -- Audio thread -----------------------------------------------------------
 
 /// Spawns the audio thread and returns a `PlayerHandle` for the UI thread.
 /// `default_volume` comes from `Settings` so both the handle shadow and the
@@ -281,7 +281,7 @@ fn handle_command(
     }
 }
 
-// ── Duration resolution ────────────────────────────────────────────────────
+// -- Duration resolution ----------------------------------------------------
 
 /// Checks that `path` can be opened and decoded as audio.
 /// Used to reject files up front (e.g. a CLI argument) before playback starts.
