@@ -13,7 +13,7 @@ use crate::library::{PlaylistId, TrackId};
 use crate::numeric::usize_to_u16_saturating;
 use crate::settings::ColorMode;
 use crate::ui::layout::{
-    Theme, cursor_spans, cursor_spans_windowed, format_duration, themes, truncate,
+    Theme, console_themes, cursor_spans, cursor_spans_windowed, format_duration, themes, truncate,
 };
 
 // -- Text-input widget ------------------------------------------------------
@@ -229,6 +229,9 @@ pub struct SettingsState {
     pub seek_secs: u64,
     pub preview_theme_idx: usize,
     pub transparent: bool,
+    /// Index into the 16-color console themes, previewed independently of
+    /// `preview_theme_idx` so neither choice clobbers the other.
+    pub preview_console_idx: usize,
     /// Editable color-mode preference (Auto / Truecolor / 16-color).
     pub color_mode: ColorMode,
     /// What truecolor auto-detection found; drives the banner and whether the
@@ -321,12 +324,14 @@ pub enum ModalConfirm {
         volume_pct: u32,
         seek_secs: u64,
         theme_name: String,
+        console_theme_name: String,
         transparent: bool,
         color_mode: ColorMode,
     },
     /// Apply a theme live during settings preview without closing the modal.
     PreviewTheme {
         theme_name: String,
+        console_theme_name: String,
         transparent: bool,
         color_mode: ColorMode,
     },
@@ -418,12 +423,13 @@ const SET_THEME: usize = 3;
 const SET_TRANSPARENCY: usize = 4;
 const SET_ROWS: usize = 5;
 
-/// Which rows accept input.  Theme and transparency are locked (and skipped by
-/// the cursor) whenever truecolor is not in effect, since the console fallback
-/// ignores both.
+/// Which rows accept input.  Every mode has themes to choose from, so only
+/// transparency is locked (and skipped by the cursor) without truecolor: the
+/// console themes leave the background at the terminal default, which is
+/// already whatever the terminal is.
 const fn settings_enabled(color_mode: ColorMode, detected: bool) -> [bool; SET_ROWS] {
     let tc = color_mode.truecolor(detected);
-    [true, true, true, tc, tc]
+    [true, true, true, true, tc]
 }
 
 fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
@@ -431,6 +437,7 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
     let preview = |s: &SettingsState| {
         ModalOutcome::Confirm(ModalConfirm::PreviewTheme {
             theme_name: themes()[s.preview_theme_idx].name.to_string(),
+            console_theme_name: console_themes()[s.preview_console_idx].name.to_string(),
             transparent: s.transparent,
             color_mode: s.color_mode,
         })
@@ -486,22 +493,22 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
                     ModalOutcome::Consumed
                 }
                 SET_COLOR_MODE => {
-                    s.color_mode = if left {
-                        s.color_mode.prev()
-                    } else {
-                        s.color_mode.next()
-                    };
+                    // Two states, so both directions are the same toggle.
+                    s.color_mode = s.color_mode.toggle(s.detected_truecolor);
                     preview(s)
                 }
                 SET_THEME => {
-                    if left {
-                        s.preview_theme_idx = s
-                            .preview_theme_idx
-                            .checked_sub(1)
-                            .unwrap_or_else(|| themes().len() - 1);
+                    // Cycle whichever palette is actually on screen.
+                    let (idx, len) = if s.color_mode.truecolor(s.detected_truecolor) {
+                        (&mut s.preview_theme_idx, themes().len())
                     } else {
-                        s.preview_theme_idx = (s.preview_theme_idx + 1) % themes().len();
-                    }
+                        (&mut s.preview_console_idx, console_themes().len())
+                    };
+                    *idx = if left {
+                        idx.checked_sub(1).unwrap_or(len - 1)
+                    } else {
+                        (*idx + 1) % len
+                    };
                     preview(s)
                 }
                 _ => {
@@ -516,6 +523,7 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
                 volume_pct: s.volume_pct,
                 seek_secs: s.seek_secs,
                 theme_name: themes()[s.preview_theme_idx].name.to_string(),
+                console_theme_name: console_themes()[s.preview_console_idx].name.to_string(),
                 transparent: s.transparent,
                 color_mode: s.color_mode,
             })
@@ -1164,12 +1172,7 @@ fn render_playlist_picker(
 
         frame.render_stateful_widget(
             List::new(items)
-                .highlight_style(
-                    Style::default()
-                        .fg(theme.text)
-                        .bg(theme.panel_bg)
-                        .add_modifier(Modifier::BOLD),
-                )
+                .highlight_style(theme.selection_style())
                 .highlight_symbol("> "),
             rows[2],
             &mut list_state,
@@ -1442,13 +1445,13 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
         theme,
     );
 
-    // Theme and transparency are locked when the console fallback is active.
-    let theme_name = themes()[view.preview_theme_idx].name;
-    let theme_value = if truecolor {
-        theme_cycle_display(theme_name, theme)
+    // Both modes have themes; only transparency depends on truecolor.
+    let theme_name = if truecolor {
+        themes()[view.preview_theme_idx].name
     } else {
-        locked_display("console", theme)
+        console_themes()[view.preview_console_idx].name
     };
+    let theme_value = theme_cycle_display(theme_name, theme);
     render_settings_row(
         frame,
         rows[5],
@@ -1493,14 +1496,20 @@ const fn settings_row_description(cursor: usize, truecolor: bool) -> &'static st
         SET_VOLUME => "Volume applied each time audium starts.",
         SET_SEEK => "How far the seek keys jump, in seconds.",
         SET_COLOR_MODE if truecolor => {
-            "Auto detects truecolor support; force a mode if detection is wrong."
+            "Auto follows what your terminal reports. Switch to 16-color if the colors look wrong."
         }
-        SET_COLOR_MODE => "Theme & transparency need truecolor. Set this to Truecolor to override.",
-        SET_THEME => "Color scheme for the interface.",
-        // SET_TRANSPARENCY
-        _ => {
+        SET_COLOR_MODE => {
+            "Auto follows what your terminal reports. Switch to Truecolor only if it does support it."
+        }
+        SET_THEME if truecolor => "Color scheme for the interface.",
+        SET_THEME => {
+            "Console themes track your terminal's own palette. Pick the one matching its background."
+        }
+        SET_TRANSPARENCY if truecolor => {
             "Shows the terminal background through the UI. Best with a transparent or blurred terminal."
         }
+        // SET_TRANSPARENCY, 16-color
+        _ => "Console themes already leave the background untouched, so there is nothing to blend.",
     }
 }
 

@@ -30,19 +30,21 @@ impl ColorMode {
         }
     }
 
-    pub const fn next(self) -> Self {
-        match self {
-            Self::Auto => Self::Truecolor,
-            Self::Truecolor => Self::Ansi16,
-            Self::Ansi16 => Self::Auto,
+    /// The only override worth offering, given what detection found: forcing
+    /// the mode detection already picked is indistinguishable from `Auto`.
+    pub const fn override_for(detected: bool) -> Self {
+        if detected {
+            Self::Ansi16
+        } else {
+            Self::Truecolor
         }
     }
 
-    pub const fn prev(self) -> Self {
+    /// Settings offers two states, so left and right are the same toggle.
+    pub const fn toggle(self, detected: bool) -> Self {
         match self {
-            Self::Auto => Self::Ansi16,
-            Self::Ansi16 => Self::Truecolor,
-            Self::Truecolor => Self::Auto,
+            Self::Auto => Self::override_for(detected),
+            _ => Self::Auto,
         }
     }
 
@@ -53,6 +55,10 @@ impl ColorMode {
             Self::Ansi16 => "16-color",
         }
     }
+}
+
+fn default_console_theme() -> String {
+    "console_dark".to_string()
 }
 
 /// Persistent user preferences.
@@ -68,9 +74,13 @@ pub struct Settings {
     pub default_volume: f32,
     /// How many seconds <- / -> seek by.
     pub seek_step_secs: u64,
-    /// Name of the active theme.  Must match one of the built-in theme names;
-    /// unknown values fall back to "dark" silently on load.
+    /// Name of the active truecolor theme.  Must match one of the built-in
+    /// theme names; unknown values fall back to "dark" silently on load.
     pub theme_name: String,
+    /// Name of the active 16-color console theme.  Kept separate from
+    /// `theme_name` so switching color modes does not overwrite either choice.
+    #[serde(default = "default_console_theme")]
+    pub console_theme_name: String,
     /// Whether background transparency is enabled.
     pub transparent: bool,
     /// How colors are selected.  `Auto` detects truecolor support and falls
@@ -85,6 +95,7 @@ impl Default for Settings {
             default_volume: 0.7,
             seek_step_secs: 1,
             theme_name: "dark".to_string(),
+            console_theme_name: default_console_theme(),
             transparent: false,
             color_mode: ColorMode::Auto,
         }
@@ -128,5 +139,9 @@ impl Settings {
 
     pub fn set_theme(&mut self, name: &str) {
         self.theme_name = name.to_string();
+    }
+
+    pub fn set_console_theme(&mut self, name: &str) {
+        self.console_theme_name = name.to_string();
     }
 }

@@ -100,12 +100,7 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     }
 
     frame.render_stateful_widget(
-        List::new(all_items).highlight_style(
-            Style::default()
-                .fg(t.text)
-                .bg(t.panel_bg)
-                .add_modifier(Modifier::BOLD),
-        ),
+        List::new(all_items).highlight_style(t.selection_style()),
         list_rect,
         &mut list_state,
     );

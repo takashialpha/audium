@@ -220,12 +220,7 @@ pub fn render_filepicker(frame: &mut Frame<'_>, picker: &FilePicker, theme: &The
 
     frame.render_stateful_widget(
         List::new(items)
-            .highlight_style(
-                Style::default()
-                    .fg(theme.text)
-                    .bg(theme.panel_bg)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .highlight_style(theme.selection_style())
             .highlight_symbol(""),
         list_rect,
         &mut list_state,

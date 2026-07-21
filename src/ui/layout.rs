@@ -126,6 +126,26 @@ impl Theme {
     pub fn apply_sidebar_bg(&self, style: Style) -> Style {
         self.apply_color(style, self.sidebar_bg)
     }
+
+    /// Style marking the selected row of a list.
+    ///
+    /// The RGB themes tint the row's background, which is legible because
+    /// `panel_bg` sits a shade off `bg`.  The console themes have no such
+    /// shade to spend: at 16 colors a mid-tone selection background wrecks
+    /// contrast from both sides, and leaving the row to a brighter foreground
+    /// alone gives only 2.3:1 against an unselected one, which on a real tty
+    /// is hard to pick out.  Reverse video swaps foreground and background
+    /// instead, so the row reads as a solid block whatever the palette is.
+    pub fn selection_style(&self) -> Style {
+        if self.ascii {
+            Style::default().add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default()
+                .fg(self.text)
+                .bg(self.panel_bg)
+                .add_modifier(Modifier::BOLD)
+        }
+    }
 }
 
 // -- Built-in themes --------------------------------------------------------
@@ -138,34 +158,91 @@ pub fn theme_by_name(name: &str) -> &'static Theme {
     THEMES.iter().find(|t| t.name == name).unwrap_or(&THEMES[0])
 }
 
-/// The 16-color fallback used when truecolor is not in effect.
+/// The 16-color fallbacks used when truecolor is not in effect.
 ///
-/// Built from named ANSI colors so it renders correctly on a real tty and
-/// inherits whatever palette the user has themed their console with.  All
-/// backgrounds are `Reset` (terminal default); selection contrast comes from
-/// bold/foreground, matching how the RGB themes highlight rows.  Kept out of
-/// `THEMES` so it never appears in the theme cycler.
-pub fn console_theme() -> &'static Theme {
-    &CONSOLE_THEME
+/// Tuned against the Linux console's actual default palette, which the kernel
+/// exposes at `/sys/module/vt/parameters/default_{red,grn,blu}`:
+///
+/// ```text
+/// 0 black    (  0,  0,  0)    8  darkgray     ( 85, 85, 85)
+/// 1 red      (170,  0,  0)    9  lightred     (255, 85, 85)
+/// 2 green    (  0,170,  0)    10 lightgreen   ( 85,255, 85)
+/// 3 yellow   (170, 85,  0)    11 lightyellow  (255,255, 85)
+/// 4 blue     (  0,  0,170)    12 lightblue    ( 85, 85,255)
+/// 5 magenta  (170,  0,170)    13 lightmagenta (255, 85,255)
+/// 6 cyan     (  0,170,170)    14 lightcyan    ( 85,255,255)
+/// 7 gray     (170,170,170)    15 white        (255,255,255)
+/// ```
+///
+/// Those values decide which color can appear on which background.  On black,
+/// blue is 1.6:1 and darkgray 2.8:1 -- both effectively unreadable.  On white,
+/// every bright variant collapses (lightyellow is 1.1:1, lightcyan 1.2:1), so
+/// the two themes share almost no colors.
+///
+/// Both themes keep `panel_bg` equal to `bg`, so panels are flat and the
+/// selected row is marked by foreground and weight rather than a background
+/// band.  A mid-tone selection background is tempting but wrecks contrast from
+/// both sides at this palette size: lightred on darkgray is 2.4:1, yellow on
+/// gray is 2.3:1.  The `>` marker plus a bold, brighter foreground carries the
+/// selection instead, which is what console programs generally do.
+///
+/// Kept out of `THEMES` so they never appear in the truecolor theme cycler.
+pub fn console_themes() -> &'static [Theme] {
+    &CONSOLE_THEMES
 }
 
-static CONSOLE_THEME: Theme = Theme {
-    name: "console",
-    bg: Color::Reset,
-    panel_bg: Color::Reset,
-    sidebar_bg: Color::Reset,
-    // Bright ANSI variants for higher contrast against a typical dark console.
-    accent: Color::LightCyan,
-    subtle: Color::Gray,
-    text: Color::White,
-    text_dim: Color::Gray,
-    now_playing: Color::LightGreen,
-    danger: Color::LightRed,
-    dir_col: Color::LightYellow,
-    vol_empty: Color::DarkGray,
-    transparent: false,
-    ascii: true,
-};
+/// Looks up a console theme by name, falling back to the dark one.
+pub fn console_theme_by_name(name: &str) -> &'static Theme {
+    CONSOLE_THEMES
+        .iter()
+        .find(|t| t.name == name)
+        .unwrap_or(&CONSOLE_THEMES[0])
+}
+
+static CONSOLE_THEMES: [Theme; 2] = [
+    // Default: a tty is black out of the box, so `bg` stays at the terminal's
+    // own color and every foreground is picked for contrast against black.
+    // Sixteen colors do not offer three legible neutral steps above black:
+    // darkgray is 2.8:1 and reads as black on a real tty, so it is not used at
+    // all here.  Dim text and hints therefore share one step below white, and
+    // the bar's empty remainder is told apart by its glyph (`-` against `#`)
+    // rather than by being dimmer.
+    Theme {
+        name: "console_dark",
+        bg: Color::Reset,
+        panel_bg: Color::Reset,
+        sidebar_bg: Color::Reset,
+        accent: Color::LightCyan,       // 17.1:1
+        subtle: Color::Gray,            //  9.0:1
+        text: Color::White,             // 21.0:1
+        text_dim: Color::Gray,          //  9.0:1
+        now_playing: Color::LightGreen, // 15.8:1
+        danger: Color::LightRed,        //  6.7:1
+        dir_col: Color::LightYellow,    // 19.7:1
+        vol_empty: Color::Gray,         //  9.0:1; darkgray reads as black on a tty
+        transparent: false,
+        ascii: true,
+    },
+    // For a light console.  `bg` is set explicitly rather than inherited:
+    // "light" has to paint the background white, or on a tty it renders black
+    // text on the console's black.  Only the dim ANSI variants survive here.
+    Theme {
+        name: "console_light",
+        bg: Color::White,
+        panel_bg: Color::White,
+        sidebar_bg: Color::White,
+        accent: Color::Blue,         // 13.3:1
+        subtle: Color::DarkGray,     //  7.5:1
+        text: Color::Black,          // 21.0:1
+        text_dim: Color::DarkGray,   //  7.5:1
+        now_playing: Color::Magenta, //  6.4:1 (green would be 3.1:1 here)
+        danger: Color::Red,          //  7.8:1
+        dir_col: Color::Yellow,      //  5.2:1 (renders as brown)
+        vol_empty: Color::DarkGray,  //  7.5:1; gray on white is only 2.3:1
+        transparent: false,
+        ascii: true,
+    },
+];
 
 static THEMES: [Theme; 15] = [
     // 1: dark (default)

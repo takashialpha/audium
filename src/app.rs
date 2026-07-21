@@ -17,7 +17,7 @@ use crate::{
     player::{PlayerEvent, PlayerHandle, resolve_duration, spawn_audio_thread},
     settings::{ColorMode, Settings},
     ui,
-    ui::layout::{Theme, console_theme, theme_by_name, themes},
+    ui::layout::{Theme, console_theme_by_name, console_themes, theme_by_name, themes},
 };
 
 // -- Terminal color detection -----------------------------------------------
@@ -44,16 +44,21 @@ fn detect_truecolor() -> bool {
 
 /// Resolves the live theme for the current color state.
 ///
-/// With truecolor active the selected RGB theme is used (honoring
-/// transparency); otherwise the named-ANSI console theme is substituted while
-/// the user's real theme choice is left untouched in settings.
-fn resolve_theme(theme_name: &str, transparent: bool, truecolor: bool) -> Theme {
+/// Each mode has its own saved choice, so switching between them never
+/// overwrites the other; transparency applies only to the RGB themes, whose
+/// backgrounds are real colors rather than the terminal default.
+fn resolve_theme(
+    theme_name: &str,
+    console_theme_name: &str,
+    transparent: bool,
+    truecolor: bool,
+) -> Theme {
     if truecolor {
         let mut t = theme_by_name(theme_name).clone();
         t.transparent = transparent;
         t
     } else {
-        console_theme().clone()
+        console_theme_by_name(console_theme_name).clone()
     }
 }
 
@@ -191,6 +196,7 @@ impl AppState {
     pub fn new(library: Library, player: PlayerHandle, settings: Settings) -> Self {
         let theme = resolve_theme(
             &settings.theme_name,
+            &settings.console_theme_name,
             settings.transparent,
             settings.color_mode.truecolor(detect_truecolor()),
         );
@@ -885,11 +891,16 @@ impl AppState {
             .iter()
             .position(|t| t.name == self.settings.theme_name.as_str())
             .unwrap_or(0);
+        let preview_console_idx = console_themes()
+            .iter()
+            .position(|t| t.name == self.settings.console_theme_name.as_str())
+            .unwrap_or(0);
         self.modal = Some(Modal::Settings(SettingsState {
             cursor: 0,
             volume_pct: vol_pct,
             seek_secs: self.settings.seek_step_secs,
             preview_theme_idx,
+            preview_console_idx,
             transparent: self.settings.transparent,
             color_mode: self.settings.color_mode,
             detected_truecolor: detect_truecolor(),
@@ -1208,23 +1219,27 @@ impl AppState {
                 volume_pct,
                 seek_secs,
                 theme_name,
+                console_theme_name,
                 transparent,
                 color_mode,
             } => self.apply_save_settings(
                 volume_pct,
                 seek_secs,
                 &theme_name,
+                &console_theme_name,
                 transparent,
                 color_mode,
             ),
 
             ModalConfirm::PreviewTheme {
                 theme_name,
+                console_theme_name,
                 transparent,
                 color_mode,
             } => {
                 let truecolor = color_mode.truecolor(detect_truecolor());
-                self.theme = resolve_theme(&theme_name, transparent, truecolor);
+                self.theme =
+                    resolve_theme(&theme_name, &console_theme_name, transparent, truecolor);
             }
 
             ModalConfirm::ShuffleView => {
@@ -1304,6 +1319,7 @@ impl AppState {
         volume_pct: u32,
         seek_secs: u64,
         theme_name: &str,
+        console_theme_name: &str,
         transparent: bool,
         color_mode: ColorMode,
     ) {
@@ -1311,11 +1327,13 @@ impl AppState {
             .set_default_volume(numeric::whole_percent_to_ratio(volume_pct));
         self.settings.set_seek_step_secs(seek_secs);
         self.settings.set_theme(theme_name);
+        self.settings.set_console_theme(console_theme_name);
         self.settings.transparent = transparent;
         self.settings.color_mode = color_mode;
         // Apply the resolved theme live (console fallback when not truecolor).
         self.theme = resolve_theme(
             theme_name,
+            console_theme_name,
             transparent,
             color_mode.truecolor(detect_truecolor()),
         );

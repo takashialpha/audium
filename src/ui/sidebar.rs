@@ -45,10 +45,16 @@ fn render_library(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
         state.library.tracks.len(),
         (inner.width as usize).saturating_sub(MARKER_W),
     );
+    // The library row is a paragraph rather than a list, so it has to apply the
+    // selection style itself to match how the list widgets mark their rows.
+    let mut style = row_style(t, is_active, selected);
+    if selected {
+        style = style.patch(t.selection_style());
+    }
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             format!("{}{label}", if selected { MARKER } else { "  " }),
-            row_style(t, is_active, selected),
+            style,
         ))),
         inner,
     );
@@ -89,12 +95,7 @@ fn render_playlists(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
 
     frame.render_stateful_widget(
         List::new(items)
-            .highlight_style(
-                Style::default()
-                    .fg(t.text)
-                    .bg(t.panel_bg)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .highlight_style(t.selection_style())
             .highlight_symbol(MARKER),
         inner,
         &mut list_state,

@@ -58,12 +58,9 @@ pub fn render_queue(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     }
 
     frame.render_stateful_widget(
-        List::new(items).block(block).highlight_style(
-            Style::default()
-                .fg(t.text)
-                .bg(t.panel_bg)
-                .add_modifier(Modifier::BOLD),
-        ),
+        List::new(items)
+            .block(block)
+            .highlight_style(t.selection_style()),
         area,
         &mut list_state,
     );
