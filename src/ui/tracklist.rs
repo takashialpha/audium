@@ -14,12 +14,7 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let t = &state.theme;
     let has_filter = state.filter_active || !state.tracklist_filter.is_empty();
 
-    let pl_name = state
-        .library
-        .playlist(state.active_playlist)
-        .map_or("Tracks", |p| p.name.as_str());
-
-    let title = format!(" {pl_name} ");
+    let title = format!(" {} ", state.active_view_name());
     let block = styled_block(&title, focused, t).style(t.apply_panel_bg(Style::default()));
     let inner = block.inner(area);
     frame.render_widget(block, area);

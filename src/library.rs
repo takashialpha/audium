@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use lofty::prelude::{Accessor, TaggedFileExt};
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -14,8 +15,22 @@ pub type TrackId = u64;
 /// Opaque, stable identifier for a playlist.  Auto-incremented; never reused.
 pub type PlaylistId = u64;
 
-/// The reserved id for the "All Tracks" virtual playlist.
-pub const ALL_TRACKS_ID: PlaylistId = 0;
+/// On-disk schema version of the index.
+///
+/// Bump this for any change that older audium versions cannot read, or that
+/// this version cannot read from an older file.  There is deliberately no
+/// migration path: [`Library::load`] sets an index of any other version aside
+/// and starts fresh, and the music directory is re-scanned so the tracks come
+/// back on their own.  Only playlists have to be rebuilt by hand.
+const FORMAT_VERSION: u32 = 1;
+
+/// Basename of the index inside the data directory.
+///
+/// Deliberately *not* `library.json`: every release up to 1.x wrote a
+/// different, incompatible schema under that name.  Using a name they never
+/// touched means neither version can read the other's file, so upgrading (or
+/// downgrading) can never half-load a foreign index.
+const INDEX_FILE: &str = "audium.json";
 
 // ── Track ──────────────────────────────────────────────────────────────────
 
@@ -29,7 +44,8 @@ pub struct Track {
     pub path: PathBuf,
 
     // Optional metadata read from file tags on import.
-    // All default to None so existing library.json files deserialize cleanly.
+    // All default to None so an index written before they existed still
+    // deserializes cleanly.
     #[serde(default)]
     pub artist: Option<String>,
     #[serde(default)]
@@ -122,8 +138,8 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
 
 /// A named, ordered collection of track references.
 ///
-/// The virtual "All Tracks" playlist (id == `ALL_TRACKS_ID`) is managed
-/// automatically by `Library` and cannot be deleted or renamed.
+/// A user-created playlist. The full library is not one of these -- it is
+/// `Library::tracks` itself, surfaced separately in the sidebar.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Playlist {
     pub id: PlaylistId,
@@ -147,28 +163,47 @@ impl Playlist {
 /// Top-level persistent state: a registry of tracks + a set of playlists.
 ///
 /// Invariants upheld at all times:
-///  - `playlists[0]` is always the "All Tracks" virtual playlist
-///    (`id == ALL_TRACKS_ID`).
+///  - Every playlist in `playlists` is user-created; the library as a whole is
+///    `tracks`, never a playlist entry.
 ///  - Every `TrackId` inside any playlist exists in `tracks`.
 ///  - `next_track_id` / `next_playlist_id` are strictly increasing.
+///  - `by_id` maps every track's id to its position in `tracks`.
+///
+/// `tracks` is public for iteration only.  Anything that adds or removes an
+/// entry must go through this type's methods, which keep `by_id` in step.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Library {
+    /// Schema version of this index; see [`FORMAT_VERSION`].
+    #[serde(default)]
+    version: u32,
+
     /// All registered tracks, keyed by insertion order.
     pub tracks: Vec<Track>,
-    /// All playlists (index 0 is always "All Tracks").
+    /// All user-created playlists.
     pub playlists: Vec<Playlist>,
 
     next_track_id: TrackId,
     next_playlist_id: PlaylistId,
+
+    /// `TrackId` -> index into `tracks`.  Derived state, never persisted:
+    /// without it every lookup is a linear scan, and the callers that resolve
+    /// a whole playlist do one scan *per track*.
+    ///
+    /// `FxHash` rather than std's `SipHash`: the key is a `u64` we generate
+    /// ourselves and this is read on every render.
+    #[serde(skip)]
+    by_id: FxHashMap<TrackId, usize>,
 }
 
 impl Default for Library {
     fn default() -> Self {
         Self {
+            version: FORMAT_VERSION,
             tracks: Vec::new(),
-            playlists: vec![Playlist::new(ALL_TRACKS_ID, "All Tracks")],
+            playlists: Vec::new(),
             next_track_id: 1,
-            next_playlist_id: 1, // 0 is reserved for ALL_TRACKS_ID
+            next_playlist_id: 1,
+            by_id: FxHashMap::default(),
         }
     }
 }
@@ -176,10 +211,36 @@ impl Default for Library {
 impl Library {
     // ── Filesystem paths ─────────────────────────────────────────────────
 
+    /// `$XDG_DATA_HOME/audium` -- the index and the imported audio files.
     pub fn data_dir() -> Result<PathBuf> {
-        xdg::BaseDirectories::with_prefix("audium")
+        Self::xdg()
             .create_data_directory("")
             .context("could not determine data directory")
+    }
+
+    /// The XDG base directories for audium, used for every path we touch.
+    fn xdg() -> xdg::BaseDirectories {
+        xdg::BaseDirectories::with_prefix("audium")
+    }
+
+    /// Highest-priority existing copy of a config file: `$XDG_CONFIG_HOME`
+    /// first, then each entry of `$XDG_CONFIG_DIRS`, so a distribution or
+    /// sysadmin can ship defaults under `/etc/xdg/audium/`.
+    ///
+    /// Returns `None` when no copy exists anywhere; creates nothing.
+    pub fn find_config_file(name: &str) -> Option<PathBuf> {
+        Self::xdg().find_config_file(name)
+    }
+
+    /// Where a config file is *written*: always `$XDG_CONFIG_HOME/audium`,
+    /// never a system directory. Creates the directory if needed.
+    ///
+    /// Config lives apart from the data directory so the spec's split holds:
+    /// config is hand-editable and portable, data is ours to manage.
+    pub fn place_config_file(name: &str) -> Result<PathBuf> {
+        Self::xdg()
+            .place_config_file(name)
+            .context("could not determine config directory")
     }
 
     pub fn music_dir() -> Result<PathBuf> {
@@ -187,27 +248,42 @@ impl Library {
     }
 
     fn index_path() -> Result<PathBuf> {
-        Ok(Self::data_dir()?.join("library.json"))
+        Ok(Self::data_dir()?.join(INDEX_FILE))
     }
 
     // ── Persistence ──────────────────────────────────────────────────────
 
-    /// Loads (or creates) the library from `$XDG_DATA_HOME/audium/library.json`.
+    /// Loads (or creates) the index from `$XDG_DATA_HOME/audium/audium.json`.
     /// Silently prunes tracks whose files have been deleted externally.
     pub fn load() -> Result<Self> {
         fs::create_dir_all(Self::data_dir()?)?;
         fs::create_dir_all(Self::music_dir()?)?;
 
+        // No index, or one this version cannot read, still falls through to the
+        // music-directory scan below rather than returning early -- that scan is
+        // what rebuilds the collection, so short-circuiting it would leave a
+        // fresh install (or a set-aside index) staring at an empty library with
+        // its files sitting right there.
         let index = Self::index_path()?;
-        if !index.exists() {
-            return Ok(Self::default());
+        let mut lib = if index.exists() {
+            let raw = fs::read_to_string(&index)
+                .with_context(|| format!("reading library index at {}", index.display()))?;
+            serde_json::from_str::<Self>(&raw)
+                .with_context(|| format!("parsing {INDEX_FILE}: the file may be corrupted"))?
+        } else {
+            Self::default()
+        };
+
+        // A foreign version is moved aside, never migrated and never deleted:
+        // the old file stays on disk if anything needs recovering from it by
+        // hand, and only playlists have to be rebuilt.
+        if lib.version != FORMAT_VERSION {
+            let aside = index.with_extension(format!("v{}.json", lib.version));
+            fs::rename(&index, &aside).with_context(|| {
+                format!("setting aside an unreadable index at {}", aside.display())
+            })?;
+            lib = Self::default();
         }
-
-        let raw = fs::read_to_string(&index)
-            .with_context(|| format!("reading library index at {}", index.display()))?;
-
-        let mut lib: Self = serde_json::from_str(&raw)
-            .with_context(|| "parsing library.json: the file may be corrupted")?;
 
         let mut changed = false;
 
@@ -228,7 +304,7 @@ impl Library {
         }
 
         // Remove tracks whose files no longer exist.
-        let mut removed = std::collections::HashSet::new();
+        let mut removed = FxHashSet::default();
         lib.tracks.retain(|t| {
             if t.path.exists() {
                 true
@@ -244,18 +320,10 @@ impl Library {
             }
         }
 
-        // Ensure the "All Tracks" virtual playlist is always at index 0.
-        if lib.playlists.is_empty() || lib.playlists[0].id != ALL_TRACKS_ID {
-            lib.playlists.retain(|pl| pl.id != ALL_TRACKS_ID);
-            let mut all = Playlist::new(ALL_TRACKS_ID, "All Tracks");
-            all.tracks = lib.tracks.iter().map(|t| t.id).collect();
-            lib.playlists.insert(0, all);
-        }
-
         // Re-import any audio files sitting in the music directory but not
         // registered in the library, e.g. left behind after tracks were
         // pruned due to a stale recorded path.
-        let known: std::collections::HashSet<PathBuf> = lib
+        let known: FxHashSet<PathBuf> = lib
             .tracks
             .iter()
             .filter_map(|t| t.path.canonicalize().ok())
@@ -276,11 +344,12 @@ impl Library {
 
                 let id = lib.next_track_id;
                 lib.next_track_id += 1;
-                lib.playlists[0].tracks.push(id);
                 lib.tracks.push(track_from_file(id, path));
                 changed = true;
             }
         }
+
+        lib.reindex();
 
         if changed {
             lib.save()?;
@@ -302,9 +371,8 @@ impl Library {
 
     // ── Track management ─────────────────────────────────────────────────
 
-    /// Copies `source` into `$XDG_DATA_HOME/audium/music/` (if not already there),
-    /// registers it in the library and in every playlist that auto-includes
-    /// all tracks (i.e., the virtual "All Tracks" playlist).
+    /// Copies `source` into `$XDG_DATA_HOME/audium/music/` (if not already
+    /// there) and registers it in the library.
     ///
     /// Returns `(track, is_new)`.  `is_new` is false if the file was already
     /// present (idempotent).
@@ -373,12 +441,8 @@ impl Library {
         self.next_track_id += 1;
 
         let track = track_from_file(id, dest);
+        self.by_id.insert(id, self.tracks.len());
         self.tracks.push(track.clone());
-
-        // Keep "All Tracks" in sync.
-        if let Some(all) = self.playlists.iter_mut().find(|p| p.id == ALL_TRACKS_ID) {
-            all.tracks.push(id);
-        }
 
         self.save()?;
         Ok((track, true))
@@ -390,18 +454,11 @@ impl Library {
         let before = self.tracks.len();
         self.tracks.retain(|t| t.id != id);
         if self.tracks.len() != before {
+            // Removal shifts every later index, so the whole map is rebuilt.
+            self.reindex();
             for pl in &mut self.playlists {
                 pl.tracks.retain(|&tid| tid != id);
             }
-            self.save()?;
-        }
-        Ok(())
-    }
-
-    /// Renames a track (display name only; does not touch the file).
-    pub fn rename_track(&mut self, id: TrackId, new_name: impl Into<String>) -> Result<()> {
-        if let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) {
-            t.name = new_name.into();
             self.save()?;
         }
         Ok(())
@@ -441,7 +498,18 @@ impl Library {
 
     /// Returns a reference to a track by id.
     pub fn track(&self, id: TrackId) -> Option<&Track> {
-        self.tracks.iter().find(|t| t.id == id)
+        self.by_id.get(&id).and_then(|&i| self.tracks.get(i))
+    }
+
+    /// Rebuilds [`Self::by_id`].  Call after anything reorders `tracks` or
+    /// changes its length; it is O(n) and those events are rare.
+    fn reindex(&mut self) {
+        self.by_id = self
+            .tracks
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (t.id, i))
+            .collect();
     }
 
     // ── Playlist management ──────────────────────────────────────────────
@@ -455,12 +523,8 @@ impl Library {
         Ok(id)
     }
 
-    /// Deletes a user playlist.  Silently ignores attempts to delete
-    /// "All Tracks" (id == `ALL_TRACKS_ID`).
+    /// Deletes a user playlist.
     pub fn delete_playlist(&mut self, id: PlaylistId) -> Result<()> {
-        if id == ALL_TRACKS_ID {
-            return Ok(());
-        }
         let before = self.playlists.len();
         self.playlists.retain(|p| p.id != id);
         if self.playlists.len() != before {
@@ -469,11 +533,8 @@ impl Library {
         Ok(())
     }
 
-    /// Renames a user playlist.  Silently ignores "All Tracks".
+    /// Renames a user playlist.
     pub fn rename_playlist(&mut self, id: PlaylistId, name: impl Into<String>) -> Result<()> {
-        if id == ALL_TRACKS_ID {
-            return Ok(());
-        }
         if let Some(pl) = self.playlists.iter_mut().find(|p| p.id == id) {
             pl.name = name.into();
             self.save()?;
@@ -492,6 +553,19 @@ impl Library {
         Ok(())
     }
 
+    /// Drops a track from one playlist; the track itself stays in the library.
+    pub fn playlist_remove_track(
+        &mut self,
+        playlist_id: PlaylistId,
+        track_id: TrackId,
+    ) -> Result<()> {
+        if let Some(pl) = self.playlists.iter_mut().find(|p| p.id == playlist_id) {
+            pl.tracks.retain(|&tid| tid != track_id);
+            self.save()?;
+        }
+        Ok(())
+    }
+
     /// Returns a reference to a playlist by id.
     pub fn playlist(&self, id: PlaylistId) -> Option<&Playlist> {
         self.playlists.iter().find(|p| p.id == id)
@@ -503,5 +577,69 @@ impl Library {
         self.playlist(playlist_id)
             .map(|pl| pl.tracks.iter().filter_map(|id| self.track(*id)).collect())
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn track(id: TrackId) -> Track {
+        Track {
+            id,
+            name: format!("t{id}"),
+            path: PathBuf::from(format!("/nonexistent/t{id}.mp3")),
+            artist: None,
+            album: None,
+            year: None,
+            genre: None,
+            lyrics: None,
+        }
+    }
+
+    fn library_of(ids: &[TrackId]) -> Library {
+        let mut lib = Library {
+            tracks: ids.iter().copied().map(track).collect(),
+            ..Default::default()
+        };
+        lib.reindex();
+        lib
+    }
+
+    #[test]
+    fn resolves_every_id_to_its_own_track() {
+        let lib = library_of(&[1, 2, 3, 7, 100]);
+        for id in [1, 2, 3, 7, 100] {
+            assert_eq!(lib.track(id).map(|t| t.id), Some(id), "id {id}");
+        }
+        assert!(lib.track(4).is_none(), "unknown id must not resolve");
+    }
+
+    /// A removal shifts the index of every later track, so a stale map would
+    /// silently return the wrong one rather than failing loudly.
+    #[test]
+    fn reindex_after_removal_keeps_ids_aligned() {
+        let mut lib = library_of(&[1, 2, 3, 4, 5]);
+        lib.tracks.retain(|t| t.id != 2);
+        lib.reindex();
+
+        assert!(lib.track(2).is_none(), "removed id still resolves");
+        for id in [1, 3, 4, 5] {
+            assert_eq!(
+                lib.track(id).map(|t| t.id),
+                Some(id),
+                "id {id} after removal"
+            );
+        }
+    }
+
+    /// Ids are assigned monotonically, but a hand-edited index may list them
+    /// in any order; lookup must not assume `tracks` is sorted.
+    #[test]
+    fn resolves_ids_listed_out_of_order() {
+        let lib = library_of(&[9, 4, 7, 1]);
+        for id in [9, 4, 7, 1] {
+            assert_eq!(lib.track(id).map(|t| t.id), Some(id), "id {id}");
+        }
     }
 }

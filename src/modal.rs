@@ -4,13 +4,17 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{
+        Block, BorderType, Borders, Clear, List, ListItem, ListState, Padding, Paragraph, Wrap,
+    },
 };
 
 use crate::library::{PlaylistId, TrackId};
 use crate::numeric::usize_to_u16_saturating;
 use crate::settings::ColorMode;
-use crate::ui::layout::{Theme, cursor_spans, format_duration, themes};
+use crate::ui::layout::{
+    Theme, cursor_spans, cursor_spans_windowed, format_duration, themes, truncate,
+};
 
 // ── Text-input widget ──────────────────────────────────────────────────────
 
@@ -199,9 +203,19 @@ pub type LyricsTextArea = TextArea;
 
 #[derive(Debug, Clone, Copy)]
 pub enum RemoveTarget {
-    TrackFromQueue { queue_idx: usize },
-    TrackFromLibrary { track_id: TrackId },
-    Playlist { playlist_id: PlaylistId },
+    TrackFromQueue {
+        queue_idx: usize,
+    },
+    TrackFromLibrary {
+        track_id: TrackId,
+    },
+    TrackFromPlaylist {
+        playlist_id: PlaylistId,
+        track_id: TrackId,
+    },
+    Playlist {
+        playlist_id: PlaylistId,
+    },
     Queue,
 }
 
@@ -233,9 +247,8 @@ pub enum Modal {
         description: String,
         target: RemoveTarget,
     },
-    Rename {
-        kind: String,
-        id: u64,
+    EditPlaylist {
+        id: PlaylistId,
         input: TextInput,
     },
     NewPlaylist {
@@ -250,9 +263,10 @@ pub enum Modal {
         cursor: usize,
     },
     Help,
-    ShufflePlaylist {
-        playlist_id: PlaylistId,
-        playlist_name: String,
+    /// Confirms shuffling the active view into the queue; the app resolves
+    /// which tracks that is when the confirmation comes back.
+    ShuffleView {
+        view_name: String,
     },
     /// Top-level menu: Settings / About / Quit.
     Menu {
@@ -291,9 +305,8 @@ pub enum ModalOutcome {
 #[derive(Debug)]
 pub enum ModalConfirm {
     Remove(RemoveTarget),
-    Rename {
-        kind: String,
-        id: u64,
+    RenamePlaylist {
+        id: PlaylistId,
         new_name: String,
     },
     NewPlaylist {
@@ -317,9 +330,7 @@ pub enum ModalConfirm {
         transparent: bool,
         color_mode: ColorMode,
     },
-    ShufflePlaylist {
-        playlist_id: PlaylistId,
-    },
+    ShuffleView,
     OpenSettings,
     OpenAbout,
     Quit,
@@ -685,10 +696,8 @@ impl Modal {
                 }
             }
 
-            Self::ShufflePlaylist { playlist_id, .. } => match confirm_key(code) {
-                Confirm::Yes => ModalOutcome::Confirm(ModalConfirm::ShufflePlaylist {
-                    playlist_id: *playlist_id,
-                }),
+            Self::ShuffleView { .. } => match confirm_key(code) {
+                Confirm::Yes => ModalOutcome::Confirm(ModalConfirm::ShuffleView),
                 Confirm::No => ModalOutcome::Dismissed,
                 Confirm::Ignore => ModalOutcome::Consumed,
             },
@@ -701,21 +710,21 @@ impl Modal {
                 Confirm::Ignore => ModalOutcome::Consumed,
             },
 
-            // Renaming edits existing data, so Enter and Esc both write the
-            // change; a blank name keeps the original (nothing is lost).
-            Self::Rename { kind, id, input } => match handle_text_key(input, code) {
-                TextInputResult::Submitted(name) => ModalOutcome::Confirm(ModalConfirm::Rename {
-                    kind: kind.clone(),
-                    id: *id,
-                    new_name: name,
-                }),
+            // Editing existing data, so Enter and Esc both write the change;
+            // a blank name keeps the original (nothing is lost).
+            Self::EditPlaylist { id, input } => match handle_text_key(input, code) {
+                TextInputResult::Submitted(name) => {
+                    ModalOutcome::Confirm(ModalConfirm::RenamePlaylist {
+                        id: *id,
+                        new_name: name,
+                    })
+                }
                 TextInputResult::Dismissed => {
                     let name = input.value.trim();
                     if name.is_empty() {
                         ModalOutcome::Dismissed
                     } else {
-                        ModalOutcome::Confirm(ModalConfirm::Rename {
-                            kind: kind.clone(),
+                        ModalOutcome::Confirm(ModalConfirm::RenamePlaylist {
                             id: *id,
                             new_name: name.to_string(),
                         })
@@ -766,22 +775,28 @@ pub fn render_modal(frame: &mut Frame<'_>, modal: &Modal, theme: &Theme) {
         Modal::ConfirmQuit => render_confirm(frame, "Quit audium?", theme),
         Modal::Menu { cursor } => render_menu(frame, *cursor, theme),
         Modal::ConfirmRemove { description, .. } => render_confirm(frame, description, theme),
-        Modal::Rename { kind, input, .. } => {
+        Modal::EditPlaylist { input, .. } => {
             render_text_input(
                 frame,
-                &format!("Rename {kind}"),
+                "Edit Playlist",
                 input,
-                "[Enter / Esc] rename",
+                &[hint("Enter / Esc", "save")],
                 theme,
             );
         }
         Modal::NewPlaylist { input, add_track } => {
-            let (title, hint) = if add_track.is_some() {
-                ("Add to New Playlist", "[Enter] create & add   [Esc] cancel")
+            let (title, create) = if add_track.is_some() {
+                ("Add to New Playlist", "create & add")
             } else {
-                ("New Playlist", "[Enter] create   [Esc] cancel")
+                ("New Playlist", "create")
             };
-            render_text_input(frame, title, input, hint, theme);
+            render_text_input(
+                frame,
+                title,
+                input,
+                &[hint("Enter", create), hint("Esc", "cancel")],
+                theme,
+            );
         }
         Modal::AddToPlaylist {
             track_name,
@@ -790,9 +805,9 @@ pub fn render_modal(frame: &mut Frame<'_>, modal: &Modal, theme: &Theme) {
             ..
         } => render_playlist_picker(frame, track_name, choices, *cursor, theme),
         Modal::Settings(state) => render_settings(frame, state, theme),
-        Modal::ShufflePlaylist { playlist_name, .. } => render_confirm(
+        Modal::ShuffleView { view_name } => render_confirm(
             frame,
-            &format!("Shuffle \"{playlist_name}\"? This will clear the current queue."),
+            &format!("Shuffle \"{view_name}\"? This will clear the current queue."),
             theme,
         ),
         Modal::EditMetadata {
@@ -817,8 +832,149 @@ fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     }
 }
 
-fn modal_block<'a>(title: &'a str, theme: &Theme) -> Block<'a> {
+/// Every modal is inset from its border by [`MODAL_PAD_X`] columns and
+/// [`MODAL_PAD_Y`] rows on all four sides.  Applying it here rather than in
+/// each renderer is what keeps the gap identical across dialogs: a renderer
+/// only ever lays out content, never its own margins.
+///
+/// Consequence for sizing: a modal's height is `content rows + 2 borders +
+/// 2 * MODAL_PAD_Y`, and its usable width is `width - 2 - 2 * MODAL_PAD_X`.
+pub const MODAL_PAD_X: u16 = 2;
+pub const MODAL_PAD_Y: u16 = 1;
+
+/// Rows and columns a modal spends on its border plus the inset above.
+pub const MODAL_CHROME_H: u16 = 2 + 2 * MODAL_PAD_Y;
+
+// ── Dialog hint footer ─────────────────────────────────────────────────────
+
+/// One key hint in a dialog footer.
+#[derive(Clone, Copy)]
+pub struct Hint<'a> {
+    key: &'a str,
+    action: &'a str,
+    /// Rendered in the danger color: this key destroys something.
+    danger: bool,
+}
+
+pub const fn hint<'a>(key: &'a str, action: &'a str) -> Hint<'a> {
+    Hint {
+        key,
+        action,
+        danger: false,
+    }
+}
+
+const fn danger_hint<'a>(key: &'a str, action: &'a str) -> Hint<'a> {
+    Hint {
+        key,
+        action,
+        danger: true,
+    }
+}
+
+/// Renders a dialog's hints as `[key] action` pairs joined by the theme
+/// separator, e.g. `[Tab] next field  ·  [Esc] close`.
+///
+/// The brackets carry the key/action boundary. Spacing alone cannot: a reader
+/// has no way to tell a wide gap *within* a pair from the gap *between* two,
+/// and the color difference disappears on a monochrome tty.
+///
+/// Wraps at whole pairs, never mid-pair, so a hint gains a row instead of
+/// being cut off. Size the dialog with [`hint_height`] first.
+fn hint_lines<'a>(hints: &[Hint<'a>], width: usize, theme: &Theme) -> Vec<Line<'a>> {
+    let sep = theme.glyphs().sep;
+    let sep_w = sep.chars().count();
+    let action_style = Style::default().fg(theme.subtle);
+
+    let mut lines: Vec<Line<'a>> = Vec::new();
+    let mut spans: Vec<Span<'a>> = Vec::new();
+    let mut used = 0usize;
+
+    for h in hints {
+        let pair_w = h.key.chars().count() + h.action.chars().count() + 3; // "[k] a"
+        let needed = if spans.is_empty() {
+            pair_w
+        } else {
+            pair_w + sep_w
+        };
+
+        if !spans.is_empty() && used + needed > width {
+            lines.push(Line::from(std::mem::take(&mut spans)));
+            used = 0;
+        }
+        if !spans.is_empty() {
+            spans.push(Span::styled(sep, action_style));
+            used += sep_w;
+        }
+
+        let key_style = if h.danger {
+            Style::default()
+                .fg(theme.danger)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme.accent)
+        };
+        spans.push(Span::styled(format!("[{}]", h.key), key_style));
+        spans.push(Span::styled(format!(" {}", h.action), action_style));
+        used += pair_w;
+    }
+
+    if !spans.is_empty() {
+        lines.push(Line::from(spans));
+    }
+    lines
+}
+
+/// Rows [`hint_lines`] will occupy at `width`.
+pub fn hint_height(hints: &[Hint<'_>], width: usize, theme: &Theme) -> u16 {
+    usize_to_u16_saturating(hint_lines(hints, width, theme).len())
+}
+
+/// Draws the hint footer centred in `area`.  Every dialog puts it at the
+/// bottom; see the UI conventions in the README.
+pub fn render_hints(frame: &mut Frame<'_>, area: Rect, hints: &[Hint<'_>], theme: &Theme) {
+    frame.render_widget(
+        Paragraph::new(hint_lines(hints, area.width as usize, theme)).alignment(Alignment::Center),
+        area,
+    );
+}
+
+/// Rows `text` occupies once wrapped to `width`, so a dialog can be sized
+/// from its message instead of reserving a fixed guess that clips anything
+/// longer.  Greedy whitespace wrapping, matching `Paragraph`'s.
+fn wrapped_height(text: &str, width: usize) -> u16 {
+    if width == 0 {
+        return 1;
+    }
+    let mut rows = 1usize;
+    let mut used = 0usize;
+    for word in text.split_whitespace() {
+        let w = word.chars().count();
+        if used == 0 {
+            used = w;
+        } else if used + 1 + w <= width {
+            used += 1 + w;
+        } else {
+            rows += 1;
+            used = w;
+        }
+    }
+    usize_to_u16_saturating(rows)
+}
+
+/// Usable content width inside a modal of total width `w`.
+const fn modal_inner_width(w: u16) -> usize {
+    (w.saturating_sub(2 + 2 * MODAL_PAD_X)) as usize
+}
+
+pub fn modal_block<'a>(title: &'a str, theme: &Theme) -> Block<'a> {
     Block::default()
+        .padding(Padding::new(
+            MODAL_PAD_X,
+            MODAL_PAD_X,
+            MODAL_PAD_Y,
+            MODAL_PAD_Y,
+        ))
         .title(format!(" {title} "))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
@@ -830,63 +986,13 @@ fn modal_block<'a>(title: &'a str, theme: &Theme) -> Block<'a> {
 // ── Individual renderers ───────────────────────────────────────────────────
 
 fn render_notification(frame: &mut Frame<'_>, title: &str, message: &str, theme: &Theme) {
-    let area = frame.area();
-    let rect = centered_rect(50, 7, area);
-    frame.render_widget(Clear, rect);
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(""),
-            Line::from(Span::styled(message, Style::default().fg(theme.text))),
-            Line::from(""),
-            Line::from(Span::styled(
-                "Press any key to dismiss",
-                Style::default().fg(theme.text_dim),
-            )),
-        ])
-        .alignment(Alignment::Center)
-        .wrap(Wrap { trim: false })
-        .block(modal_block(title, theme)),
-        rect,
-    );
-}
+    const WIDTH: u16 = 50;
+    let hints = [hint("any key", "dismiss")];
+    let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
+    let msg_h = wrapped_height(message, modal_inner_width(WIDTH));
 
-fn render_confirm(frame: &mut Frame<'_>, description: &str, theme: &Theme) {
     let area = frame.area();
-    let rect = centered_rect(52, 7, area);
-    frame.render_widget(Clear, rect);
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(""),
-            Line::from(Span::styled(description, Style::default().fg(theme.text))),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled(
-                    "[Y / Enter]",
-                    Style::default()
-                        .fg(theme.danger)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(" confirm    ", Style::default().fg(theme.text_dim)),
-                Span::styled("[N / Esc]", Style::default().fg(theme.accent)),
-                Span::styled(" cancel", Style::default().fg(theme.text_dim)),
-            ]),
-        ])
-        .alignment(Alignment::Center)
-        .wrap(Wrap { trim: true })
-        .block(modal_block("Confirm", theme)),
-        rect,
-    );
-}
-
-fn render_text_input(
-    frame: &mut Frame<'_>,
-    title: &str,
-    input: &TextInput,
-    hint: &str,
-    theme: &Theme,
-) {
-    let area = frame.area();
-    let rect = centered_rect(52, 7, area);
+    let rect = centered_rect(WIDTH, msg_h + 1 + hint_h + MODAL_CHROME_H, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block(title, theme);
@@ -896,9 +1002,81 @@ fn render_text_input(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
+            Constraint::Length(msg_h),  // message
+            Constraint::Length(1),      // gap above the hints
+            Constraint::Length(hint_h), // hints
+        ])
+        .split(inner);
+
+    frame.render_widget(
+        Paragraph::new(Span::styled(message, Style::default().fg(theme.text)))
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: false }),
+        rows[0],
+    );
+    render_hints(frame, rows[2], &hints, theme);
+}
+
+fn render_confirm(frame: &mut Frame<'_>, description: &str, theme: &Theme) {
+    const WIDTH: u16 = 52;
+    let hints = [
+        danger_hint("Y / Enter", "confirm"),
+        hint("N / Esc", "cancel"),
+    ];
+    let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
+    let msg_h = wrapped_height(description, modal_inner_width(WIDTH));
+
+    let area = frame.area();
+    let rect = centered_rect(WIDTH, msg_h + 1 + hint_h + MODAL_CHROME_H, area);
+    frame.render_widget(Clear, rect);
+
+    let block = modal_block("Confirm", theme);
+    let inner = block.inner(rect);
+    frame.render_widget(block, rect);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(msg_h),  // message
+            Constraint::Length(1),      // gap above the hints
+            Constraint::Length(hint_h), // hints
+        ])
+        .split(inner);
+
+    frame.render_widget(
+        Paragraph::new(Span::styled(description, Style::default().fg(theme.text)))
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true }),
+        rows[0],
+    );
+    render_hints(frame, rows[2], &hints, theme);
+}
+
+fn render_text_input(
+    frame: &mut Frame<'_>,
+    title: &str,
+    input: &TextInput,
+    hints: &[Hint<'_>],
+    theme: &Theme,
+) {
+    const WIDTH: u16 = 52;
+    let hint_h = hint_height(hints, modal_inner_width(WIDTH), theme);
+
+    let area = frame.area();
+    let rect = centered_rect(WIDTH, 3 + hint_h + MODAL_CHROME_H, area);
+    frame.render_widget(Clear, rect);
+
+    let block = modal_block(title, theme);
+    let inner = block.inner(rect);
+    frame.render_widget(block, rect);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),      // label
+            Constraint::Length(1),      // input
+            Constraint::Length(1),      // spacer
+            Constraint::Length(hint_h), // hints
         ])
         .split(inner);
 
@@ -911,14 +1089,16 @@ fn render_text_input(
     );
 
     frame.render_widget(
-        Paragraph::new(Line::from(cursor_spans(&input.value, input.cursor, theme))),
+        Paragraph::new(Line::from(cursor_spans_windowed(
+            &input.value,
+            input.cursor,
+            rows[1].width as usize,
+            theme,
+        ))),
         rows[1],
     );
 
-    frame.render_widget(
-        Paragraph::new(Span::styled(hint, Style::default().fg(theme.subtle))),
-        rows[2],
-    );
+    render_hints(frame, rows[3], hints, theme);
 }
 
 fn render_playlist_picker(
@@ -928,9 +1108,18 @@ fn render_playlist_picker(
     cursor: usize,
     theme: &Theme,
 ) {
+    const WIDTH: u16 = 52;
     let area = frame.area();
-    let height = (usize_to_u16_saturating(choices.len()) + 6).min(area.height.saturating_sub(4));
-    let rect = centered_rect(52, height, area);
+    // track name + spacer + one row per choice + gap + hints, plus the chrome.
+    let hints = [
+        hint("Enter", "add"),
+        hint("j/k", "navigate"),
+        hint("Esc", "cancel"),
+    ];
+    let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
+    let height = (usize_to_u16_saturating(choices.len()) + 3 + hint_h + MODAL_CHROME_H)
+        .min(area.height.saturating_sub(4));
+    let rect = centered_rect(WIDTH, height, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Add to Playlist", theme);
@@ -940,10 +1129,11 @@ fn render_playlist_picker(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(0),
-            Constraint::Length(1),
+            Constraint::Length(1),      // track name
+            Constraint::Length(1),      // spacer
+            Constraint::Min(0),         // choices
+            Constraint::Length(1),      // gap above the hints
+            Constraint::Length(hint_h), // hints
         ])
         .split(inner);
 
@@ -986,28 +1176,14 @@ fn render_playlist_picker(
         );
     }
 
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            "[Enter] add  [j/k] navigate  [Esc] cancel",
-            Style::default().fg(theme.subtle),
-        )),
-        rows[3],
-    );
+    render_hints(frame, rows[4], &hints, theme);
 }
 
 fn render_help(frame: &mut Frame<'_>, theme: &Theme) {
-    let area = frame.area();
-    let rect = centered_rect(60, 38, area);
-    frame.render_widget(Clear, rect);
-
-    let block = modal_block("Help: Keybindings", theme);
-    let inner = block.inner(rect);
-    frame.render_widget(block, rect);
-
     let bindings: &[(&str, &str)] = &[
         ("q", "Quit"),
-        ("Tab", "Cycle panel focus"),
-        ("?", "Toggle this help"),
+        ("Tab / S-Tab", "Next / previous panel"),
+        ("?", "Toggle this list"),
         ("", ""),
         ("j / Down", "Move cursor down"),
         ("k / Up", "Move cursor up"),
@@ -1024,22 +1200,36 @@ fn render_help(frame: &mut Frame<'_>, theme: &Theme) {
         ("[  /  ]", "Speed down / up"),
         ("", ""),
         ("Enter", "Play selected track"),
-        ("a", "Add track to queue"),
+        ("a", "Add selected track / list to queue"),
         ("p", "Add track to playlist"),
         ("d", "Remove selected item"),
         ("D", "Clear queue"),
-        ("r", "Rename track / playlist"),
-        ("e", "Edit track metadata & lyrics"),
+        ("e", "Edit selected track / playlist"),
         ("y", "Toggle lyrics overlay"),
         ("", ""),
         ("c", "Create new playlist"),
-        ("z", "Shuffle playlist into queue"),
+        ("z", "Shuffle current view into queue"),
         ("", ""),
         ("f", "Open file picker"),
         ("/", "Filter tracklist"),
         ("", ""),
         ("m", "Open menu"),
     ];
+
+    // Height follows the table, so it cannot drift when a key is added or
+    // removed and leave a lopsided gap at the bottom.
+    let area = frame.area();
+    let height = usize_to_u16_saturating(bindings.len()).saturating_add(MODAL_CHROME_H);
+    let rect = centered_rect(60, height, area);
+    frame.render_widget(Clear, rect);
+
+    let block = modal_block("Keybindings", theme);
+    let inner = block.inner(rect);
+    frame.render_widget(block, rect);
+
+    // Size the key column to the widest key so no row can push its description
+    // out of alignment.
+    let key_w = bindings.iter().map(|(key, _)| key.len()).max().unwrap_or(0);
 
     let items: Vec<Line<'_>> = bindings
         .iter()
@@ -1048,7 +1238,10 @@ fn render_help(frame: &mut Frame<'_>, theme: &Theme) {
                 Line::from("")
             } else {
                 Line::from(vec![
-                    Span::styled(format!("  {key:>10}  "), Style::default().fg(theme.accent)),
+                    Span::styled(
+                        format!("{key:>key_w$}  "),
+                        Style::default().fg(theme.accent),
+                    ),
                     Span::styled(*desc, Style::default().fg(theme.text_dim)),
                 ])
             }
@@ -1059,8 +1252,17 @@ fn render_help(frame: &mut Frame<'_>, theme: &Theme) {
 }
 
 fn render_menu(frame: &mut Frame<'_>, cursor: usize, theme: &Theme) {
+    // Wide enough that the hint footer wraps to two rows, not three, which
+    // would leave this small dialog bottom-heavy.
+    const WIDTH: u16 = 40;
     let area = frame.area();
-    let rect = centered_rect(32, 9, area);
+    let hints = [
+        hint("j/k", "navigate"),
+        hint("Enter", "select"),
+        hint("Esc", "close"),
+    ];
+    let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
+    let rect = centered_rect(WIDTH, 4 + hint_h + MODAL_CHROME_H, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Menu", theme);
@@ -1072,12 +1274,11 @@ fn render_menu(frame: &mut Frame<'_>, cursor: usize, theme: &Theme) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // spacer
-            Constraint::Length(1), // Settings
-            Constraint::Length(1), // About
-            Constraint::Length(1), // Quit
-            Constraint::Min(0),    // padding
-            Constraint::Length(1), // hint
+            Constraint::Length(1),      // Settings
+            Constraint::Length(1),      // About
+            Constraint::Length(1),      // Quit
+            Constraint::Min(1),         // gap above the hints
+            Constraint::Length(hint_h), // hints
         ])
         .split(inner);
 
@@ -1100,21 +1301,15 @@ fn render_menu(frame: &mut Frame<'_>, cursor: usize, theme: &Theme) {
                     },
                 ),
             ])),
-            rows[1 + i],
+            rows[i],
         );
     }
 
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            "j/k  navigate   Enter  select   Esc  close",
-            Style::default().fg(theme.subtle),
-        ))
-        .alignment(Alignment::Center),
-        rows[5],
-    );
+    render_hints(frame, rows[4], &hints, theme);
 }
 
 fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
+    const WIDTH: u16 = 64;
     // Single pure-ASCII logo, rendered the same on every terminal.
     const LOGO: [&str; 7] = [
         "                          mm     ##                       ",
@@ -1126,8 +1321,12 @@ fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
         " \"\"\"\" \"\"   \"\"\"\" \"\"    \"\"\" \"\"  \"\"\"\"\"\"\"\"   \"\"\"\" \"\"  \"\" \"\" \"\"",
     ];
 
+    let hints = [hint("any key", "close")];
+    let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
+
     let area = frame.area();
-    let rect = centered_rect(64, 17, area);
+    // logo(7) + spacer + 4 meta rows + spacer, then the hints.
+    let rect = centered_rect(WIDTH, 13 + hint_h + MODAL_CHROME_H, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("About", theme);
@@ -1137,15 +1336,14 @@ fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // top margin
-            Constraint::Length(7), // logo
-            Constraint::Length(1), // spacer
-            Constraint::Length(1), // version
-            Constraint::Length(1), // author
-            Constraint::Length(1), // license
-            Constraint::Length(1), // repo
-            Constraint::Min(0),    // bottom gap
-            Constraint::Length(1), // hint
+            Constraint::Length(7),      // logo
+            Constraint::Length(1),      // spacer
+            Constraint::Length(1),      // version
+            Constraint::Length(1),      // author
+            Constraint::Length(1),      // license
+            Constraint::Length(1),      // repo
+            Constraint::Min(1),         // gap above the hints
+            Constraint::Length(hint_h), // hints
         ])
         .split(inner);
 
@@ -1160,7 +1358,7 @@ fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
             ))
         })
         .collect();
-    frame.render_widget(Paragraph::new(logo).alignment(Alignment::Center), rows[1]);
+    frame.render_widget(Paragraph::new(logo).alignment(Alignment::Center), rows[0]);
 
     let version = env!("CARGO_PKG_VERSION");
     let meta: [(&str, &str); 4] = [
@@ -1173,28 +1371,28 @@ fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
     for (i, (label, value)) in meta.iter().enumerate() {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(format!("  {label:>8}  "), Style::default().fg(theme.subtle)),
+                Span::styled(format!("{label:>8}  "), Style::default().fg(theme.subtle)),
                 Span::styled(*value, Style::default().fg(theme.text)),
             ])),
-            rows[3 + i],
+            rows[2 + i],
         );
     }
 
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            "Press any key to close",
-            Style::default().fg(theme.subtle),
-        ))
-        .alignment(Alignment::Center),
-        rows[8],
-    );
+    render_hints(frame, rows[7], &hints, theme);
 }
 
 fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
+    const WIDTH: u16 = 60;
     let truecolor = view.color_mode.truecolor(view.detected_truecolor);
     let area = frame.area();
-    // border(2) + banner(1) + hint(1) + spacer(1) + 5×row(3) + footnote(2) = 20 inner → 22
-    let rect = centered_rect(60, 22, area);
+    let hints = [
+        hint("j/k", "select"),
+        hint("h/l", "adjust"),
+        hint("Enter / Esc", "close"),
+    ];
+    let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
+    // banner(1) + spacer(1) + 5×row(3) + footnote(2) + spacer(1), then hints.
+    let rect = centered_rect(WIDTH, 20 + hint_h + MODAL_CHROME_H, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Settings", theme);
@@ -1204,23 +1402,24 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // banner
-            Constraint::Length(1), // hint
-            Constraint::Length(1), // spacer
-            Constraint::Length(3), // volume
-            Constraint::Length(3), // seek
-            Constraint::Length(3), // color mode
-            Constraint::Length(3), // theme
-            Constraint::Length(3), // transparency
-            Constraint::Length(2), // footnote (wraps to 2 lines)
+            Constraint::Length(1),      // banner
+            Constraint::Length(1),      // spacer
+            Constraint::Length(3),      // volume
+            Constraint::Length(3),      // seek
+            Constraint::Length(3),      // color mode
+            Constraint::Length(3),      // theme
+            Constraint::Length(3),      // transparency
+            Constraint::Length(2),      // footnote (wraps to 2 lines)
+            Constraint::Min(1),         // gap above the hints
+            Constraint::Length(hint_h), // hints
         ])
         .split(inner);
 
-    render_settings_header(frame, rows[0], rows[1], view, theme);
+    render_settings_header(frame, rows[0], view, theme);
 
     render_settings_row(
         frame,
-        rows[3],
+        rows[2],
         "Default volume",
         view.cursor == SET_VOLUME,
         volume_bar(view.volume_pct, theme),
@@ -1228,7 +1427,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     );
     render_settings_row(
         frame,
-        rows[4],
+        rows[3],
         "Seek step",
         view.cursor == SET_SEEK,
         seek_display(view.seek_secs, theme),
@@ -1236,7 +1435,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     );
     render_settings_row(
         frame,
-        rows[5],
+        rows[4],
         "Color mode",
         view.cursor == SET_COLOR_MODE,
         color_mode_display(view.color_mode, theme),
@@ -1252,7 +1451,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     };
     render_settings_row(
         frame,
-        rows[6],
+        rows[5],
         "Theme",
         view.cursor == SET_THEME,
         theme_value,
@@ -1266,7 +1465,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     };
     render_settings_row(
         frame,
-        rows[7],
+        rows[6],
         "Terminal transparency",
         view.cursor == SET_TRANSPARENCY,
         transparency_value,
@@ -1282,8 +1481,10 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
         ))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true }),
-        rows[8],
+        rows[7],
     );
+
+    render_hints(frame, rows[9], &hints, theme);
 }
 
 /// One-line description of a settings row, shown in the footnote when selected.
@@ -1307,7 +1508,6 @@ const fn settings_row_description(cursor: usize, truecolor: bool) -> &'static st
 fn render_settings_header(
     frame: &mut Frame<'_>,
     banner_area: Rect,
-    hint_area: Rect,
     view: &SettingsState,
     theme: &Theme,
 ) {
@@ -1319,14 +1519,6 @@ fn render_settings_header(
         ))
         .alignment(Alignment::Center),
         banner_area,
-    );
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            "j/k select   h/l adjust   Enter/Esc close",
-            Style::default().fg(theme.text_dim),
-        ))
-        .alignment(Alignment::Center),
-        hint_area,
     );
 }
 
@@ -1486,14 +1678,24 @@ fn render_metadata_field(
 
     if is_active {
         frame.render_widget(
-            Paragraph::new(Line::from(cursor_spans(&input.value, input.cursor, theme))),
+            Paragraph::new(Line::from(cursor_spans_windowed(
+                &input.value,
+                input.cursor,
+                cols[1].width as usize,
+                theme,
+            ))),
             cols[1],
         );
     } else {
+        // Inactive fields have no cursor to follow, so a long value is marked
+        // as clipped rather than silently cut off at the border.
         let (text, style) = if input.value.is_empty() {
-            ("-", Style::default().fg(theme.subtle))
+            ("-".to_string(), Style::default().fg(theme.subtle))
         } else {
-            (input.value.as_str(), Style::default().fg(theme.text_dim))
+            (
+                truncate(&input.value, cols[1].width as usize),
+                Style::default().fg(theme.text_dim),
+            )
         };
         frame.render_widget(Paragraph::new(Span::styled(text, style)), cols[1]);
     }
@@ -1527,8 +1729,15 @@ fn render_edit_metadata(
     active_field: usize,
     theme: &Theme,
 ) {
+    const WIDTH: u16 = 62;
     let area = frame.area();
-    let rect = centered_rect(62, 14, area);
+    let hints = [
+        hint("Tab", "next field"),
+        hint("arrows", "move cursor"),
+        hint("Esc / Enter", "close"),
+    ];
+    let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
+    let rect = centered_rect(WIDTH, 8 + hint_h + MODAL_CHROME_H, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Edit Track", theme);
@@ -1538,33 +1747,24 @@ fn render_edit_metadata(
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // nav hint
-            Constraint::Length(1), // spacer
-            Constraint::Length(1), // Name
-            Constraint::Length(1), // Artist
-            Constraint::Length(1), // Album
-            Constraint::Length(1), // Year
-            Constraint::Length(1), // Genre
-            Constraint::Length(1), // Edit Lyrics → button
-            Constraint::Min(0),    // padding
+            Constraint::Length(1),      // Name
+            Constraint::Length(1),      // Artist
+            Constraint::Length(1),      // Album
+            Constraint::Length(1),      // Year
+            Constraint::Length(1),      // Genre
+            Constraint::Length(1),      // spacer
+            Constraint::Length(1),      // Edit Lyrics → button
+            Constraint::Min(1),         // gap above the hints
+            Constraint::Length(hint_h), // hints
         ])
         .split(inner);
 
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            "Tab  next field    arrows  move cursor    Esc/Enter  close",
-            Style::default().fg(theme.subtle),
-        ))
-        .alignment(Alignment::Center),
-        rows[0],
-    );
-
-    // Text input fields (rows 0-4)
     for (i, (label, input)) in META_LABELS.iter().zip(fields.iter()).enumerate() {
-        render_metadata_field(frame, rows[2 + i], label, input, active_field == i, theme);
+        render_metadata_field(frame, rows[i], label, input, active_field == i, theme);
     }
 
-    render_edit_lyrics_button(frame, rows[7], active_field == 5, theme);
+    render_edit_lyrics_button(frame, rows[6], active_field == 5, theme);
+    render_hints(frame, rows[8], &hints, theme);
 }
 
 // ── EditLyrics / tui-textarea renderer ────────────────────────────────────
@@ -1585,33 +1785,37 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
+    let hints = [
+        hint("arrows", "navigate"),
+        hint("Home/End", "line start/end"),
+        hint("Enter", "new line"),
+        hint("Backspace", "delete"),
+        hint("Esc", "save"),
+    ];
+    let hint_h = hint_height(&hints, inner.width as usize, theme);
+
     let splits = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),
-            Constraint::Min(0),
-            Constraint::Length(1),
+            Constraint::Min(0),         // editor
+            Constraint::Length(1),      // gap below the editor
+            Constraint::Length(1),      // LRC format note
+            Constraint::Length(hint_h), // hints
         ])
         .split(inner);
 
+    // Not a keybinding, so it sits above the footer rather than inside it.
     frame.render_widget(
         Paragraph::new(Span::styled(
-            "arrows  navigate    Home/End  line start/end",
-            Style::default().fg(theme.subtle),
-        ))
-        .alignment(Alignment::Center),
-        splits[0],
-    );
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            "Enter  new line   Backspace  delete   LRC: [mm:ss.xx] lyric   Esc  save",
+            "synced lyrics: prefix a line with [mm:ss.xx]",
             Style::default().fg(theme.subtle),
         ))
         .alignment(Alignment::Center),
         splits[2],
     );
+    render_hints(frame, splits[3], &hints, theme);
 
-    let visible = usize::from(splits[1].height);
+    let visible = usize::from(splits[0].height);
     let scroll = textarea
         .cursor_row
         .saturating_sub(visible.saturating_sub(1))
@@ -1635,5 +1839,5 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
         })
         .collect();
 
-    frame.render_widget(Paragraph::new(items), splits[1]);
+    frame.render_widget(Paragraph::new(items), splits[0]);
 }

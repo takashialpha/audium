@@ -42,15 +42,15 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 - **Keyboard-driven:** built to be driven entirely from the keyboard, for people who live in the terminal and never reach for the mouse. Press `?` in-app to see every keybinding.
 - **Library & metadata:** import through the built-in file picker; artist, album, year and genre are read from tags automatically and editable in-app.
 - **Lyrics:** store plain text or LRC synced lyrics per track. An overlay auto-scrolls synced lyrics to the current line, with a built-in editor.
-- **It's your library:** your tracks are stored as plain JSON at `$XDG_DATA_HOME/audium/library.json` (typically `~/.local/share/audium/library.json`). Edit it by hand, back it up, move it anywhere. audium doesn't rename your files and never phones home.
+- **It's your library:** your tracks are stored as plain JSON at `$XDG_DATA_HOME/audium/audium.json` (typically `~/.local/share/audium/audium.json`). Edit it by hand, back it up, move it anywhere. audium doesn't rename your files and never phones home.
 - **Themes:** 15 built-in truecolor themes (nord, gruvbox, catppuccin, rosé pine, dracula, tokyo night, and more). Switch live with instant preview. Optional background transparency for composited terminals.
 - **Adapts to your terminal:** detects truecolor support and, on a bare Linux console (tty) or any terminal without it, automatically falls back to a crisp 16-color theme with ASCII-only glyphs so the UI stays readable everywhere. The settings menu shows what it detected and lets you force the color mode if the guess is wrong.
-- **Playlists & queue:** create, rename and delete playlists, shuffle them into the queue, and pick a loop mode.
+- **Library and playlists:** your whole collection and your playlists are separate things, in their own panels. Create, rename and delete playlists, queue or shuffle either one, and pick a loop mode.
 - **Playback control:** filter the tracklist in real time, adjust playback speed and seek freely.
 - **Threaded audio:** playback runs on its own thread; the UI never stutters your music.
 - **System audio output:** audium plays through your default system output. Change the output device in your OS and audium follows, no in-app device switching, no surprises.
-- **Format agnostic:** MP3, FLAC, OGG, WAV, AAC, M4A, Opus, AIFF and more via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
-- **Tiny binary:** ~3 MB stripped release build.
+- **Format agnostic:** MP3, MP2, FLAC, OGG/Vorbis, WAV, AAC, M4A and AIFF via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
+- **Tiny binary:** ~4 MB stripped release build.
 - **100% safe Rust:** zero `unsafe` blocks in the codebase.
 
 ---
@@ -86,8 +86,6 @@ audium
 audium path/to/song.flac
 ```
 
-audium stores your library at `$XDG_DATA_HOME/audium/library.json` and your music at `$XDG_DATA_HOME/audium/music/` (typically under `~/.local/share/audium/`).
-
 ---
 
 ## Building from source
@@ -119,13 +117,33 @@ sudo dnf install alsa-utils alsa-lib-devel
 ## Library layout
 
 ```
-$XDG_DATA_HOME/audium/   # typically ~/.local/share/audium/
-├── library.json   # track registry + playlists
-├── settings.json  # user preferences (volume, seek step, theme, transparency, color mode)
+$XDG_DATA_HOME/audium/     # typically ~/.local/share/audium/
+├── audium.json    # track registry + playlists
 └── music/         # copies of all imported audio files
+
+$XDG_CONFIG_HOME/audium/   # typically ~/.config/audium/
+└── settings.json  # user preferences (volume, seek step, theme, transparency, color mode)
 ```
 
-`library.json` is human-readable and editable by hand. audium re-validates it on next launch, so feel free to reorganise playlists, fix track names, or move the file to another machine.
+`audium.json` is human-readable and editable by hand. audium re-validates it on next launch, so feel free to reorganise playlists, fix track names, or move the file to another machine.
+
+It carries a `version` field, and audium **never migrates an index it cannot read**. Anything unrecognised is renamed to `audium.v<n>.json` and left in place; the collection is then rebuilt by re-scanning `music/`. Nothing is ever deleted.
+
+### Upgrading
+
+The same procedure applies to every upgrade, from any version, and to downgrades:
+
+1. Make sure your audio files are in `$XDG_DATA_HOME/audium/music/`. If you are coming from a version that stored them elsewhere (very early releases used `~/.audium/music/`), copy them there first.
+2. Start audium. Every file in `music/` is re-imported, with its name and metadata read back from the file's own tags.
+3. Recreate your playlists, and anything you had edited in-app.
+
+What is lost is whatever lived *only* in the index: your playlists, plus any track name, metadata or lyrics you edited inside audium rather than in the file's tags. Your old index file is left on disk untouched: open it to see what it held, then delete it once you're done.
+
+Preferences are not carried over either: `settings.json` moved from the data directory to `$XDG_CONFIG_HOME/audium/` in this release.
+
+Old files audium no longer reads, safe to remove by hand: `$XDG_DATA_HOME/audium/settings.json`, `library.json`, `~/.audium/`, and any `audium.v<n>.json`.
+
+2.0 is a clean break in every one of these: the index filename, its schema, where preferences live, and several keybindings. That is what the major version marks.
 
 ---
 
@@ -147,3 +165,52 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 
 Issues and pull requests are welcome.
 Please open an issue before starting work on a large change.
+
+### Hashing
+
+Use `rustc_hash::FxHashMap` / `FxHashSet` throughout; there are no
+`std::collections` hash containers left in the tree. FxHash is materially
+faster than std's SipHash for the small keys audium hashes (`TrackId` is a
+`u64`), and every key is locally generated — track ids and paths under our own
+music directory — so std's DoS resistance buys nothing here. Keeping one
+hasher project-wide also means no one has to wonder why two exist.
+
+### UI conventions
+
+**Modal spacing is centralised, never hand-rolled.** `modal_block()` applies a
+fixed inset — `MODAL_PAD_X` columns (2) and `MODAL_PAD_Y` rows (1) — on all four
+sides of every dialog. A renderer lays out *content only*: no leading blank
+line, no trailing `Constraint::Min(0)` standing in for a bottom margin, no
+`format!("  {label}")` gutters. This is the rule that keeps the gap identical
+between the border and the first line of text in every popup.
+
+It follows that a modal's height is `content rows + MODAL_CHROME_H`, and its
+usable width is `width - 2 - 2 * MODAL_PAD_X`. Size dialogs from their content
+using that constant rather than a literal; a hardcoded height silently drifts
+into a lopsided gap the moment a row is added or removed.
+
+Blank rows *between* content groups are still the renderer's business — the
+rule governs margins, not internal separators.
+
+A gap row must be guaranteed, never left over. Use `Min(1)` when the content
+above it is fixed-height and `Length(1)` when the content above it is the
+flexible region; `Min(0)` promises nothing and silently collapses to zero the
+moment the dialog is sized correctly from its content.
+
+**Key hints go at the bottom, as `[key] action` pairs.** Build them with
+`hint()` / `danger_hint()` and render with `render_hints()`; never hand-write
+a hint string. The brackets are what make the pairing legible — spacing alone
+cannot distinguish a gap *inside* a pair from a gap *between* two, and the
+color difference vanishes on a monochrome tty. `danger_hint()` marks a key
+that destroys something.
+
+`hint_lines()` wraps at whole pairs, so a footer that outgrows its dialog gains
+a row instead of being cut off mid-word. Ask `hint_height()` for the row count
+*before* sizing the dialog and reserve that many rows at the bottom.
+
+Only the keybindings dialog has no footer: the whole dialog is one.
+
+Both rules cover *every* overlay, not just the modals in `modal.rs` — the file
+picker and the lyrics overlay go through `modal_block()` and `render_hints()`
+too. The file picker is the one dialog that overrides anything, left-aligning
+its title because a long path reads better anchored to the left.

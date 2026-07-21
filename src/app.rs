@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use crate::{
     cli::Cli,
     filepicker::{FilePicker, FilePickerOutcome},
-    library::{ALL_TRACKS_ID, Library, PlaylistId, Track, TrackId},
+    library::{Library, PlaylistId, Track, TrackId},
     lyrics,
     modal::{
         Modal, ModalConfirm, ModalOutcome, RemoveTarget, SettingsState, TextInput,
@@ -91,22 +91,48 @@ impl LoopMode {
 /// Which panel currently owns keyboard focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
-    Sidebar,
+    Library,
+    Playlists,
     TrackList,
     Queue,
 }
 
 impl Focus {
+    /// Tab order, one stop per drawn frame.
     pub const fn cycle(self) -> Self {
         match self {
-            Self::Sidebar => Self::TrackList,
+            Self::Library => Self::Playlists,
+            Self::Playlists => Self::TrackList,
             Self::TrackList => Self::Queue,
-            Self::Queue => Self::Sidebar,
+            Self::Queue => Self::Library,
         }
+    }
+
+    /// Shift+Tab: the same ring walked backwards.
+    pub const fn cycle_back(self) -> Self {
+        match self {
+            Self::Library => Self::Queue,
+            Self::Playlists => Self::Library,
+            Self::TrackList => Self::Playlists,
+            Self::Queue => Self::TrackList,
+        }
+    }
+
+    /// Whether this panel selects what the tracklist shows.
+    pub const fn is_sidebar(self) -> bool {
+        matches!(self, Self::Library | Self::Playlists)
     }
 }
 
 // ── AppState ───────────────────────────────────────────────────────────────
+
+/// What the sidebar cursor can point at. The library is not a playlist, so it
+/// gets its own variant instead of a reserved playlist id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SidebarItem {
+    Library,
+    Playlist(PlaylistId),
+}
 
 pub struct AppState {
     pub library: Library,
@@ -115,12 +141,12 @@ pub struct AppState {
     // ── UI ──────────────────────────────────────────────────────────────
     pub focus: Focus,
 
-    /// Which playlist is currently displayed in the tracklist panel.
-    pub active_playlist: PlaylistId,
+    /// What the tracklist panel is currently showing.
+    pub active_view: SidebarItem,
 
-    /// Cursor inside the sidebar (playlist list).
-    pub sidebar_cursor: usize,
-    /// Cursor inside the tracklist (tracks of `active_playlist`).
+    /// Cursor inside the playlists frame; indexes `library.playlists`.
+    pub playlist_cursor: usize,
+    /// Cursor inside the tracklist (tracks of `active_view`).
     pub tracklist_cursor: usize,
     /// Cursor inside the queue panel.
     pub queue_cursor: usize,
@@ -171,9 +197,9 @@ impl AppState {
         let mut s = Self {
             library,
             player,
-            focus: Focus::Sidebar,
-            active_playlist: ALL_TRACKS_ID,
-            sidebar_cursor: 0,
+            focus: Focus::Library,
+            active_view: SidebarItem::Library,
+            playlist_cursor: 0,
             tracklist_cursor: 0,
             queue_cursor: 0,
             queue: Vec::new(),
@@ -306,12 +332,48 @@ impl AppState {
         self.player.stop();
     }
 
-    // ── Active playlist helpers ──────────────────────────────────────────
+    // ── Sidebar / active view helpers ────────────────────────────────────
+
+    /// The playlist under the playlists-frame cursor.
+    fn cursor_playlist_id(&self) -> Option<PlaylistId> {
+        self.library
+            .playlists
+            .get(self.playlist_cursor)
+            .map(|pl| pl.id)
+    }
+
+    /// The playlist the tracklist is showing, or `None` when it shows the
+    /// whole library.
+    pub const fn active_playlist_id(&self) -> Option<PlaylistId> {
+        match self.active_view {
+            SidebarItem::Library => None,
+            SidebarItem::Playlist(id) => Some(id),
+        }
+    }
+
+    /// Name of the active view, for the tracklist panel title.
+    pub fn active_view_name(&self) -> &str {
+        match self.active_view {
+            SidebarItem::Library => "Library",
+            SidebarItem::Playlist(id) => self
+                .library
+                .playlist(id)
+                .map_or("Tracks", |pl| pl.name.as_str()),
+        }
+    }
+
+    /// Tracks backing the active view, in display order.
+    fn view_tracks(&self) -> Vec<&Track> {
+        match self.active_view {
+            SidebarItem::Library => self.library.tracks.iter().collect(),
+            SidebarItem::Playlist(id) => self.library.playlist_tracks(id),
+        }
+    }
 
     /// Rebuilds the filtered track ID cache. Call after any change to the
-    /// active playlist, filter string, or library track list.
+    /// active view, filter string, or library track list.
     pub fn rebuild_filter_cache(&mut self) {
-        let all = self.library.playlist_tracks(self.active_playlist);
+        let all = self.view_tracks();
         if self.tracklist_filter.is_empty() {
             self.filtered_ids = all.iter().map(|t| t.id).collect();
             return;
@@ -353,8 +415,11 @@ impl AppState {
     // ── Tick ─────────────────────────────────────────────────────────────
 
     /// Processes player events and auto-advances on natural track end.
-    pub fn tick(&mut self) {
+    /// Returns whether anything changed, so the caller can skip a redraw.
+    pub fn tick(&mut self) -> bool {
+        let mut changed = false;
         for event in self.player.drain_events() {
+            changed = true;
             match event {
                 PlayerEvent::TrackFinished => self.play_next(),
                 PlayerEvent::Error(msg) => {
@@ -362,6 +427,13 @@ impl AppState {
                 }
             }
         }
+        changed
+    }
+
+    /// Whether the UI changes on its own right now -- the player bar's elapsed
+    /// time and the synced-lyrics overlay both advance without any input.
+    const fn is_animating(&self) -> bool {
+        self.now_playing.is_some() && !self.player.is_paused
     }
 
     // ── Input ─────────────────────────────────────────────────────────────
@@ -503,12 +575,19 @@ impl AppState {
             KeyCode::Char('-') => self.player.volume_down(),
 
             // Navigation
-            KeyCode::Tab => {
-                self.focus = self.focus.cycle();
+            KeyCode::Tab | KeyCode::BackTab => {
+                self.focus = if code == KeyCode::BackTab {
+                    self.focus.cycle_back()
+                } else {
+                    self.focus.cycle()
+                };
                 self.filter_active = false;
                 self.tracklist_filter.clear();
                 self.tracklist_cursor = 0;
                 self.rebuild_filter_cache();
+                // Landing on a sidebar frame points the tracklist at it, the
+                // same as moving its cursor does.
+                self.sync_active_view();
             }
             KeyCode::Char('j' | 'k' | 'g' | 'G')
             | KeyCode::Up
@@ -526,7 +605,6 @@ impl AppState {
             KeyCode::Char('p') => self.action_add_to_playlist(),
             KeyCode::Char('d') => self.action_remove(),
             KeyCode::Char('D') => self.action_clear_queue(),
-            KeyCode::Char('r') => self.action_rename(),
             KeyCode::Char('c') => self.action_new_playlist(),
             KeyCode::Char('f') => self.action_open_filepicker(),
             KeyCode::Char('m') => self.action_open_menu(),
@@ -534,7 +612,7 @@ impl AppState {
             KeyCode::Char('z') => self.action_shuffle_playlist(),
             KeyCode::Char('[') => self.action_speed_down(),
             KeyCode::Char(']') => self.action_speed_up(),
-            KeyCode::Char('e') => self.action_edit_metadata(),
+            KeyCode::Char('e') => self.action_edit(),
             KeyCode::Char('y') => self.action_toggle_lyrics(),
             KeyCode::Char('/') if self.focus == Focus::TrackList => {
                 self.filter_active = true;
@@ -550,7 +628,9 @@ impl AppState {
     /// Returns `true` if `code` was a navigation key.
     fn move_cursor(&mut self, code: KeyCode) -> bool {
         let (cursor, len) = match self.focus {
-            Focus::Sidebar => (self.sidebar_cursor, self.library.playlists.len()),
+            // The library frame is a single row: nothing to move between.
+            Focus::Library => (0, 1),
+            Focus::Playlists => (self.playlist_cursor, self.library.playlists.len()),
             Focus::TrackList => (self.tracklist_cursor, self.active_tracks().len()),
             Focus::Queue => (self.queue_cursor, self.queue.len()),
         };
@@ -558,9 +638,10 @@ impl AppState {
             return false;
         };
         match self.focus {
-            Focus::Sidebar => {
-                self.sidebar_cursor = new;
-                self.sync_active_playlist();
+            Focus::Library => {}
+            Focus::Playlists => {
+                self.playlist_cursor = new;
+                self.sync_active_view();
             }
             Focus::TrackList => self.tracklist_cursor = new,
             Focus::Queue => self.queue_cursor = new,
@@ -568,15 +649,23 @@ impl AppState {
         true
     }
 
-    /// Keeps `active_playlist` in sync with `sidebar_cursor`.
-    fn sync_active_playlist(&mut self) {
-        if let Some(pl) = self.library.playlists.get(self.sidebar_cursor) {
-            self.active_playlist = pl.id;
-            self.tracklist_cursor = 0;
-            self.tracklist_filter.clear();
-            self.filter_active = false;
-            self.rebuild_filter_cache();
-        }
+    /// Points the tracklist at whichever sidebar frame currently has focus.
+    /// A no-op from the tracklist or queue, which do not choose the view.
+    fn sync_active_view(&mut self) {
+        let item = match self.focus {
+            Focus::Library => SidebarItem::Library,
+            Focus::Playlists => match self.cursor_playlist_id() {
+                Some(id) => SidebarItem::Playlist(id),
+                None => return,
+            },
+            Focus::TrackList | Focus::Queue => return,
+        };
+
+        self.active_view = item;
+        self.tracklist_cursor = 0;
+        self.tracklist_filter.clear();
+        self.filter_active = false;
+        self.rebuild_filter_cache();
     }
 
     // ── Actions ───────────────────────────────────────────────────────────
@@ -635,8 +724,8 @@ impl AppState {
     /// Enter on queue      →  play that queue entry immediately.
     fn action_enter(&mut self) {
         match self.focus {
-            Focus::Sidebar => {
-                self.sync_active_playlist();
+            Focus::Library | Focus::Playlists => {
+                self.sync_active_view();
                 self.focus = Focus::TrackList;
             }
             Focus::TrackList => {
@@ -653,19 +742,42 @@ impl AppState {
         }
     }
 
+    /// Appends to the queue, scoped to the focused panel: a whole playlist from
+    /// the sidebar, the cursor's track from the tracklist. Queue entries are
+    /// already queued, so there is nothing to add.
     fn action_add_to_queue(&mut self) {
-        if let Some(track) = self.selected_track() {
-            self.queue.push(track);
+        match self.focus {
+            Focus::Library => {
+                let tracks = self.library.tracks.clone();
+                self.queue.extend(tracks);
+            }
+            Focus::Playlists => {
+                let Some(id) = self.cursor_playlist_id() else {
+                    return;
+                };
+                let tracks: Vec<Track> = self
+                    .library
+                    .playlist_tracks(id)
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                self.queue.extend(tracks);
+            }
+            Focus::TrackList => {
+                if let Some(track) = self.selected_track() {
+                    self.queue.push(track);
+                }
+            }
+            Focus::Queue => {}
         }
     }
 
     fn action_add_to_playlist(&mut self) {
-        if let Some(track) = self.selected_track() {
+        if let Some(track) = self.focused_track() {
             let choices: Vec<(u64, String)> = self
                 .library
                 .playlists
                 .iter()
-                .filter(|p| p.id != ALL_TRACKS_ID)
                 .map(|p| (p.id, p.name.clone()))
                 .collect();
 
@@ -689,11 +801,10 @@ impl AppState {
 
     fn action_remove(&mut self) {
         match self.focus {
-            Focus::Sidebar => {
-                if let Some(pl) = self.library.playlists.get(self.sidebar_cursor) {
-                    if pl.id == ALL_TRACKS_ID {
-                        return; // cannot delete "All Tracks"
-                    }
+            // The library itself is not deletable; only playlists are.
+            Focus::Library => {}
+            Focus::Playlists => {
+                if let Some(pl) = self.library.playlists.get(self.playlist_cursor) {
                     self.modal = Some(Modal::ConfirmRemove {
                         description: format!("Delete playlist \"{}\"?", pl.name),
                         target: RemoveTarget::Playlist { playlist_id: pl.id },
@@ -702,9 +813,30 @@ impl AppState {
             }
             Focus::TrackList => {
                 if let Some(track) = self.selected_track() {
+                    // Inside a playlist `d` scopes to that playlist; only the
+                    // library view deletes from the library itself.
+                    let (description, target) = match self.active_playlist_id() {
+                        None => (
+                            format!("Remove \"{}\" from library?", track.name),
+                            RemoveTarget::TrackFromLibrary { track_id: track.id },
+                        ),
+                        Some(playlist_id) => {
+                            let name = self
+                                .library
+                                .playlist(playlist_id)
+                                .map_or_else(String::new, |pl| pl.name.clone());
+                            (
+                                format!("Remove \"{}\" from \"{name}\"?", track.name),
+                                RemoveTarget::TrackFromPlaylist {
+                                    playlist_id,
+                                    track_id: track.id,
+                                },
+                            )
+                        }
+                    };
                     self.modal = Some(Modal::ConfirmRemove {
-                        description: format!("Remove \"{}\" from library?", track.name),
-                        target: RemoveTarget::TrackFromLibrary { track_id: track.id },
+                        description,
+                        target,
                     });
                 }
             }
@@ -729,41 +861,6 @@ impl AppState {
             description: "Clear the entire queue?".into(),
             target: RemoveTarget::Queue,
         });
-    }
-
-    fn action_rename(&mut self) {
-        match self.focus {
-            Focus::Sidebar => {
-                if let Some(pl) = self.library.playlists.get(self.sidebar_cursor) {
-                    if pl.id == ALL_TRACKS_ID {
-                        return;
-                    }
-                    self.modal = Some(Modal::Rename {
-                        kind: "Playlist".into(),
-                        id: pl.id,
-                        input: TextInput::with_value(&pl.name),
-                    });
-                }
-            }
-            Focus::TrackList => {
-                if let Some(t) = self.selected_track() {
-                    self.modal = Some(Modal::Rename {
-                        kind: "Track".into(),
-                        id: t.id,
-                        input: TextInput::with_value(&t.name),
-                    });
-                }
-            }
-            Focus::Queue => {
-                if let Some(t) = self.queue.get(self.queue_cursor).cloned() {
-                    self.modal = Some(Modal::Rename {
-                        kind: "Track".into(),
-                        id: t.id,
-                        input: TextInput::with_value(&t.name),
-                    });
-                }
-            }
-        }
     }
 
     fn action_new_playlist(&mut self) {
@@ -803,17 +900,15 @@ impl AppState {
         self.modal = Some(Modal::About);
     }
 
-    /// `z`: prompt to shuffle the active playlist into the queue.
+    /// `z`: prompt to shuffle the active view -- a playlist or the whole
+    /// library -- into the queue.
     fn action_shuffle_playlist(&mut self) {
-        if let Some(pl) = self.library.playlist(self.active_playlist) {
-            if pl.tracks.is_empty() {
-                return;
-            }
-            self.modal = Some(Modal::ShufflePlaylist {
-                playlist_id: pl.id,
-                playlist_name: pl.name.clone(),
-            });
+        if self.view_tracks().is_empty() {
+            return;
         }
+        self.modal = Some(Modal::ShuffleView {
+            view_name: self.active_view_name().to_string(),
+        });
     }
 
     // ── Playback speed ────────────────────────────────────────────────────
@@ -854,16 +949,41 @@ impl AppState {
 
     // ── Metadata / lyrics actions ─────────────────────────────────────────
 
-    fn selected_track_for_edit(&self) -> Option<Track> {
+    /// The track under the cursor in the focused panel. The sidebar selects
+    /// playlists, not tracks, so it has none.
+    fn focused_track(&self) -> Option<Track> {
         match self.focus {
             Focus::TrackList => self.selected_track(),
             Focus::Queue => self.queue.get(self.queue_cursor).cloned(),
-            Focus::Sidebar => None,
+            Focus::Library | Focus::Playlists => None,
+        }
+    }
+
+    /// The one editor key: opens whatever the focused panel has selected.
+    /// A playlist's only editable attribute is its name, so the sidebar gets a
+    /// single-field dialog; tracks get the full metadata form.
+    fn action_edit(&mut self) {
+        if self.focus.is_sidebar() {
+            self.action_edit_playlist();
+            return;
+        }
+        self.action_edit_metadata();
+    }
+
+    /// The library has no editable attributes, so `e` only opens on a playlist.
+    fn action_edit_playlist(&mut self) {
+        if self.focus == Focus::Playlists
+            && let Some(pl) = self.library.playlists.get(self.playlist_cursor)
+        {
+            self.modal = Some(Modal::EditPlaylist {
+                id: pl.id,
+                input: TextInput::with_value(&pl.name),
+            });
         }
     }
 
     fn action_edit_metadata(&mut self) {
-        if let Some(t) = self.selected_track_for_edit() {
+        if let Some(t) = self.focused_track() {
             self.modal = Some(Modal::EditMetadata {
                 track_id: t.id,
                 fields: [
@@ -887,14 +1007,6 @@ impl AppState {
             .and_then(|t| t.lyrics.as_ref())
             .map(|raw| lyrics::parse_lrc(raw))
             .unwrap_or_default();
-    }
-
-    fn sync_queue_name(&mut self, track_id: TrackId, name: &str) {
-        for t in &mut self.queue {
-            if t.id == track_id {
-                t.name = name.to_string();
-            }
-        }
     }
 
     fn sync_queue_metadata(
@@ -1005,12 +1117,23 @@ impl AppState {
                     .min(self.active_tracks().len().saturating_sub(1));
             }
 
+            RemoveTarget::TrackFromPlaylist {
+                playlist_id,
+                track_id,
+            } => {
+                let _ = self.library.playlist_remove_track(playlist_id, track_id);
+                self.rebuild_filter_cache();
+                self.tracklist_cursor = self
+                    .tracklist_cursor
+                    .min(self.active_tracks().len().saturating_sub(1));
+            }
+
             RemoveTarget::Playlist { playlist_id } => {
                 let _ = self.library.delete_playlist(playlist_id);
-                self.sidebar_cursor = self
-                    .sidebar_cursor
+                self.playlist_cursor = self
+                    .playlist_cursor
                     .min(self.library.playlists.len().saturating_sub(1));
-                self.sync_active_playlist();
+                self.sync_active_view();
             }
 
             RemoveTarget::Queue => {
@@ -1048,7 +1171,9 @@ impl AppState {
         match confirm {
             ModalConfirm::Remove(target) => self.apply_remove(target),
 
-            ModalConfirm::Rename { kind, id, new_name } => self.apply_rename(&kind, id, new_name),
+            ModalConfirm::RenamePlaylist { id, new_name } => {
+                let _ = self.library.rename_playlist(id, new_name);
+            }
 
             ModalConfirm::NewPlaylist { name, add_track } => {
                 if let Ok(playlist_id) = self.library.create_playlist(name)
@@ -1102,8 +1227,8 @@ impl AppState {
                 self.theme = resolve_theme(&theme_name, transparent, truecolor);
             }
 
-            ModalConfirm::ShufflePlaylist { playlist_id } => {
-                self.apply_shuffle_playlist(playlist_id);
+            ModalConfirm::ShuffleView => {
+                self.apply_shuffle_view();
             }
 
             ModalConfirm::SaveMetadata {
@@ -1174,16 +1299,6 @@ impl AppState {
         }
     }
 
-    fn apply_rename(&mut self, kind: &str, id: u64, new_name: String) {
-        if kind == "Track" {
-            let _ = self.library.rename_track(id, &new_name);
-            self.sync_queue_name(id, &new_name);
-            self.rebuild_filter_cache();
-        } else {
-            let _ = self.library.rename_playlist(id, new_name);
-        }
-    }
-
     fn apply_save_settings(
         &mut self,
         volume_pct: u32,
@@ -1207,14 +1322,9 @@ impl AppState {
         let _ = self.settings.save();
     }
 
-    fn apply_shuffle_playlist(&mut self, playlist_id: PlaylistId) {
+    fn apply_shuffle_view(&mut self) {
         // Resolve tracks, shuffle in place, replace queue, start playing.
-        let mut tracks: Vec<Track> = self
-            .library
-            .playlist_tracks(playlist_id)
-            .into_iter()
-            .cloned()
-            .collect();
+        let mut tracks: Vec<Track> = self.view_tracks().into_iter().cloned().collect();
 
         if tracks.is_empty() {
             return;
@@ -1263,15 +1373,42 @@ pub fn run(cli: Cli) -> Result<()> {
 }
 
 fn event_loop(mut terminal: DefaultTerminal, state: &mut AppState) -> Result<()> {
-    loop {
-        state.tick();
-        terminal.draw(|frame| ui::render(frame, state))?;
+    /// How long to wait for input before looping again.
+    const POLL: Duration = Duration::from_millis(50);
+    /// Refresh rate while a track is playing, enough for a smooth elapsed
+    /// time without redrawing on every poll.
+    const PLAYBACK_REFRESH: Duration = Duration::from_millis(250);
 
-        if event::poll(Duration::from_millis(50))?
-            && let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            state.handle_key(key.code, key.modifiers);
+    // Redrawing unconditionally each poll costs a full render 20 times a
+    // second forever, whatever the library size. Draw only when something
+    // actually changed.
+    let mut dirty = true;
+    let mut last_draw = Instant::now();
+
+    loop {
+        if state.tick() {
+            dirty = true;
+        }
+        if state.is_animating() && last_draw.elapsed() >= PLAYBACK_REFRESH {
+            dirty = true;
+        }
+
+        if dirty {
+            terminal.draw(|frame| ui::render(frame, state))?;
+            last_draw = Instant::now();
+            dirty = false;
+        }
+
+        if event::poll(POLL)? {
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    state.handle_key(key.code, key.modifiers);
+                    dirty = true;
+                }
+                // A resize invalidates the whole frame.
+                Event::Resize(..) => dirty = true,
+                _ => {}
+            }
         }
 
         if state.should_quit {

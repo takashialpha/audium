@@ -15,7 +15,7 @@ pub fn render_queue(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
 
     if state.queue.is_empty() {
         frame.render_widget(
-            Paragraph::new("  No tracks in queue.  Enter to play, 'a' to add.")
+            Paragraph::new("  No tracks in queue.  'a' on a track or playlist to add.")
                 .style(Style::default().fg(t.subtle))
                 .block(block),
             area,

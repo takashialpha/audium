@@ -450,6 +450,35 @@ pub fn cursor_spans(value: &str, cursor: usize, theme: &Theme) -> Vec<Span<'stat
     ]
 }
 
+/// Like [`cursor_spans`], but keeps the cursor visible in values too long for
+/// the field by scrolling a `width`-cell window over them, the way a shell
+/// prompt does.  Without this a long name simply runs past the right edge and
+/// you end up typing blind.
+pub fn cursor_spans_windowed(
+    value: &str,
+    cursor: usize,
+    width: usize,
+    theme: &Theme,
+) -> Vec<Span<'static>> {
+    let len = value.chars().count();
+    // The block cursor needs one cell past the final character, so a value
+    // only fits untouched when it is strictly shorter than the field.
+    if width == 0 || len < width {
+        return cursor_spans(value, cursor, theme);
+    }
+
+    let cur = value[..cursor].chars().count();
+    // Scroll just far enough to bring the cursor back inside the window.
+    let start = cur.saturating_sub(width - 1).min(len + 1 - width);
+    let window: String = value.chars().skip(start).take(width).collect();
+    let window_cursor = window
+        .char_indices()
+        .nth(cur - start)
+        .map_or(window.len(), |(i, _)| i);
+
+    cursor_spans(&window, window_cursor, theme)
+}
+
 /// Builds a consistently styled panel block.
 pub fn styled_block<'a>(title: &'a str, focused: bool, theme: &Theme) -> Block<'a> {
     Block::default()
@@ -471,13 +500,14 @@ pub fn styled_block<'a>(title: &'a str, focused: bool, theme: &Theme) -> Block<'
 /// Truncates a string to `max` chars, appending `~` if truncated.
 pub fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        format!(
-            "{}~",
-            s.chars().take(max.saturating_sub(1)).collect::<String>()
-        )
+        return s.to_string();
     }
+    // At max == 0 there is not even room for the ellipsis, and returning "~"
+    // would overflow the caller's field by one cell.
+    if max == 0 {
+        return String::new();
+    }
+    format!("{}~", s.chars().take(max - 1).collect::<String>())
 }
 
 pub fn format_duration(secs: u64) -> String {

@@ -1,21 +1,29 @@
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
-    layout::{Alignment, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState},
+    widgets::{Clear, List, ListItem, ListState},
 };
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
+use crate::modal::{hint, hint_height, modal_block, render_hints};
 use crate::ui::layout::{Theme, truncate};
 
 /// A file extension is considered audio if it is one of these.
+/// Extensions the bundled symphonia decoders can actually play.  Anything not
+/// listed here is hidden from the picker rather than offered and then rejected
+/// by `validate_decodable` at import.
+///
+/// Deliberately absent: `opus` (symphonia 0.5 demuxes Ogg but ships no Opus
+/// decoder) and `wma` (no ASF demuxer at all).
 const AUDIO_EXTS: &[&str] = &[
-    "mp3", "flac", "ogg", "oga", "wav", "aac", "m4a", "opus", "wma", "aiff", "aif",
+    "mp3", "mp2", "mp1", "flac", "ogg", "oga", "wav", "wave", "aac", "m4a", "m4b", "aiff", "aif",
+    "aifc",
 ];
 
 pub fn is_audio(path: &Path) -> bool {
@@ -161,27 +169,28 @@ pub fn render_filepicker(frame: &mut Frame<'_>, picker: &FilePicker, theme: &The
         truncate(&path_str, path_max)
     );
 
-    let block = Block::default()
-        .title(title)
-        .title_alignment(Alignment::Left)
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.accent))
-        .style(theme.apply_bg(Style::default()));
-
+    // Same chrome as every other dialog; only the title alignment differs,
+    // because a long path reads better anchored to the left.
+    let block = modal_block(&title, theme).title_alignment(Alignment::Left);
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
-    let list_height = inner.height.saturating_sub(1);
-    let list_rect = Rect {
-        height: list_height,
-        ..inner
-    };
-    let hint_rect = Rect {
-        y: inner.y + list_height,
-        height: 1,
-        ..inner
-    };
+    let hints = [
+        hint("Enter", "open/select"),
+        hint("j/k", "navigate"),
+        hint("Esc", "cancel"),
+    ];
+    let hint_h = hint_height(&hints, inner.width as usize, theme);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),         // entries
+            Constraint::Length(1),      // gap above the hints
+            Constraint::Length(hint_h), // hints
+        ])
+        .split(inner);
+    let list_rect = rows[0];
 
     let name_max = usize::from(inner.width.saturating_sub(2)); // 2 cols for the icon
     let items: Vec<ListItem<'_>> = picker
@@ -222,11 +231,5 @@ pub fn render_filepicker(frame: &mut Frame<'_>, picker: &FilePicker, theme: &The
         &mut list_state,
     );
 
-    frame.render_widget(
-        ratatui::widgets::Paragraph::new(Span::styled(
-            "[Enter] open/select  [j/k] navigate  [Esc] cancel",
-            Style::default().fg(theme.subtle),
-        )),
-        hint_rect,
-    );
+    render_hints(frame, rows[2], &hints, theme);
 }

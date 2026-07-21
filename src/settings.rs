@@ -55,7 +55,10 @@ impl ColorMode {
     }
 }
 
-/// Persistent user preferences stored at `$XDG_DATA_HOME/audium/settings.json`.
+/// Persistent user preferences.
+///
+/// Read from the highest-priority copy across `$XDG_CONFIG_HOME` and
+/// `$XDG_CONFIG_DIRS`; always written to `$XDG_CONFIG_HOME/audium/settings.json`.
 ///
 /// All fields have sensible defaults via `Default` so missing keys in an
 /// older file are silently filled in on load.
@@ -89,19 +92,14 @@ impl Default for Settings {
 }
 
 impl Settings {
-    fn path() -> Result<std::path::PathBuf> {
-        Ok(Library::data_dir()?.join("settings.json"))
-    }
+    const FILE: &'static str = "settings.json";
 
     /// Loads settings from disk.  Missing file → `Default`.
     /// Corrupt file → `Default` (non-fatal; we just overwrite on next save).
     pub fn load() -> Self {
-        let Ok(path) = Self::path() else {
+        let Some(path) = Library::find_config_file(Self::FILE) else {
             return Self::default();
         };
-        if !path.exists() {
-            return Self::default();
-        }
         let Ok(raw) = fs::read_to_string(&path) else {
             return Self::default();
         };
@@ -109,7 +107,7 @@ impl Settings {
     }
 
     pub fn save(&self) -> Result<()> {
-        let path = Self::path()?;
+        let path = Library::place_config_file(Self::FILE)?;
         let tmp = path.with_extension("json.tmp");
         let raw = serde_json::to_string_pretty(self)?;
         fs::write(&tmp, &raw).with_context(|| format!("writing settings to {}", tmp.display()))?;
