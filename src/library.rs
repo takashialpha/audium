@@ -79,6 +79,7 @@ struct FileTags {
     title: Option<String>,
     artist: Option<String>,
     album: Option<String>,
+    lyrics: Option<String>,
     duration_secs: Option<u64>,
 }
 
@@ -96,7 +97,7 @@ fn track_from_file(id: TrackId, path: PathBuf) -> Track {
         name,
         artist: tags.as_ref().and_then(|t| t.artist.clone()),
         album: tags.as_ref().and_then(|t| t.album.clone()),
-        lyrics: None,
+        lyrics: tags.as_ref().and_then(|t| t.lyrics.clone()),
         duration_secs: tags.as_ref().and_then(|t| t.duration_secs),
         path,
     }
@@ -122,6 +123,7 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
             title: None,
             artist: None,
             album: None,
+            lyrics: None,
             duration_secs,
         });
     };
@@ -139,8 +141,121 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
             .album()
             .map(std::borrow::Cow::into_owned)
             .and_then(nonempty),
+        // Either key may hold them depending on the container; ID3v2 uses
+        // USLT, everything else the plain lyrics field.
+        lyrics: tag
+            .get_string(lofty::prelude::ItemKey::Lyrics)
+            .or_else(|| tag.get_string(lofty::prelude::ItemKey::UnsyncLyrics))
+            .map(ToString::to_string)
+            .and_then(nonempty),
         duration_secs,
     })
+}
+
+/// Writes the editable fields back into the file's own tags.
+///
+/// The file is the record; `audium.json` only caches it. Anything typed in the
+/// app therefore has to reach the tags, or re-importing the track (which any
+/// rescan or a version bump does) would quietly restore the old values.
+///
+/// Writes into whichever tag the container treats as primary, which for every
+/// format audium accepts is one that holds all four fields: `ID3v2` for MPEG,
+/// WAV and AIFF, Vorbis comments for FLAC and Ogg, and an MP4 atom list for
+/// M4A. Verified by writing each of those and reading them back.
+fn write_file_tags(
+    path: &Path,
+    name: &str,
+    artist: Option<&str>,
+    album: Option<&str>,
+    lyrics: Option<&str>,
+) -> Result<()> {
+    use lofty::config::{ParseOptions, WriteOptions};
+    use lofty::file::{AudioFile, TaggedFileExt};
+    use lofty::prelude::ItemKey;
+    use lofty::probe::Probe;
+    use lofty::tag::Tag;
+
+    // Errors reach a dialog, so they name the file rather than its whole path.
+    let file = path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+
+    let mut tagged = Probe::open(path)
+        .with_context(|| format!("opening {file}"))?
+        .options(ParseOptions::new().read_cover_art(false))
+        .read()
+        .with_context(|| format!("reading tags from {file}"))?;
+
+    // A file with no tag at all still needs one to write into; the primary
+    // type is whichever the container natively carries.
+    if tagged.primary_tag_mut().is_none() {
+        let kind = tagged.primary_tag_type();
+        tagged.insert_tag(Tag::new(kind));
+    }
+    let Some(tag) = tagged.primary_tag_mut() else {
+        anyhow::bail!("{file} cannot hold tags");
+    };
+
+    tag.set_title(name.to_string());
+    set_or_clear(tag, ItemKey::TrackArtist, artist);
+    set_or_clear(tag, ItemKey::AlbumTitle, album);
+
+    // ID3v2 has no unsynchronised-lyrics equivalent under `Lyrics`; it wants
+    // USLT, which lofty exposes as a separate key. Writing the wrong one is
+    // silently dropped, so pick by tag type.
+    let lyrics_key = if tag.tag_type() == lofty::tag::TagType::Id3v2 {
+        ItemKey::UnsyncLyrics
+    } else {
+        ItemKey::Lyrics
+    };
+    set_or_clear(tag, lyrics_key, lyrics);
+
+    // Written to a copy and renamed into place, never edited where it lies.
+    //
+    // Growing a tag shifts everything after it, and the file may be open: the
+    // decoder streams the track that is playing, and audium can edit exactly
+    // that track. Rewriting underneath the reader moves the audio out from
+    // under its file offset. A rename instead leaves the open file on the old
+    // inode, so playback continues from what it already had.
+    //
+    // It is also the only way this is crash-safe. An interrupted in-place
+    // rewrite leaves a truncated or half-shifted music file; an interrupted
+    // copy leaves a stray temp file and an untouched original.
+    //
+    // The `.tmp` suffix keeps the scratch file out of `is_audio`, so a stray
+    // one is never imported as a track.
+    let tmp = path.with_extension("audium-tag.tmp");
+    let write_via_tmp = || -> Result<()> {
+        fs::copy(path, &tmp).with_context(|| format!("copying {file} to write its tags"))?;
+        tagged
+            .save_to_path(&tmp, WriteOptions::default())
+            .with_context(|| format!("writing tags to {file}"))?;
+        fs::rename(&tmp, path).with_context(|| format!("replacing {file}"))?;
+        Ok(())
+    };
+
+    let result = write_via_tmp();
+    if result.is_err() {
+        // Best effort: the original is already intact, this only tidies up.
+        let _ = fs::remove_file(&tmp);
+    }
+    result
+}
+
+/// Sets a tag item, or removes it when the value is empty: leaving the old
+/// text in place would make clearing a field in the app look like it worked
+/// until the next rescan put it back.
+fn set_or_clear(tag: &mut lofty::tag::Tag, key: lofty::prelude::ItemKey, value: Option<&str>) {
+    use lofty::tag::{ItemValue, TagItem};
+    match value.map(str::trim).filter(|v| !v.is_empty()) {
+        Some(v) => {
+            tag.insert(TagItem::new(key, ItemValue::Text(v.to_string())));
+        }
+        None => {
+            tag.remove_key(key);
+        }
+    }
 }
 
 // -- Playlist ---------------------------------------------------------------
@@ -486,6 +601,14 @@ impl Library {
     }
 
     /// Replaces all user-editable metadata for a track (no file is touched).
+    /// Replaces a track's user-editable metadata, in the index and in the
+    /// file's own tags.
+    ///
+    /// The index is written first and always: it is what the UI reads, so an
+    /// edit must survive on screen even when the file cannot be written (a
+    /// read-only mount, a format with nowhere to put the field). The tag error
+    /// is returned so the caller can say so, rather than leaving the user to
+    /// discover on the next rescan that the edit did not stick.
     pub fn update_track_metadata(
         &mut self,
         id: TrackId,
@@ -493,24 +616,54 @@ impl Library {
         artist: Option<String>,
         album: Option<String>,
     ) -> Result<()> {
-        if let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) {
-            t.name = name;
-            t.artist = artist;
-            t.album = album;
-            self.save()
-        } else {
-            Ok(())
-        }
+        let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) else {
+            return Ok(());
+        };
+        t.name = name;
+        t.artist = artist;
+        t.album = album;
+
+        let (path, name, artist, album, lyrics) = (
+            t.path.clone(),
+            t.name.clone(),
+            t.artist.clone(),
+            t.album.clone(),
+            t.lyrics.clone(),
+        );
+        self.save()?;
+        write_file_tags(
+            &path,
+            &name,
+            artist.as_deref(),
+            album.as_deref(),
+            lyrics.as_deref(),
+        )
     }
 
-    /// Replaces (or clears) the raw lyrics text for a track.
+    /// Replaces (or clears) the raw lyrics text for a track, in the index and
+    /// in the file's own tags.  See [`Self::update_track_metadata`] for why the
+    /// index is written even when the file write fails.
     pub fn set_track_lyrics(&mut self, id: TrackId, lyrics: Option<String>) -> Result<()> {
-        if let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) {
-            t.lyrics = lyrics;
-            self.save()
-        } else {
-            Ok(())
-        }
+        let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) else {
+            return Ok(());
+        };
+        t.lyrics = lyrics;
+
+        let (path, name, artist, album, lyrics) = (
+            t.path.clone(),
+            t.name.clone(),
+            t.artist.clone(),
+            t.album.clone(),
+            t.lyrics.clone(),
+        );
+        self.save()?;
+        write_file_tags(
+            &path,
+            &name,
+            artist.as_deref(),
+            album.as_deref(),
+            lyrics.as_deref(),
+        )
     }
 
     /// Returns a reference to a track by id.

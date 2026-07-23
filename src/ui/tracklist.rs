@@ -7,7 +7,8 @@ use ratatui::{
 };
 
 use super::layout::{
-    Columns, GAP_S, NUM_W, Theme, cursor_spans, format_duration, row_marker, styled_block,
+    Columns, GAP_S, NUM_W, Theme, cursor_spans_windowed, format_duration, row_marker, styled_block,
+    truncate,
 };
 use crate::app::{AppState, Focus};
 
@@ -120,17 +121,20 @@ fn render_filter_bar(frame: &mut Frame<'_>, area: Rect, state: &AppState, t: &Th
     } else {
         Style::default().fg(t.text_dim)
     };
+    // "/ " already took two columns of the row.
+    let field_w = usize::from(area.width).saturating_sub(2);
     let mut spans = vec![Span::styled("/ ", prefix_style)];
     if state.filter_active {
         // Cursor sits at the end of the filter text (no in-place editing).
-        spans.extend(cursor_spans(
+        spans.extend(cursor_spans_windowed(
             &state.tracklist_filter,
             state.tracklist_filter.len(),
+            field_w,
             t,
         ));
     } else {
         spans.push(Span::styled(
-            state.tracklist_filter.as_str(),
+            truncate(&state.tracklist_filter, field_w),
             Style::default().fg(t.text),
         ));
     }

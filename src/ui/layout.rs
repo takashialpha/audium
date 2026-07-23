@@ -551,23 +551,41 @@ pub fn cursor_spans_windowed(
     width: usize,
     theme: &Theme,
 ) -> Vec<Span<'static>> {
+    let start = h_window_start(value, cursor, width);
+    if start == 0 && value.chars().count() < width.max(1) {
+        return cursor_spans(value, cursor, theme);
+    }
+
+    let window: String = value.chars().skip(start).take(width).collect();
+    let cur = value[..cursor].chars().count();
+    let window_cursor = window
+        .char_indices()
+        .nth(cur.saturating_sub(start))
+        .map_or(window.len(), |(i, _)| i);
+
+    cursor_spans(&window, window_cursor, theme)
+}
+
+/// First visible character of a `width`-wide window that keeps `cursor` in
+/// view.
+///
+/// Exposed so a multi-line editor can offset every row by the same amount:
+/// scrolling only the cursor's row would slide it out of alignment with the
+/// lines above and below it.
+pub fn h_window_start(value: &str, cursor: usize, width: usize) -> usize {
     let len = value.chars().count();
     // The block cursor needs one cell past the final character, so a value
     // only fits untouched when it is strictly shorter than the field.
     if width == 0 || len < width {
-        return cursor_spans(value, cursor, theme);
+        return 0;
     }
-
     let cur = value[..cursor].chars().count();
-    // Scroll just far enough to bring the cursor back inside the window.
-    let start = cur.saturating_sub(width - 1).min(len + 1 - width);
-    let window: String = value.chars().skip(start).take(width).collect();
-    let window_cursor = window
-        .char_indices()
-        .nth(cur - start)
-        .map_or(window.len(), |(i, _)| i);
+    cur.saturating_sub(width - 1).min(len + 1 - width)
+}
 
-    cursor_spans(&window, window_cursor, theme)
+/// A `width`-wide slice of `line` starting at `start` characters in.
+pub fn h_window(line: &str, start: usize, width: usize) -> String {
+    line.chars().skip(start).take(width).collect()
 }
 
 /// Centred two-line prompt for an empty panel: a statement of what is missing,

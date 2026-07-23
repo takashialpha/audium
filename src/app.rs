@@ -1212,6 +1212,19 @@ impl AppState {
 
     /// Persists edited metadata to the library and syncs it into the live
     /// queue. Shared by `SaveMetadata` and `SaveMetadataAndEditLyrics`.
+    /// Tells the user when an edit reached the library but not the file.
+    ///
+    /// The edit is not lost -- it is in `audium.json` and on screen -- but the
+    /// file is the record, so a rescan would revert it. Saying so now is
+    /// better than the value quietly changing back later.
+    fn report_tag_failure(&mut self, result: &Result<()>) {
+        if let Err(e) = result {
+            self.modal = Some(Modal::Notify {
+                message: format!("Saved in audium, but could not write the file's tags: {e}"),
+            });
+        }
+    }
+
     fn save_metadata(
         &mut self,
         track_id: TrackId,
@@ -1219,12 +1232,13 @@ impl AppState {
         artist: Option<&String>,
         album: Option<&String>,
     ) {
-        let _ = self.library.update_track_metadata(
+        let written = self.library.update_track_metadata(
             track_id,
             name.to_string(),
             artist.cloned(),
             album.cloned(),
         );
+        self.report_tag_failure(&written);
         self.sync_queue_metadata(track_id, name, artist, album);
         self.rebuild_filter_cache();
     }
@@ -1307,7 +1321,8 @@ impl AppState {
             }
 
             ModalConfirm::SaveLyrics { track_id, lyrics } => {
-                let _ = self.library.set_track_lyrics(track_id, lyrics);
+                let written = self.library.set_track_lyrics(track_id, lyrics);
+                self.report_tag_failure(&written);
                 if self.show_lyrics {
                     self.refresh_lyrics_cache();
                 }

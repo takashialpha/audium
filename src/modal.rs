@@ -13,7 +13,8 @@ use crate::library::{PlaylistId, TrackId};
 use crate::numeric::usize_to_u16_saturating;
 use crate::settings::ColorMode;
 use crate::ui::layout::{
-    Theme, console_themes, cursor_spans, cursor_spans_windowed, format_duration, themes, truncate,
+    Theme, console_themes, cursor_spans, cursor_spans_windowed, format_duration, h_window,
+    h_window_start, themes, truncate,
 };
 
 // -- Text-input widget ------------------------------------------------------
@@ -949,13 +950,18 @@ fn wrapped_height(text: &str, width: usize) -> u16 {
     let mut used = 0usize;
     for word in text.split_whitespace() {
         let w = word.chars().count();
-        if used == 0 {
-            used = w;
-        } else if used + 1 + w <= width {
-            used += 1 + w;
-        } else {
+        if used > 0 && used + 1 + w > width {
             rows += 1;
-            used = w;
+            used = 0;
+        }
+        // A word wider than the line cannot be fitted by moving it: it is
+        // broken across as many rows as it needs, so count them.
+        if w > width {
+            let extra = (w - 1) / width;
+            rows += extra;
+            used = w - extra * width;
+        } else {
+            used += if used == 0 { w } else { 1 + w };
         }
     }
     usize_to_u16_saturating(rows)
@@ -2004,6 +2010,16 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
         .saturating_sub(visible.saturating_sub(1))
         .min(textarea.lines.len().saturating_sub(visible));
 
+    // A lyric line can be longer than the editor is wide. Every row shifts by
+    // the same amount as the cursor's, so the text stays in column with the
+    // lines above and below rather than only the edited row sliding.
+    let width = usize::from(splits[0].width);
+    let cursor_line = textarea
+        .lines
+        .get(textarea.cursor_row)
+        .map_or("", String::as_str);
+    let h_scroll = h_window_start(cursor_line, textarea.cursor_col, width);
+
     let items: Vec<Line<'_>> = textarea
         .lines
         .iter()
@@ -2011,13 +2027,20 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
         .skip(scroll)
         .take(visible)
         .map(|(row, line)| {
+            let shown = h_window(line, h_scroll, width);
             if row == textarea.cursor_row {
-                Line::from(cursor_spans(line, textarea.cursor_col, theme))
+                let col = shown
+                    .char_indices()
+                    .nth(
+                        line[..textarea.cursor_col]
+                            .chars()
+                            .count()
+                            .saturating_sub(h_scroll),
+                    )
+                    .map_or(shown.len(), |(i, _)| i);
+                Line::from(cursor_spans(&shown, col, theme))
             } else {
-                Line::from(Span::styled(
-                    line.as_str(),
-                    Style::default().fg(theme.text_dim),
-                ))
+                Line::from(Span::styled(shown, Style::default().fg(theme.text_dim)))
             }
         })
         .collect();

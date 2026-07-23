@@ -40,9 +40,9 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 ## Features
 
 - **Keyboard-driven:** built to be driven entirely from the keyboard, for people who live in the terminal and never reach for the mouse. Press `?` in-app for grouped help covering every keybinding.
-- **Library & metadata:** import through the built-in file picker; title, artist, album and track length are read from the files' own tags, and the first three are editable in-app.
+- **Library & metadata:** import through the built-in file picker; title, artist, album and track length are read from the files' own tags, and edits are written straight back to them.
 - **Lyrics:** store plain text or LRC synced lyrics per track. An overlay auto-scrolls synced lyrics to the current line, with a built-in editor.
-- **It's your library:** your tracks are stored as plain JSON at `$XDG_DATA_HOME/audium/audium.json` (typically `~/.local/share/audium/audium.json`). Edit it by hand, back it up, move it anywhere. audium doesn't rename your files and never phones home.
+- **It's your library:** metadata you edit is written into the files' own tags, so it travels with them and any other player can read it. `$XDG_DATA_HOME/audium/audium.json` is a plain-JSON index over the top: edit it by hand, back it up, move it anywhere. audium never phones home.
 - **Themes:** 15 built-in truecolor themes plus 2 console themes (nord, gruvbox, catppuccin, rose pine, dracula, tokyo night, and more). Switch live with instant preview. Optional background transparency for composited terminals.
 - **Adapts to your terminal:** detects truecolor support and, on a bare Linux console (tty) or any terminal without it, automatically falls back to a 16-color theme with ASCII-only glyphs so the UI stays readable everywhere. Two console themes are built from named ANSI colors, one for a dark background and one for a light one, and each color mode remembers its own theme. The settings menu shows what it detected and lets you override it if the guess is wrong.
 - **Library and playlists:** your whole collection and your playlists are separate things, in their own panels. Create, rename and delete playlists, queue or shuffle either one, and pick a loop mode.
@@ -135,9 +135,9 @@ The same procedure applies to every upgrade, from any version, and to downgrades
 
 1. Make sure your audio files are in `$XDG_DATA_HOME/audium/music/`. If you are coming from a version that stored them elsewhere (very early releases used `~/.audium/music/`), copy them there first.
 2. Start audium. Every file in `music/` is re-imported, with its name and metadata read back from the file's own tags.
-3. Recreate your playlists, and anything you had edited in-app.
+3. Recreate your playlists.
 
-What is lost is whatever lived *only* in the index: your playlists, plus any track name, metadata or lyrics you edited inside audium rather than in the file's tags. Your old index file is left on disk untouched: open it to see what it held, then delete it once you're done.
+Playlists are the only thing lost, because they are the only thing that exists solely in the index. Titles, artists, albums and lyrics all live in the files' own tags, including the ones you edit inside audium, so they come back with the tracks. Your old index file is left on disk untouched: open it to see what your playlists held, then delete it once you're done.
 
 Preferences are not carried over either: `settings.json` moved from the data directory to `$XDG_CONFIG_HOME/audium/` in this release.
 
@@ -160,8 +160,6 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 ## TODO
 
 - MPRIS, so desktop media keys and status bars can see and drive playback (needs D-Bus, so deferred past 2.0.0)
-- Reordering tracks within a playlist
-- Writing edited metadata back to the files' own tags
 - Resuming where playback left off
 - YouTube audio import (no external binary deps)
 
