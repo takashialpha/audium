@@ -6,7 +6,9 @@ use ratatui::{
     widgets::{List, ListItem, ListState},
 };
 
-use super::layout::{Columns, GAP_S, NUM_W, format_duration, render_empty_state, styled_block};
+use super::layout::{
+    Columns, GAP_S, NUM_W, format_duration, render_empty_state, row_marker, styled_block,
+};
 use crate::app::{AppState, Focus};
 
 pub fn render_queue(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
@@ -40,11 +42,7 @@ pub fn render_queue(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
         .map(|(i, track)| {
             let is_current = state.now_playing == Some(i);
 
-            let marker = if is_current {
-                t.glyphs().play.to_string()
-            } else {
-                (i + 1).to_string()
-            };
+            let marker = row_marker(is_current, state.player.is_paused, state.elapsed(), t);
             let num = Span::styled(
                 format!("{marker:>NUM_W$}{GAP_S}"),
                 Style::default().fg(if is_current { t.accent } else { t.subtle }),

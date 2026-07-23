@@ -265,7 +265,9 @@ pub enum Modal {
         choices: Vec<(PlaylistId, String)>,
         cursor: usize,
     },
-    Help,
+    Help {
+        scroll: usize,
+    },
     /// Confirms shuffling the active view into the queue; the app resolves
     /// which tracks that is when the confirmation comes back.
     ShuffleView {
@@ -278,11 +280,11 @@ pub enum Modal {
     About,
     ConfirmQuit,
     Settings(SettingsState),
-    /// In-app editor for track metadata (name, artist, album, year, genre).
+    /// In-app editor for track metadata.
     EditMetadata {
         track_id: TrackId,
-        /// [0]=name [1]=artist [2]=album [3]=year [4]=genre
-        fields: [TextInput; 5],
+        /// [0]=name [1]=artist [2]=album
+        fields: [TextInput; META_FIELDS],
         active_field: usize,
         /// Restored if the name field is cleared, so closing always writes a
         /// valid name (the editor never traps you).
@@ -344,8 +346,6 @@ pub enum ModalConfirm {
         name: String,
         artist: Option<String>,
         album: Option<String>,
-        year: Option<u32>,
-        genre: Option<String>,
     },
     SaveLyrics {
         track_id: TrackId,
@@ -358,8 +358,6 @@ pub enum ModalConfirm {
         name: String,
         artist: Option<String>,
         album: Option<String>,
-        year: Option<u32>,
-        genre: Option<String>,
     },
 }
 
@@ -532,21 +530,21 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
     }
 }
 
-const META_YEAR: usize = 3;
+/// Editable text fields in the metadata dialog.
+pub const META_FIELDS: usize = 3;
+/// Those fields plus the "Edit Lyrics ->" button, which is the last row.
+const META_ROWS: usize = META_FIELDS + 1;
 
 fn handle_edit_metadata_key(
     code: KeyCode,
     track_id: TrackId,
-    fields: &mut [TextInput; 5],
+    fields: &mut [TextInput; META_FIELDS],
     active_field: &mut usize,
     original_name: &str,
 ) -> ModalOutcome {
-    // Rows 0-4 are text inputs; row 5 is the "Edit Lyrics ->" button.
-    const ROWS: usize = 6;
     match code {
-        // Esc/Enter close and write.  Every field is already valid (year takes
-        // digits only), and a cleared name falls back to the original, so the
-        // editor always commits and never traps.
+        // Esc/Enter close and write.  A cleared name falls back to the
+        // original, so the editor always commits and never traps.
         KeyCode::Esc | KeyCode::Enter => {
             let typed = fields[0].value.trim();
             let name = if typed.is_empty() {
@@ -556,16 +554,12 @@ fn handle_edit_metadata_key(
             };
             let artist = nonempty_opt(&fields[1].value);
             let album = nonempty_opt(&fields[2].value);
-            let year = fields[META_YEAR].value.trim().parse().ok();
-            let genre = nonempty_opt(&fields[4].value);
-            if matches!(code, KeyCode::Enter) && *active_field == 5 {
+            if matches!(code, KeyCode::Enter) && *active_field == META_FIELDS {
                 ModalOutcome::Confirm(ModalConfirm::SaveMetadataAndEditLyrics {
                     track_id,
                     name,
                     artist,
                     album,
-                    year,
-                    genre,
                 })
             } else {
                 ModalOutcome::Confirm(ModalConfirm::SaveMetadata {
@@ -573,36 +567,31 @@ fn handle_edit_metadata_key(
                     name,
                     artist,
                     album,
-                    year,
-                    genre,
                 })
             }
         }
         KeyCode::Tab | KeyCode::Down => {
-            *active_field = (*active_field + 1) % ROWS;
+            *active_field = (*active_field + 1) % META_ROWS;
             ModalOutcome::Consumed
         }
         KeyCode::BackTab | KeyCode::Up => {
-            *active_field = (*active_field + ROWS - 1) % ROWS;
+            *active_field = (*active_field + META_ROWS - 1) % META_ROWS;
             ModalOutcome::Consumed
         }
-        // Text-input keys only apply to the 5 text fields (rows 0-4).
-        // The year field accepts digits only, so it is never invalid.
-        KeyCode::Char(c) if *active_field < 5 => {
-            if *active_field != META_YEAR || c.is_ascii_digit() {
-                fields[*active_field].push(c);
-            }
+        // Text-input keys apply only to the text fields, not the button row.
+        KeyCode::Char(c) if *active_field < META_FIELDS => {
+            fields[*active_field].push(c);
             ModalOutcome::Consumed
         }
-        KeyCode::Backspace if *active_field < 5 => {
+        KeyCode::Backspace if *active_field < META_FIELDS => {
             fields[*active_field].backspace();
             ModalOutcome::Consumed
         }
-        KeyCode::Left if *active_field < 5 => {
+        KeyCode::Left if *active_field < META_FIELDS => {
             fields[*active_field].move_left();
             ModalOutcome::Consumed
         }
-        KeyCode::Right if *active_field < 5 => {
+        KeyCode::Right if *active_field < META_FIELDS => {
             fields[*active_field].move_right();
             ModalOutcome::Consumed
         }
@@ -680,7 +669,9 @@ const fn confirm_key(code: KeyCode) -> Confirm {
 impl Modal {
     pub fn handle_key(&mut self, code: KeyCode, _modifiers: KeyModifiers) -> ModalOutcome {
         match self {
-            Self::Notify { .. } | Self::Help | Self::About => ModalOutcome::Dismissed,
+            Self::Notify { .. } | Self::About => ModalOutcome::Dismissed,
+
+            Self::Help { scroll } => handle_help_key(code, scroll),
 
             Self::ConfirmQuit => match confirm_key(code) {
                 Confirm::Yes => ModalOutcome::Confirm(ModalConfirm::Quit),
@@ -778,7 +769,7 @@ impl Modal {
 pub fn render_modal(frame: &mut Frame<'_>, modal: &Modal, theme: &Theme) {
     match modal {
         Modal::Notify { message } => render_notification(frame, "Notice", message, theme),
-        Modal::Help => render_help(frame, theme),
+        Modal::Help { scroll } => render_help(frame, *scroll, theme),
         Modal::About => render_about(frame, theme),
         Modal::ConfirmQuit => render_confirm(frame, "Quit audium?", theme),
         Modal::Menu { cursor } => render_menu(frame, *cursor, theme),
@@ -1182,76 +1173,249 @@ fn render_playlist_picker(
     render_hints(frame, rows[4], &hints, theme);
 }
 
-fn render_help(frame: &mut Frame<'_>, theme: &Theme) {
-    let bindings: &[(&str, &str)] = &[
-        ("q", "Quit"),
-        ("Tab / S-Tab", "Next / previous panel"),
-        ("?", "Toggle this list"),
-        ("", ""),
-        ("j / Down", "Move cursor down"),
-        ("k / Up", "Move cursor up"),
-        ("g / G", "Jump to top / bottom"),
-        ("PgUp / PgDn", "Page up / down"),
-        ("", ""),
-        ("Space", "Play / Pause"),
-        ("n", "Next track"),
-        ("N", "Previous track"),
-        ("Left / Right", "Seek backward / forward"),
-        ("+ / =", "Volume up"),
-        ("-", "Volume down"),
-        ("l", "Cycle loop mode"),
-        ("[  /  ]", "Speed down / up"),
-        ("", ""),
-        ("Enter", "Play selected track"),
-        ("a", "Add selected track / list to queue"),
-        ("p", "Add track to playlist"),
-        ("d", "Remove selected item"),
-        ("D", "Clear queue"),
-        ("e", "Edit selected track / playlist"),
-        ("y", "Toggle lyrics overlay"),
-        ("", ""),
-        ("c", "Create new playlist"),
-        ("z", "Shuffle current view into queue"),
-        ("", ""),
-        ("f", "Open file picker"),
-        ("/", "Filter tracklist"),
-        ("", ""),
-        ("m", "Open menu"),
-    ];
+/// Rows a page key moves the help list.
+const HELP_PAGE: usize = 10;
 
-    // Height follows the table, so it cannot drift when a key is added or
-    // removed and leave a lopsided gap at the bottom.
+/// Scrolling keys move the list; anything else closes, so the dialog still
+/// dismisses on a stray keypress.
+const fn handle_help_key(code: KeyCode, scroll: &mut usize) -> ModalOutcome {
+    let moved = match code {
+        KeyCode::Char('j') | KeyCode::Down => scroll.saturating_add(1),
+        KeyCode::Char('k') | KeyCode::Up => scroll.saturating_sub(1),
+        KeyCode::PageDown => scroll.saturating_add(HELP_PAGE),
+        KeyCode::PageUp => scroll.saturating_sub(HELP_PAGE),
+        KeyCode::Char('g') | KeyCode::Home => 0,
+        _ => return ModalOutcome::Dismissed,
+    };
+    *scroll = moved;
+    ModalOutcome::Consumed
+}
+
+/// One titled group of keys.
+struct HelpSection {
+    title: &'static str,
+    keys: &'static [(&'static str, &'static str)],
+}
+
+/// Grouped by what you are trying to do, not by which key happens to be free.
+/// Anonymous blank-line groups told the reader that a break existed but never
+/// what it meant.
+const HELP: &[HelpSection] = &[
+    HelpSection {
+        title: "Getting around",
+        keys: &[
+            ("Tab / S-Tab", "Next / previous panel"),
+            ("j / k", "Move cursor"),
+            ("g / G", "Jump to top / bottom"),
+            ("PgUp / PgDn", "Page up / down"),
+            ("Enter", "Open / play selection"),
+            ("/", "Filter the track list"),
+        ],
+    },
+    HelpSection {
+        title: "Playback",
+        keys: &[
+            ("Space", "Play / pause"),
+            ("n / N", "Next / previous track"),
+            ("Left / Right", "Seek backward / forward"),
+            ("+ / -", "Volume up / down"),
+            ("[ / ]", "Speed down / up"),
+            ("l", "Cycle loop mode"),
+            ("y", "Lyrics overlay"),
+        ],
+    },
+    HelpSection {
+        title: "Queue",
+        keys: &[
+            ("a", "Add selection to queue"),
+            ("z", "Shuffle view into queue"),
+            ("d", "Remove from queue"),
+            ("D", "Clear the queue"),
+            ("J / K", "Move track down / up"),
+        ],
+    },
+    HelpSection {
+        title: "Library",
+        keys: &[
+            ("f", "Import files"),
+            ("c", "Create a playlist"),
+            ("p", "Add track to a playlist"),
+            ("e", "Edit track / playlist"),
+            ("d", "Delete track / playlist"),
+        ],
+    },
+    HelpSection {
+        title: "Application",
+        keys: &[
+            ("m", "Menu, settings and about"),
+            ("?", "Toggle this help"),
+            ("q", "Quit"),
+        ],
+    },
+];
+
+/// Renders one section as `title` then its keys, indented under it.
+///
+/// Keys are left-aligned at a fixed indent, so every key in the dialog starts
+/// on the same column as every other and sits directly under its heading;
+/// right-aligning them instead lined up only the descriptions and left a
+/// ragged edge running down the middle of each column.
+///
+/// The width is per column: one width shared across both would size the
+/// single-letter side to fit `Tab / S-Tab`, stranding its keys a dozen columns
+/// from the text they label.
+fn help_lines<'a>(sections: &[&'a HelpSection], theme: &Theme) -> Vec<Line<'a>> {
+    let key_w = sections
+        .iter()
+        .flat_map(|s| s.keys.iter())
+        .map(|(k, _)| k.chars().count())
+        .max()
+        .unwrap_or(0);
+
+    let mut lines = Vec::new();
+    for (i, section) in sections.iter().enumerate() {
+        if i > 0 {
+            lines.push(Line::from(""));
+        }
+        lines.push(Line::from(Span::styled(
+            section.title,
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        )));
+        for (key, desc) in section.keys {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("  {key:<key_w$}   "),
+                    Style::default().fg(theme.text),
+                ),
+                Span::styled(*desc, Style::default().fg(theme.text_dim)),
+            ]));
+        }
+    }
+    lines
+}
+
+/// Splits the sections into two balanced columns, or one if the terminal is
+/// too narrow for two.
+fn help_columns() -> (Vec<&'static HelpSection>, Vec<&'static HelpSection>) {
+    let all: Vec<&HelpSection> = HELP.iter().collect();
+    // Balance by rendered height, not by section count, and pick the split
+    // with the smallest difference rather than the first one past halfway:
+    // crossing the midpoint can leave the columns further apart than stopping
+    // short of it would have.
+    let rows = |s: &HelpSection| s.keys.len() + 2;
+    let total: usize = all.iter().map(|s| rows(s)).sum();
+    let mut used = 0;
+    let mut best = (usize::MAX, 1);
+    for (i, section) in all.iter().enumerate() {
+        used += rows(section);
+        let diff = used.abs_diff(total - used);
+        if diff < best.0 {
+            best = (diff, i + 1);
+        }
+    }
+    let (left, right) = all.split_at(best.1.min(all.len()));
+    (left.to_vec(), right.to_vec())
+}
+
+/// Blank columns between the two key columns.
+const HELP_COL_GAP: u16 = 4;
+
+/// Widest rendered line in a block.
+fn lines_width(lines: &[Line<'_>]) -> u16 {
+    usize_to_u16_saturating(lines.iter().map(Line::width).max().unwrap_or(0))
+}
+
+fn render_help(frame: &mut Frame<'_>, scroll: usize, theme: &Theme) {
     let area = frame.area();
-    let height = usize_to_u16_saturating(bindings.len()).saturating_add(MODAL_CHROME_H);
-    let rect = centered_rect(60, height, area);
+
+    // Lay the columns out first and size the dialog to what they actually
+    // measure. A fixed width left the right-hand column floating in dead
+    // space, because its keys are single letters while the left column's run
+    // to `Tab / S-Tab`.
+    let (left_sections, right_sections) = help_columns();
+    let left = help_lines(&left_sections, theme);
+    let right = help_lines(&right_sections, theme);
+    let (left_w, right_w) = (lines_width(&left), lines_width(&right));
+
+    let chrome = 2 + 2 * MODAL_PAD_X;
+    let two_col = !right.is_empty() && left_w + HELP_COL_GAP + right_w + chrome <= area.width;
+
+    let (body_lines, content_w) = if two_col {
+        (left.len().max(right.len()), left_w + HELP_COL_GAP + right_w)
+    } else {
+        // Too narrow to sit side by side: stack every section in one column.
+        (0, left_w.max(right_w))
+    };
+
+    let hints = [hint("j/k", "scroll"), hint("any key", "close")];
+    let hint_h = hint_height(&hints, usize::from(content_w), theme);
+
+    let width = (content_w + chrome).min(area.width.saturating_sub(2));
+
+    // Clamp to the terminal: the list is taller than a short window, and being
+    // silently cut off with no way to reach the rest is worse than scrolling.
+    let stacked: Vec<Line<'_>>;
+    let (lines_len, single) = if two_col {
+        (body_lines, None)
+    } else {
+        let all: Vec<&HelpSection> = HELP.iter().collect();
+        stacked = help_lines(&all, theme);
+        (stacked.len(), Some(&stacked))
+    };
+
+    let max_h = area.height.saturating_sub(2);
+    let fixed = hint_h + 1 + MODAL_CHROME_H;
+    let height = (usize_to_u16_saturating(lines_len) + fixed).min(max_h);
+    let visible = usize::from(height.saturating_sub(fixed));
+    let scrollable = lines_len > visible;
+    let scroll = if scrollable {
+        usize_to_u16_saturating(scroll.min(lines_len - visible))
+    } else {
+        0
+    };
+
+    let rect = centered_rect(width, height, area);
     frame.render_widget(Clear, rect);
 
-    let block = modal_block("Keybindings", theme);
+    let block = modal_block("Help", theme);
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
-    // Size the key column to the widest key so no row can push its description
-    // out of alignment.
-    let key_w = bindings.iter().map(|(key, _)| key.len()).max().unwrap_or(0);
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Length(hint_h),
+        ])
+        .split(inner);
 
-    let items: Vec<Line<'_>> = bindings
-        .iter()
-        .map(|(key, desc)| {
-            if key.is_empty() {
-                Line::from("")
-            } else {
-                Line::from(vec![
-                    Span::styled(
-                        format!("{key:>key_w$}  "),
-                        Style::default().fg(theme.accent),
-                    ),
-                    Span::styled(*desc, Style::default().fg(theme.text_dim)),
-                ])
-            }
-        })
-        .collect();
+    if let Some(all) = single {
+        frame.render_widget(Paragraph::new(all.clone()).scroll((scroll, 0)), rows[0]);
+    } else {
+        // Fixed left column rather than an even split: the columns hold
+        // different amounts of text, so halving the width would strand one of
+        // them well short of the border.
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(left_w + HELP_COL_GAP),
+                Constraint::Min(0),
+            ])
+            .split(rows[0]);
+        frame.render_widget(Paragraph::new(left).scroll((scroll, 0)), cols[0]);
+        frame.render_widget(Paragraph::new(right).scroll((scroll, 0)), cols[1]);
+    }
 
-    frame.render_widget(Paragraph::new(items), inner);
+    // The scroll hint would be a lie when everything already fits.
+    let shown: Vec<Hint<'_>> = if scrollable {
+        hints.to_vec()
+    } else {
+        vec![hint("any key", "close")]
+    };
+    render_hints(frame, rows[2], &shown, theme);
 }
 
 fn render_menu(frame: &mut Frame<'_>, cursor: usize, theme: &Theme) {
@@ -1658,7 +1822,7 @@ fn locked_display(value: &'static str, theme: &Theme) -> Line<'static> {
 
 // -- EditMetadata renderer --------------------------------------------------
 
-const META_LABELS: [&str; 5] = ["Name", "Artist", "Album", "Year", "Genre"];
+const META_LABELS: [&str; META_FIELDS] = ["Name", "Artist", "Album"];
 
 fn render_metadata_field(
     frame: &mut Frame<'_>,
@@ -1734,7 +1898,7 @@ fn render_edit_lyrics_button(frame: &mut Frame<'_>, row: Rect, active: bool, the
 
 fn render_edit_metadata(
     frame: &mut Frame<'_>,
-    fields: &[TextInput; 5],
+    fields: &[TextInput; META_FIELDS],
     active_field: usize,
     theme: &Theme,
 ) {
@@ -1746,7 +1910,20 @@ fn render_edit_metadata(
         hint("Esc / Enter", "close"),
     ];
     let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
-    let rect = centered_rect(WIDTH, 8 + hint_h + MODAL_CHROME_H, area);
+
+    // Every row is derived from META_FIELDS: one row per field, a spacer, the
+    // lyrics button, a gap, then the hints. Hardcoding these drifted the
+    // moment the field count changed.
+    let mut constraints = vec![Constraint::Length(1); META_FIELDS];
+    constraints.extend([
+        Constraint::Length(1),      // spacer
+        Constraint::Length(1),      // Edit Lyrics -> button
+        Constraint::Min(1),         // gap above the hints
+        Constraint::Length(hint_h), // hints
+    ]);
+    let content_h = usize_to_u16_saturating(META_FIELDS) + 3;
+
+    let rect = centered_rect(WIDTH, content_h + hint_h + MODAL_CHROME_H, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Edit Track", theme);
@@ -1755,25 +1932,22 @@ fn render_edit_metadata(
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),      // Name
-            Constraint::Length(1),      // Artist
-            Constraint::Length(1),      // Album
-            Constraint::Length(1),      // Year
-            Constraint::Length(1),      // Genre
-            Constraint::Length(1),      // spacer
-            Constraint::Length(1),      // Edit Lyrics -> button
-            Constraint::Min(1),         // gap above the hints
-            Constraint::Length(hint_h), // hints
-        ])
+        .constraints(constraints)
         .split(inner);
 
     for (i, (label, input)) in META_LABELS.iter().zip(fields.iter()).enumerate() {
         render_metadata_field(frame, rows[i], label, input, active_field == i, theme);
     }
 
-    render_edit_lyrics_button(frame, rows[6], active_field == 5, theme);
-    render_hints(frame, rows[8], &hints, theme);
+    // The button is the row after the fields and the spacer; selecting it is
+    // `active_field == META_FIELDS`, the same index the key handler uses.
+    render_edit_lyrics_button(
+        frame,
+        rows[META_FIELDS + 1],
+        active_field == META_FIELDS,
+        theme,
+    );
+    render_hints(frame, rows[META_FIELDS + 3], &hints, theme);
 }
 
 // -- EditLyrics / tui-textarea renderer ------------------------------------

@@ -6,7 +6,9 @@ use ratatui::{
     widgets::{List, ListItem, ListState, Paragraph},
 };
 
-use super::layout::{Columns, GAP_S, NUM_W, Theme, cursor_spans, format_duration, styled_block};
+use super::layout::{
+    Columns, GAP_S, NUM_W, Theme, cursor_spans, format_duration, row_marker, styled_block,
+};
 use crate::app::{AppState, Focus};
 
 pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
@@ -49,26 +51,19 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let (header_rect, rule_rect, rows_rect) = (table[0], table[1], table[2]);
 
     let cols = Columns::for_width(usize::from(list_rect.width));
-    render_table_header(frame, header_rect, rule_rect, &cols, t);
+    render_table_header(frame, header_rect, rule_rect, &cols, focused, t);
 
     let tracks = state.active_tracks();
 
     let items: Vec<ListItem<'_>> = tracks
         .iter()
-        .enumerate()
-        .map(|(i, track)| {
+        .map(|track| {
             let is_playing = state
                 .now_playing
                 .and_then(|np| state.queue.get(np))
                 .is_some_and(|qt| qt.id == track.id);
 
-            // The playing row trades its index for the play glyph, which reads
-            // faster than a recoloured number.
-            let marker = if is_playing {
-                t.glyphs().play.to_string()
-            } else {
-                (i + 1).to_string()
-            };
+            let marker = row_marker(is_playing, state.player.is_paused, state.elapsed(), t);
             let num = Span::styled(
                 format!("{marker:>NUM_W$}{GAP_S}"),
                 Style::default().fg(if is_playing { t.accent } else { t.subtle }),
@@ -143,14 +138,26 @@ fn render_filter_bar(frame: &mut Frame<'_>, area: Rect, state: &AppState, t: &Th
 }
 
 /// Column labels and the rule under them.
-fn render_table_header(frame: &mut Frame<'_>, header: Rect, rule: Rect, cols: &Columns, t: &Theme) {
-    let mut spans = vec![Span::raw(format!("{:>NUM_W$}{GAP_S}", "#"))];
-    spans.extend(cols.cells("Title", "Artist", "Album", "Time"));
+/// Labels are uppercased, which reads as a table heading rather than as a
+/// first row of data, and the header picks up the accent while the panel has
+/// focus so the eye lands on the active table.
+fn render_table_header(
+    frame: &mut Frame<'_>,
+    header: Rect,
+    rule: Rect,
+    cols: &Columns,
+    focused: bool,
+    t: &Theme,
+) {
+    let label = if focused { t.accent } else { t.subtle };
+
+    let mut spans = vec![Span::raw(format!("{blank:NUM_W$}{GAP_S}", blank = ""))];
+    spans.extend(cols.cells("TITLE", "ARTIST", "ALBUM", "TIME"));
     frame.render_widget(
         Paragraph::new(Line::from(
             spans
                 .into_iter()
-                .map(|sp| sp.style(Style::default().fg(t.subtle).add_modifier(Modifier::BOLD)))
+                .map(|sp| sp.style(Style::default().fg(label).add_modifier(Modifier::BOLD)))
                 .collect::<Vec<_>>(),
         )),
         header,
@@ -158,7 +165,7 @@ fn render_table_header(frame: &mut Frame<'_>, header: Rect, rule: Rect, cols: &C
     frame.render_widget(
         Paragraph::new(Span::styled(
             t.glyphs().rule.repeat(usize::from(rule.width)),
-            Style::default().fg(t.subtle),
+            Style::default().fg(label),
         )),
         rule,
     );

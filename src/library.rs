@@ -50,10 +50,6 @@ pub struct Track {
     pub artist: Option<String>,
     #[serde(default)]
     pub album: Option<String>,
-    #[serde(default)]
-    pub year: Option<u32>,
-    #[serde(default)]
-    pub genre: Option<String>,
     /// Raw LRC text or plain lyrics, set by the user in-app.
     #[serde(default)]
     pub lyrics: Option<String>,
@@ -83,8 +79,6 @@ struct FileTags {
     title: Option<String>,
     artist: Option<String>,
     album: Option<String>,
-    year: Option<u32>,
-    genre: Option<String>,
     duration_secs: Option<u64>,
 }
 
@@ -102,8 +96,6 @@ fn track_from_file(id: TrackId, path: PathBuf) -> Track {
         name,
         artist: tags.as_ref().and_then(|t| t.artist.clone()),
         album: tags.as_ref().and_then(|t| t.album.clone()),
-        year: tags.as_ref().and_then(|t| t.year),
-        genre: tags.as_ref().and_then(|t| t.genre.clone()),
         lyrics: None,
         duration_secs: tags.as_ref().and_then(|t| t.duration_secs),
         path,
@@ -130,8 +122,6 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
             title: None,
             artist: None,
             album: None,
-            year: None,
-            genre: None,
             duration_secs,
         });
     };
@@ -149,11 +139,6 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
             .album()
             .map(std::borrow::Cow::into_owned)
             .and_then(nonempty),
-        genre: tag
-            .genre()
-            .map(std::borrow::Cow::into_owned)
-            .and_then(nonempty),
-        year: tag.date().map(|ts| u32::from(ts.year)),
         duration_secs,
     })
 }
@@ -507,15 +492,11 @@ impl Library {
         name: String,
         artist: Option<String>,
         album: Option<String>,
-        year: Option<u32>,
-        genre: Option<String>,
     ) -> Result<()> {
         if let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) {
             t.name = name;
             t.artist = artist;
             t.album = album;
-            t.year = year;
-            t.genre = genre;
             self.save()
         } else {
             Ok(())
@@ -602,6 +583,28 @@ impl Library {
         Ok(())
     }
 
+    /// Moves the track at `index` one place towards the start or end of a
+    /// playlist, and reports the index it ended up at.
+    ///
+    /// Returns `None` when the move would run off either end, so the caller
+    /// can leave the cursor where it is rather than clamping it silently.
+    pub fn playlist_move_track(
+        &mut self,
+        playlist_id: PlaylistId,
+        index: usize,
+        down: bool,
+    ) -> Option<usize> {
+        let pl = self.playlists.iter_mut().find(|p| p.id == playlist_id)?;
+        let target = if down {
+            index.checked_add(1).filter(|&i| i < pl.tracks.len())?
+        } else {
+            index.checked_sub(1)?
+        };
+        pl.tracks.swap(index, target);
+        let _ = self.save();
+        Some(target)
+    }
+
     /// Returns a reference to a playlist by id.
     pub fn playlist(&self, id: PlaylistId) -> Option<&Playlist> {
         self.playlists.iter().find(|p| p.id == id)
@@ -627,8 +630,6 @@ mod tests {
             path: PathBuf::from(format!("/nonexistent/t{id}.mp3")),
             artist: None,
             album: None,
-            year: None,
-            genre: None,
             lyrics: None,
             duration_secs: None,
         }
@@ -668,6 +669,48 @@ mod tests {
                 "id {id} after removal"
             );
         }
+    }
+
+    fn playlist_of(ids: &[TrackId]) -> Library {
+        let mut lib = library_of(ids);
+        let mut pl = Playlist::new(1, "mix");
+        pl.tracks = ids.to_vec();
+        lib.playlists.push(pl);
+        lib
+    }
+
+    fn order(lib: &Library) -> Vec<TrackId> {
+        lib.playlists[0].tracks.clone()
+    }
+
+    #[test]
+    fn moves_a_track_through_a_playlist() {
+        let mut lib = playlist_of(&[1, 2, 3]);
+        assert_eq!(lib.playlist_move_track(1, 0, true), Some(1));
+        assert_eq!(order(&lib), vec![2, 1, 3]);
+        assert_eq!(lib.playlist_move_track(1, 1, false), Some(0));
+        assert_eq!(order(&lib), vec![1, 2, 3]);
+    }
+
+    /// The caller keeps the cursor still on a refused move, so the ends must
+    /// report failure rather than clamping to themselves.
+    #[test]
+    fn refuses_to_move_past_either_end() {
+        let mut lib = playlist_of(&[1, 2, 3]);
+        assert_eq!(lib.playlist_move_track(1, 0, false), None);
+        assert_eq!(lib.playlist_move_track(1, 2, true), None);
+        assert_eq!(
+            order(&lib),
+            vec![1, 2, 3],
+            "a refused move must not reorder"
+        );
+    }
+
+    #[test]
+    fn move_on_a_missing_playlist_is_a_no_op() {
+        let mut lib = playlist_of(&[1, 2]);
+        assert_eq!(lib.playlist_move_track(99, 0, true), None);
+        assert_eq!(order(&lib), vec![1, 2]);
     }
 
     /// Ids are assigned monotonically, but a hand-edited index may list them

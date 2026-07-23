@@ -21,7 +21,7 @@ const TOP_BAR_HEIGHT: u16 = 1;
 /// Top-bar segments: name flush left, tagline centred, hint flush right.
 const BAR_NAME: &str = " audium";
 const BAR_TAGLINE: &str = "terminal music app";
-const BAR_HINT: &str = "[?] keybindings ";
+const BAR_HINT: &str = "[?] help ";
 
 pub fn render(frame: &mut Frame<'_>, state: &AppState) {
     let area = frame.area();
@@ -31,12 +31,20 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState) {
         area,
     );
 
+    // With nothing playing the bar has nothing to report, so it yields its
+    // rows to the lists rather than sitting there stating that fact.
+    let player_h = if state.now_playing.is_some() {
+        player_bar::PLAYER_BAR_H
+    } else {
+        0
+    };
+
     let vertical = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(TOP_BAR_HEIGHT),
             Constraint::Min(0),
-            Constraint::Length(5),
+            Constraint::Length(player_h),
         ])
         .split(area);
 
@@ -56,7 +64,9 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState) {
     sidebar::render_sidebar(frame, state, horizontal[0]);
     tracklist::render_tracklist(frame, state, content_split[0]);
     queue::render_queue(frame, state, content_split[1]);
-    player_bar::render_player_bar(frame, state, vertical[2]);
+    if player_h > 0 {
+        player_bar::render_player_bar(frame, state, vertical[2]);
+    }
     overlay::render_overlay(frame, state);
 }
 

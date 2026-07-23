@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -38,10 +40,8 @@ pub struct Theme {
 /// glyph literals.
 #[derive(Debug)]
 pub struct Glyphs {
-    /// Player status: playback in progress (shown while paused-capable).
-    pub play: &'static str,
-    /// Player status: paused-capable (shown while playing).
-    pub pause: &'static str,
+    /// Vertical rule separating items in a status cluster.
+    pub divider: &'static str,
     /// 3-column list prefix marking the selected / active row.
     pub marker: &'static str,
     /// Left / right value-cycle arrows in the settings rows.
@@ -50,9 +50,6 @@ pub struct Glyphs {
     /// Horizontal bar fill / empty (progress, thumb, settings volume).
     pub bar_fill: &'static str,
     pub bar_empty: &'static str,
-    /// 5-column vertical volume cells (padded), filled / empty.
-    pub vol_fill: &'static str,
-    pub vol_empty: &'static str,
     /// Padded metadata separator (e.g. `album - year`).
     pub sep: &'static str,
     /// Music note (lyrics title, file-picker audio entries).
@@ -65,42 +62,53 @@ pub struct Glyphs {
     pub times: &'static str,
     /// Horizontal rule fill, used under the track table's header row.
     pub rule: &'static str,
+    /// Scrubber: the track line, and the head riding along it.
+    pub track: &'static str,
+    pub thumb: &'static str,
+    /// Frames of the small equaliser shown against the playing row. Cycled by
+    /// elapsed time, so the list shows playback is live without the cost of a
+    /// real animation.
+    pub eq: [&'static str; 4],
+    /// The same equaliser at rest, for the track that is loaded but paused.
+    pub eq_idle: &'static str,
 }
 
 static UNICODE_GLYPHS: Glyphs = Glyphs {
-    play: "▶",
-    pause: "⏸",
+    divider: "│",
     marker: "▶  ",
     arrow_left: "◀",
     arrow_right: "▶",
     bar_fill: "█",
     bar_empty: "░",
-    vol_fill: " ▓▓▓ ",
-    vol_empty: " ░░░ ",
     sep: "  ·  ",
     note: "♪",
     folder: "📁",
     bullet: "●",
     times: "×",
     rule: "─",
+    track: "━",
+    thumb: "●",
+    eq: ["▁▃▅", "▃▅▂", "▅▂▆", "▂▆▃"],
+    eq_idle: "▁▁▁",
 };
 
 static ASCII_GLYPHS: Glyphs = Glyphs {
-    play: "|>",
-    pause: "||",
+    divider: "|",
     marker: ">  ",
     arrow_left: "<",
     arrow_right: ">",
     bar_fill: "#",
     bar_empty: "-",
-    vol_fill: " ### ",
-    vol_empty: " --- ",
     sep: "  -  ",
     note: "*",
     folder: "[/]",
     bullet: "*",
     times: "x",
     rule: "-",
+    track: "=",
+    thumb: "O",
+    eq: [".oO", "oO.", "O.o", ".Oo"],
+    eq_idle: "...",
 };
 
 impl Theme {
@@ -631,13 +639,17 @@ impl Columns {
         let time = GAP + Self::TIME_W;
 
         if body >= Self::MIN_TITLE + meta2 + time {
-            let rest = body - time;
-            let title = rest * 2 / 5;
+            // Roughly 4:3:3. Giving the title every spare column instead left
+            // it sprawling on a wide terminal, with the metadata stranded far
+            // to the right; keeping the split proportional holds the columns
+            // together at any width.
+            let rest = body - time - GAP * 2;
             let artist = rest * 3 / 10;
+            let album = rest * 3 / 10;
             Self {
-                title,
+                title: rest - artist - album,
                 artist,
-                album: rest - title - artist - GAP * 2,
+                album,
                 time: Self::TIME_W,
             }
         } else if body >= Self::MIN_TITLE + GAP + Self::MIN_META + time {
@@ -694,6 +706,21 @@ fn pad(s: &str, width: usize) -> String {
     let s = truncate(s, width);
     let fill = width.saturating_sub(s.chars().count());
     format!("{s}{blank:fill$}", blank = "")
+}
+
+/// The gutter cell for a track row: a live equaliser on the playing track,
+/// blank on every other.  Shared so the library and the queue mark the current
+/// track the same way.
+pub fn row_marker(is_playing: bool, paused: bool, elapsed: Duration, t: &Theme) -> String {
+    if !is_playing {
+        return String::new();
+    }
+    let g = t.glyphs();
+    if paused {
+        return g.eq_idle.to_string();
+    }
+    let frame = (elapsed.as_millis() / 250) as usize % g.eq.len();
+    g.eq[frame].to_string()
 }
 
 /// Builds a consistently styled panel block.

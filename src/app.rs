@@ -397,10 +397,6 @@ impl AppState {
                     || t.album
                         .as_deref()
                         .is_some_and(|s| s.to_lowercase().contains(&q))
-                    || t.genre
-                        .as_deref()
-                        .is_some_and(|s| s.to_lowercase().contains(&q))
-                    || t.year.is_some_and(|y| y.to_string().contains(&*q))
             })
             .map(|t| t.id)
             .collect();
@@ -579,7 +575,7 @@ impl AppState {
     fn handle_global_key(&mut self, code: KeyCode) {
         match code {
             KeyCode::Char('q') => self.modal = Some(Modal::ConfirmQuit),
-            KeyCode::Char('?') => self.modal = Some(Modal::Help),
+            KeyCode::Char('?') => self.modal = Some(Modal::Help { scroll: 0 }),
 
             // Playback
             KeyCode::Char(' ') => self.action_toggle_play(),
@@ -617,6 +613,8 @@ impl AppState {
 
             // Context actions
             KeyCode::Enter => self.action_enter(),
+            KeyCode::Char('J') => self.action_move_selection(true),
+            KeyCode::Char('K') => self.action_move_selection(false),
             KeyCode::Char('a') => self.action_add_to_queue(),
             KeyCode::Char('p') => self.action_add_to_playlist(),
             KeyCode::Char('d') => self.action_remove(),
@@ -785,6 +783,59 @@ impl AppState {
                 }
             }
             Focus::Queue => {}
+        }
+    }
+
+    /// `J` / `K`: moves the selected track one place through a playlist or the
+    /// queue, carrying the cursor with it.
+    ///
+    /// The library view has no order of its own to rearrange, and a filtered
+    /// tracklist has no unambiguous one: the row above on screen may be many
+    /// places away in the playlist, so "swap with it" would fling the track
+    /// somewhere the user cannot see. Both are left alone.
+    fn action_move_selection(&mut self, down: bool) {
+        match self.focus {
+            Focus::TrackList => {
+                if !self.tracklist_filter.is_empty() {
+                    return;
+                }
+                let Some(playlist_id) = self.active_playlist_id() else {
+                    return;
+                };
+                if let Some(new) =
+                    self.library
+                        .playlist_move_track(playlist_id, self.tracklist_cursor, down)
+                {
+                    self.tracklist_cursor = new;
+                    self.rebuild_filter_cache();
+                }
+            }
+            Focus::Queue => self.move_in_queue(down),
+            Focus::Library | Focus::Playlists => {}
+        }
+    }
+
+    /// Reorders the queue, keeping `now_playing` pointed at the same track:
+    /// it is an index, so any swap that touches it has to move with it or the
+    /// bar would start describing a different song.
+    fn move_in_queue(&mut self, down: bool) {
+        let from = self.queue_cursor;
+        let Some(to) = (if down {
+            from.checked_add(1).filter(|&i| i < self.queue.len())
+        } else {
+            from.checked_sub(1)
+        }) else {
+            return;
+        };
+
+        self.queue.swap(from, to);
+        self.queue_cursor = to;
+        if let Some(np) = self.now_playing {
+            if np == from {
+                self.now_playing = Some(to);
+            } else if np == to {
+                self.now_playing = Some(from);
+            }
         }
     }
 
@@ -1011,8 +1062,6 @@ impl AppState {
                     TextInput::with_value(&t.name),
                     TextInput::with_value(t.artist.as_deref().unwrap_or("")),
                     TextInput::with_value(t.album.as_deref().unwrap_or("")),
-                    TextInput::with_value(t.year.map(|y| y.to_string()).unwrap_or_default()),
-                    TextInput::with_value(t.genre.as_deref().unwrap_or("")),
                 ],
                 active_field: 0,
                 original_name: t.name,
@@ -1036,16 +1085,12 @@ impl AppState {
         name: &str,
         artist: Option<&String>,
         album: Option<&String>,
-        year: Option<u32>,
-        genre: Option<&String>,
     ) {
         for t in &mut self.queue {
             if t.id == track_id {
                 t.name = name.to_string();
                 t.artist = artist.cloned();
                 t.album = album.cloned();
-                t.year = year;
-                t.genre = genre.cloned();
             }
         }
     }
@@ -1173,18 +1218,14 @@ impl AppState {
         name: &str,
         artist: Option<&String>,
         album: Option<&String>,
-        year: Option<u32>,
-        genre: Option<&String>,
     ) {
         let _ = self.library.update_track_metadata(
             track_id,
             name.to_string(),
             artist.cloned(),
             album.cloned(),
-            year,
-            genre.cloned(),
         );
-        self.sync_queue_metadata(track_id, name, artist, album, year, genre);
+        self.sync_queue_metadata(track_id, name, artist, album);
         self.rebuild_filter_cache();
     }
 
@@ -1261,17 +1302,8 @@ impl AppState {
                 name,
                 artist,
                 album,
-                year,
-                genre,
             } => {
-                self.save_metadata(
-                    track_id,
-                    &name,
-                    artist.as_ref(),
-                    album.as_ref(),
-                    year,
-                    genre.as_ref(),
-                );
+                self.save_metadata(track_id, &name, artist.as_ref(), album.as_ref());
             }
 
             ModalConfirm::SaveLyrics { track_id, lyrics } => {
@@ -1286,17 +1318,8 @@ impl AppState {
                 name,
                 artist,
                 album,
-                year,
-                genre,
             } => {
-                self.save_metadata(
-                    track_id,
-                    &name,
-                    artist.as_ref(),
-                    album.as_ref(),
-                    year,
-                    genre.as_ref(),
-                );
+                self.save_metadata(track_id, &name, artist.as_ref(), album.as_ref());
                 self.action_edit_lyrics(track_id);
             }
         }
