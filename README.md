@@ -118,14 +118,16 @@ sudo dnf install alsa-utils alsa-lib-devel
 
 ```
 $XDG_DATA_HOME/audium/     # typically ~/.local/share/audium/
-  audium.json              # index: track ids, filenames, and playlists
+  audium.json              # index: track filenames and playlists
   music/                   # copies of all imported audio files
 
 $XDG_CONFIG_HOME/audium/   # typically ~/.config/audium/
   settings.json            # user preferences (volume, seek step, theme, transparency, color mode)
 ```
 
-`music/` holds audium's own copies of your imported files, so importing never moves or renames your originals and removing a track deletes only audium's copy. Track metadata is read from the files' tags on every launch, never cached in the index, so the two can never disagree. The index stores each track by its filename within `music/`, not an absolute path, so the whole `$XDG_DATA_HOME/audium/` directory can be copied or moved anywhere and still opens correctly.
+`music/` holds audium's own copies of your imported files, so importing never moves or renames your originals and removing a track deletes only audium's copy. Track metadata is read from the files' tags on every launch.
+
+The index lists tracks and playlist entries by filename, so it is genuinely hand-editable (add a song to a playlist by typing its filename) and identical across machines. Because identity is the filename within `music/`, the whole `$XDG_DATA_HOME/audium/` directory can be copied or moved anywhere and still opens correctly.
 
 `audium.json` is human-readable and editable by hand. audium re-validates it on next launch, so feel free to reorganise playlists or move the directory to another machine.
 
@@ -161,7 +163,8 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 
 - MPRIS, so desktop media keys and status bars can see and drive playback
 - Resuming where playback left off
-- YouTube audio import (no external binary deps)
+- Pitch-preserving speed control (time-stretch DSP), so faster playback does not raise the pitch
+- YouTube/Web audio import (no external binary deps)
 
 ## Contributing
 

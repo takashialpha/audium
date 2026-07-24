@@ -1215,6 +1215,7 @@ const HELP: &[HelpSection] = &[
             ("g / G", "Jump to top / bottom"),
             ("PgUp / PgDn", "Page up / down"),
             ("Enter", "Open / play selection"),
+            ("J / K", "Move item down / up"),
             ("/", "Filter the track list"),
         ],
     },
@@ -1237,7 +1238,6 @@ const HELP: &[HelpSection] = &[
             ("z", "Shuffle view into queue"),
             ("d", "Remove from queue"),
             ("D", "Clear the queue"),
-            ("J / K", "Move track down / up"),
         ],
     },
     HelpSection {

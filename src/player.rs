@@ -257,8 +257,9 @@ fn handle_command(
             match open_source(&path) {
                 Ok(mut source) => {
                     *stopped = false;
-                    // The Player's speed is unchanged; the source is raw and
-                    // seeks in real file time, so scale by the speed factor.
+                    // `position` is a real track offset and the decoder seeks
+                    // in the same units, so it is passed straight through; the
+                    // Player applies speed to the rate, not the seek target.
                     let _ = source.try_seek(position);
                     player.set_speed(speed);
                     player.append(source);

@@ -795,23 +795,37 @@ impl AppState {
     /// somewhere the user cannot see. Both are left alone.
     fn action_move_selection(&mut self, down: bool) {
         match self.focus {
-            Focus::TrackList => {
-                if !self.tracklist_filter.is_empty() {
-                    return;
-                }
-                let Some(playlist_id) = self.active_playlist_id() else {
-                    return;
-                };
-                if let Some(new) =
-                    self.library
-                        .playlist_move_track(playlist_id, self.tracklist_cursor, down)
-                {
-                    self.tracklist_cursor = new;
-                    self.rebuild_filter_cache();
+            Focus::TrackList => self.move_in_tracklist(down),
+            Focus::Playlists => {
+                if let Some(new) = self.library.move_playlist(self.playlist_cursor, down) {
+                    self.playlist_cursor = new;
+                    self.sync_active_view();
                 }
             }
             Focus::Queue => self.move_in_queue(down),
-            Focus::Library | Focus::Playlists => {}
+            // The library row is a single entry; nothing to reorder.
+            Focus::Library => {}
+        }
+    }
+
+    /// Reorders the focused track list: a playlist's contents, or the whole
+    /// library. A filtered view has no unambiguous order to move within (the
+    /// row above on screen may be far away in the real list), so it is left
+    /// alone.
+    fn move_in_tracklist(&mut self, down: bool) {
+        if !self.tracklist_filter.is_empty() {
+            return;
+        }
+        let moved = match self.active_view {
+            SidebarItem::Library => self.library.move_track(self.tracklist_cursor, down),
+            SidebarItem::Playlist(id) => {
+                self.library
+                    .playlist_move_track(id, self.tracklist_cursor, down)
+            }
+        };
+        if let Some(new) = moved {
+            self.tracklist_cursor = new;
+            self.rebuild_filter_cache();
         }
     }
 

@@ -35,33 +35,24 @@ const INDEX_FILE: &str = "audium.json";
 // -- Track ------------------------------------------------------------------
 
 /// A single audio file registered in the library.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Purely a runtime type: nothing here is serialized. On disk a track is just
+/// its filename (see [`IndexFile`]); everything else is derived -- the `id` is
+/// an in-memory handle assigned at load, and the metadata is read from the
+/// file's own tags. So the identity that survives on disk and across instances
+/// is the filename, which the filesystem already guarantees unique.
+#[derive(Debug, Clone)]
 pub struct Track {
     pub id: TrackId,
     /// Absolute path to the audio file, always inside the music directory.
-    ///
-    /// Serialized as the bare filename and rebuilt against the *current* music
-    /// directory on load, so the index is portable: copying or moving the data
-    /// directory cannot leave a path pointing at where it used to be.
-    #[serde(with = "path_as_filename")]
     pub path: PathBuf,
-
-    // Everything below is read from the file's own tags on load, never
-    // persisted: the file is the source of truth, so the index cannot hold a
-    // copy that drifts from it. `#[serde(skip)]` keeps these out of the index
-    // and defaults them until `Library::load` fills them in.
     /// Display name: title tag if present, otherwise the filename stem.
-    #[serde(skip)]
     pub name: String,
-    #[serde(skip)]
     pub artist: Option<String>,
-    #[serde(skip)]
     pub album: Option<String>,
     /// Raw LRC text or plain lyrics.
-    #[serde(skip)]
     pub lyrics: Option<String>,
     /// Track length in seconds, from the file's headers.
-    #[serde(skip)]
     pub duration_secs: Option<u64>,
 }
 
@@ -99,6 +90,14 @@ impl Track {
         self.duration_secs = tags.as_ref().and_then(|t| t.duration_secs);
     }
 
+    /// The track's on-disk identity: its filename within the music directory.
+    pub fn filename(&self) -> String {
+        self.path
+            .file_name()
+            .map_or_else(|| self.path.to_string_lossy(), |n| n.to_string_lossy())
+            .into_owned()
+    }
+
     /// Returns `"{artist} - {name}"` when an artist is set, otherwise `"{name}"`.
     pub fn display(&self) -> String {
         self.artist
@@ -108,25 +107,6 @@ impl Track {
                 || self.name.clone(),
                 |artist| format!("{artist} - {}", self.name),
             )
-    }
-}
-
-/// Serializes a track path as its bare filename and reads it back as a
-/// relative `PathBuf`; [`Library::load`] rebuilds the absolute path against the
-/// current music directory.
-mod path_as_filename {
-    use serde::{Deserialize, Deserializer, Serializer};
-    use std::path::PathBuf;
-
-    pub fn serialize<S: Serializer>(path: &std::path::Path, s: S) -> Result<S::Ok, S::Error> {
-        let name = path
-            .file_name()
-            .map_or_else(|| path.to_string_lossy(), |n| n.to_string_lossy());
-        s.serialize_str(&name)
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<PathBuf, D::Error> {
-        Ok(PathBuf::from(String::deserialize(d)?))
     }
 }
 
@@ -167,6 +147,16 @@ fn load_metadata(tracks: &mut [Track]) {
             });
         }
     });
+}
+
+/// The index one step from `index` in the given direction, or `None` at the
+/// end: a refused move must leave the cursor where it is, not clamp to itself.
+fn neighbour(index: usize, down: bool, len: usize) -> Option<usize> {
+    if down {
+        index.checked_add(1).filter(|&i| i < len)
+    } else {
+        index.checked_sub(1)
+    }
 }
 
 fn read_file_tags(path: &Path) -> Option<FileTags> {
@@ -330,11 +320,16 @@ fn set_or_clear(tag: &mut lofty::tag::Tag, key: lofty::prelude::ItemKey, value: 
 ///
 /// A user-created playlist. The full library is not one of these -- it is
 /// `Library::tracks` itself, surfaced separately in the sidebar.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Runtime-only, like [`Track`]. On disk a playlist is its name and an ordered
+/// list of track filenames; the `id` here is an in-memory handle. Nothing on
+/// disk or in another instance ever refers to a playlist, so it needs no
+/// stable identity beyond the current session.
+#[derive(Debug, Clone)]
 pub struct Playlist {
     pub id: PlaylistId,
     pub name: String,
-    /// Ordered list of track ids belonging to this playlist.
+    /// Ordered track ids; resolved from filenames on load.
     pub tracks: Vec<TrackId>,
 }
 
@@ -361,41 +356,60 @@ impl Playlist {
 ///
 /// `tracks` is public for iteration only.  Anything that adds or removes an
 /// entry must go through this type's methods, which keep `by_id` in step.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default)]
 pub struct Library {
-    /// Schema version of this index; see [`FORMAT_VERSION`].
-    #[serde(default)]
-    version: u32,
-
     /// All registered tracks, keyed by insertion order.
     pub tracks: Vec<Track>,
     /// All user-created playlists.
     pub playlists: Vec<Playlist>,
 
+    /// In-memory id allocators. Ids are assigned fresh each load and never
+    /// written, so these are ordinary counters, not persisted state.
     next_track_id: TrackId,
     next_playlist_id: PlaylistId,
 
-    /// `TrackId` -> index into `tracks`.  Derived state, never persisted:
-    /// without it every lookup is a linear scan, and the callers that resolve
-    /// a whole playlist do one scan *per track*.
+    /// `TrackId` -> index into `tracks`.  Derived state: without it every
+    /// lookup is a linear scan, and the callers that resolve a whole playlist
+    /// do one scan *per track*.
     ///
     /// `FxHash` rather than std's `SipHash`: the key is a `u64` we generate
     /// ourselves and this is read on every render.
-    #[serde(skip)]
     by_id: FxHashMap<TrackId, usize>,
 }
 
-impl Default for Library {
+/// The on-disk index: version, the ordered list of track filenames, and each
+/// playlist as a name and an ordered list of track filenames. No ids, no
+/// counters -- everything is keyed by the filename, which is hand-editable and
+/// the same across instances.
+#[derive(Serialize, Deserialize)]
+struct IndexFile {
+    version: u32,
+    tracks: Vec<String>,
+    playlists: Vec<PlaylistRepr>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PlaylistRepr {
+    name: String,
+    tracks: Vec<String>,
+}
+
+impl Default for IndexFile {
     fn default() -> Self {
         Self {
             version: FORMAT_VERSION,
             tracks: Vec::new(),
             playlists: Vec::new(),
-            next_track_id: 1,
-            next_playlist_id: 1,
-            by_id: FxHashMap::default(),
         }
     }
+}
+
+/// Reads just the version, to name a set-aside index and to tell an older
+/// schema apart from a corrupt file.
+#[derive(Deserialize)]
+struct VersionPeek {
+    #[serde(default)]
+    version: u32,
 }
 
 impl Library {
@@ -447,107 +461,98 @@ impl Library {
     /// Silently prunes tracks whose files have been deleted externally.
     pub fn load() -> Result<Self> {
         fs::create_dir_all(Self::data_dir()?)?;
-        fs::create_dir_all(Self::music_dir()?)?;
-
-        // No index, or one this version cannot read, still falls through to the
-        // music-directory scan below rather than returning early -- that scan is
-        // what rebuilds the collection, so short-circuiting it would leave a
-        // fresh install (or a set-aside index) staring at an empty library with
-        // its files sitting right there.
-        let index = Self::index_path()?;
-        let mut lib = if index.exists() {
-            let raw = fs::read_to_string(&index)
-                .with_context(|| format!("reading library index at {}", index.display()))?;
-            serde_json::from_str::<Self>(&raw)
-                .with_context(|| format!("parsing {INDEX_FILE}: the file may be corrupted"))?
-        } else {
-            Self::default()
-        };
-
-        // A foreign version is moved aside, never migrated and never deleted:
-        // the old file stays on disk if anything needs recovering from it by
-        // hand, and only playlists have to be rebuilt.
-        if lib.version != FORMAT_VERSION {
-            let aside = index.with_extension(format!("v{}.json", lib.version));
-            fs::rename(&index, &aside).with_context(|| {
-                format!("setting aside an unreadable index at {}", aside.display())
-            })?;
-            lib = Self::default();
-        }
-
-        let mut changed = false;
-
-        // Point every track at the current music directory, keeping only the
-        // filename from whatever was stored. A path saved before this version
-        // was absolute; one saved now is already just a name. Either way the
-        // track resolves here, so the data directory can be moved or copied
-        // freely without stranding anything.
         let music_dir = Self::music_dir()?;
-        for t in &mut lib.tracks {
-            if let Some(name) = t.path.file_name() {
-                // An index written by this version already stores just the
-                // name; an older one stored an absolute path. Flag the latter
-                // so it is rewritten to the compact, portable form once.
-                if t.path.as_os_str() != name {
-                    changed = true;
-                }
-                t.path = music_dir.join(name);
-            }
-        }
+        fs::create_dir_all(&music_dir)?;
 
-        // Remove tracks whose files no longer exist.
-        let mut removed = FxHashSet::default();
-        lib.tracks.retain(|t| {
-            if t.path.exists() {
-                true
+        let index = Self::index_path()?;
+        let (file, reset) = Self::read_index(&index)?;
+        let mut changed = reset;
+
+        // The library's order is whatever the index lists (that still exists),
+        // followed by any file in the directory the index does not mention.
+        // Identity is the filename throughout, so a moved or copied data
+        // directory just resolves against the new location.
+        let mut order: Vec<String> = Vec::with_capacity(file.tracks.len());
+        let mut seen: FxHashSet<String> = FxHashSet::default();
+        for name in file.tracks {
+            if music_dir.join(&name).is_file() && seen.insert(name.clone()) {
+                order.push(name);
             } else {
-                removed.insert(t.id);
+                // A listed file vanished (or was listed twice); the index no
+                // longer matches the directory.
                 changed = true;
-                false
-            }
-        });
-        if !removed.is_empty() {
-            for pl in &mut lib.playlists {
-                pl.tracks.retain(|id| !removed.contains(id));
             }
         }
-
-        // Import any audio file in the music directory that no track claims.
-        // This is the rebuild path (a set-aside index re-populates from the
-        // files) and a convenience (drop a file in and it appears). Identity is
-        // the filename, which `add_file` keeps unique, so a registered track is
-        // never mistaken for a new file however the directory was relocated.
-        let known: FxHashSet<std::ffi::OsString> = lib
-            .tracks
-            .iter()
-            .filter_map(|t| t.path.file_name().map(std::ffi::OsStr::to_os_string))
-            .collect();
-
         if let Ok(entries) = fs::read_dir(&music_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if !path.is_file() || !crate::filepicker::is_audio(&path) {
-                    continue;
-                }
-                let is_new = path
-                    .file_name()
-                    .is_some_and(|n| !known.contains(&n.to_os_string()));
-                if is_new {
-                    let id = lib.next_track_id;
-                    lib.next_track_id += 1;
-                    // Metadata is filled by the pass below with everyone else.
-                    lib.tracks.push(Track::at(id, path));
-                    changed = true;
-                }
-            }
+            let mut extra: Vec<String> = entries
+                .flatten()
+                .filter_map(|e| {
+                    let p = e.path();
+                    (p.is_file() && crate::filepicker::is_audio(&p))
+                        .then(|| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                        .flatten()
+                })
+                .filter(|n| seen.insert(n.clone()))
+                .collect();
+            // Deterministic order for files that were dropped in, not imported.
+            extra.sort_unstable();
+            changed |= !extra.is_empty();
+            order.append(&mut extra);
+        }
+
+        // Assign fresh ids and remember the filename each maps to, so playlists
+        // can be resolved below.
+        let mut by_name: FxHashMap<String, TrackId> = FxHashMap::default();
+        let mut tracks: Vec<Track> = Vec::with_capacity(order.len());
+        let mut next_track_id: TrackId = 1;
+        for name in order {
+            let id = next_track_id;
+            next_track_id += 1;
+            by_name.insert(name.clone(), id);
+            tracks.push(Track::at(id, music_dir.join(name)));
         }
 
         // The index carries no metadata; read it from every file now. Files are
         // independent, so this fans out across the CPU -- warm it costs a few
         // ms even for thousands of tracks, and cold the overlapping I/O waits
         // are what parallelism helps most.
-        load_metadata(&mut lib.tracks);
+        load_metadata(&mut tracks);
 
+        // Resolve each playlist's filenames to ids, dropping any the library no
+        // longer has (its file was removed).
+        let mut next_playlist_id: PlaylistId = 1;
+        let playlists: Vec<Playlist> = file
+            .playlists
+            .into_iter()
+            .map(|p| {
+                // Resolve filenames to ids, dropping any the library lacks and
+                // any repeat: a track belongs to a playlist at most once, the
+                // same invariant `playlist_add_track` keeps.
+                let mut seen = FxHashSet::default();
+                let resolved: Vec<TrackId> = p
+                    .tracks
+                    .iter()
+                    .filter_map(|n| by_name.get(n).copied())
+                    .filter(|&id| seen.insert(id))
+                    .collect();
+                changed |= resolved.len() != p.tracks.len();
+                let id = next_playlist_id;
+                next_playlist_id += 1;
+                Playlist {
+                    id,
+                    name: p.name,
+                    tracks: resolved,
+                }
+            })
+            .collect();
+
+        let mut lib = Self {
+            tracks,
+            playlists,
+            next_track_id,
+            next_playlist_id,
+            by_id: FxHashMap::default(),
+        };
         lib.reindex();
 
         if changed {
@@ -557,10 +562,54 @@ impl Library {
         Ok(lib)
     }
 
+    /// Reads the on-disk index, or sets it aside and starts fresh.
+    ///
+    /// An index this version cannot read -- a foreign schema version or a
+    /// corrupt file -- is renamed rather than migrated or deleted: the old copy
+    /// stays on disk for hand recovery, and the collection is rebuilt from the
+    /// files. Returns the parsed index (or an empty one) and whether a reset
+    /// happened, so the caller knows to rewrite the index in the current form.
+    fn read_index(index: &Path) -> Result<(IndexFile, bool)> {
+        if !index.exists() {
+            return Ok((IndexFile::default(), false));
+        }
+        let raw = fs::read_to_string(index)
+            .with_context(|| format!("reading library index at {}", index.display()))?;
+        if let Ok(file) = serde_json::from_str::<IndexFile>(&raw)
+            && file.version == FORMAT_VERSION
+        {
+            return Ok((file, false));
+        }
+        let version = serde_json::from_str::<VersionPeek>(&raw).map_or(0, |v| v.version);
+        let aside = index.with_extension(format!("v{version}.json"));
+        fs::rename(index, &aside)
+            .with_context(|| format!("setting aside an unreadable index at {}", aside.display()))?;
+        Ok((IndexFile::default(), true))
+    }
+
     pub fn save(&self) -> Result<()> {
+        // Runtime ids become filenames on disk: the index records which files
+        // exist and, per playlist, which files belong to it.
+        let file = IndexFile {
+            version: FORMAT_VERSION,
+            tracks: self.tracks.iter().map(Track::filename).collect(),
+            playlists: self
+                .playlists
+                .iter()
+                .map(|p| PlaylistRepr {
+                    name: p.name.clone(),
+                    tracks: p
+                        .tracks
+                        .iter()
+                        .filter_map(|&id| self.track(id).map(Track::filename))
+                        .collect(),
+                })
+                .collect(),
+        };
+
         let index = Self::index_path()?;
         let tmp = index.with_extension("json.tmp");
-        let raw = serde_json::to_string_pretty(self)?;
+        let raw = serde_json::to_string_pretty(&file)?;
         fs::write(&tmp, &raw)
             .with_context(|| format!("writing library index to {}", tmp.display()))?;
         fs::rename(&tmp, &index)
@@ -818,12 +867,28 @@ impl Library {
         down: bool,
     ) -> Option<usize> {
         let pl = self.playlists.iter_mut().find(|p| p.id == playlist_id)?;
-        let target = if down {
-            index.checked_add(1).filter(|&i| i < pl.tracks.len())?
-        } else {
-            index.checked_sub(1)?
-        };
+        let target = neighbour(index, down, pl.tracks.len())?;
         pl.tracks.swap(index, target);
+        let _ = self.save();
+        Some(target)
+    }
+
+    /// Reorders the whole library (the "All tracks" view). Playlists reference
+    /// tracks by id, not position, so this only changes the display order and
+    /// leaves every playlist intact.
+    pub fn move_track(&mut self, index: usize, down: bool) -> Option<usize> {
+        let target = neighbour(index, down, self.tracks.len())?;
+        self.tracks.swap(index, target);
+        // Positions moved, so the id->index map has to be rebuilt.
+        self.reindex();
+        let _ = self.save();
+        Some(target)
+    }
+
+    /// Reorders the sidebar's list of playlists.
+    pub fn move_playlist(&mut self, index: usize, down: bool) -> Option<usize> {
+        let target = neighbour(index, down, self.playlists.len())?;
+        self.playlists.swap(index, target);
         let _ = self.save();
         Some(target)
     }
