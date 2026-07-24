@@ -31,6 +31,9 @@ pub enum PlayerCommand {
         speed: f32,
     },
     SetVolume(f32),
+    /// Change playback speed without restarting the decoder, so it takes
+    /// effect mid-track with no audible gap.
+    SetSpeed(f32),
     Quit,
 }
 
@@ -112,6 +115,12 @@ impl PlayerHandle {
         self.send(PlayerCommand::SetVolume(self.volume));
     }
 
+    /// Changes playback speed in place, with no decoder restart or gap.
+    pub fn set_speed(&mut self, speed: f32) {
+        self.playback_speed = speed;
+        self.send(PlayerCommand::SetSpeed(speed));
+    }
+
     pub fn volume_up(&mut self) {
         self.set_volume(self.volume + VOLUME_STEP);
     }
@@ -175,6 +184,10 @@ fn audio_thread_main(
 ) {
     let player = Player::connect_new(sink.mixer());
     player.set_volume(default_volume);
+    // Speed lives on the Player, applied to everything it plays. Setting it
+    // here and on SetSpeed changes speed in place, rather than reopening the
+    // file, which is what used to make a speed change stutter.
+    player.set_speed(1.0);
 
     let mut stopped_explicitly = true;
 
@@ -220,7 +233,8 @@ fn handle_command(
             match open_source(&path) {
                 Ok(source) => {
                     *stopped = false;
-                    player.append(source.speed(speed));
+                    player.set_speed(speed);
+                    player.append(source);
                     player.play();
                 }
                 Err(e) => {
@@ -243,8 +257,11 @@ fn handle_command(
             match open_source(&path) {
                 Ok(mut source) => {
                     *stopped = false;
+                    // The Player's speed is unchanged; the source is raw and
+                    // seeks in real file time, so scale by the speed factor.
                     let _ = source.try_seek(position);
-                    player.append(source.speed(speed));
+                    player.set_speed(speed);
+                    player.append(source);
                     if paused {
                         player.pause();
                     } else {
@@ -273,6 +290,10 @@ fn handle_command(
 
         PlayerCommand::SetVolume(v) => {
             player.set_volume(v.clamp(VOLUME_MIN, VOLUME_MAX));
+        }
+
+        PlayerCommand::SetSpeed(s) => {
+            player.set_speed(s);
         }
 
         PlayerCommand::Quit => {

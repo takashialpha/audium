@@ -1007,18 +1007,17 @@ impl AppState {
         } else {
             None
         };
-        self.player.playback_speed = new_speed;
-        // Re-seek to the same position so the new speed takes effect immediately.
-        if let Some(pos) = current_pos
-            && let Some(np) = self.now_playing
-            && let Some(track) = self.queue.get(np)
-        {
-            let path = track.path.clone();
-            let paused = self.player.is_paused;
+        // Rebase the position accounting on the old speed, then switch: the
+        // sink changes speed in place, so there is no reopen and no gap.
+        if let Some(pos) = current_pos {
             self.seek_offset = pos;
-            self.track_start = if paused { None } else { Some(Instant::now()) };
-            self.player.seek(path, pos, paused);
+            self.track_start = if self.player.is_paused {
+                None
+            } else {
+                Some(Instant::now())
+            };
         }
+        self.player.set_speed(new_speed);
     }
 
     // -- Metadata / lyrics actions -----------------------------------------
