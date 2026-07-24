@@ -468,14 +468,31 @@ impl Library {
         let (file, reset) = Self::read_index(&index)?;
         let mut changed = reset;
 
+        // One listing of the music directory: the lossy filename each audio
+        // file presents, mapped to the real path used to open it. Matching by
+        // the lossy name keeps the index valid JSON (a non-UTF-8 name cannot be
+        // a JSON string) while still finding the file, whose real bytes live in
+        // the path -- so such a file round-trips instead of looking missing and
+        // being re-imported every launch.
+        let mut present: FxHashMap<String, PathBuf> = FxHashMap::default();
+        if let Ok(entries) = fs::read_dir(&music_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file()
+                    && crate::filepicker::is_audio(&path)
+                    && let Some(name) = path.file_name()
+                {
+                    present.insert(name.to_string_lossy().into_owned(), path);
+                }
+            }
+        }
+
         // The library's order is whatever the index lists (that still exists),
-        // followed by any file in the directory the index does not mention.
-        // Identity is the filename throughout, so a moved or copied data
-        // directory just resolves against the new location.
-        let mut order: Vec<String> = Vec::with_capacity(file.tracks.len());
+        // followed by any present file the index does not mention.
+        let mut order: Vec<String> = Vec::with_capacity(present.len());
         let mut seen: FxHashSet<String> = FxHashSet::default();
         for name in file.tracks {
-            if music_dir.join(&name).is_file() && seen.insert(name.clone()) {
+            if present.contains_key(&name) && seen.insert(name.clone()) {
                 order.push(name);
             } else {
                 // A listed file vanished (or was listed twice); the index no
@@ -483,33 +500,31 @@ impl Library {
                 changed = true;
             }
         }
-        if let Ok(entries) = fs::read_dir(&music_dir) {
-            let mut extra: Vec<String> = entries
-                .flatten()
-                .filter_map(|e| {
-                    let p = e.path();
-                    (p.is_file() && crate::filepicker::is_audio(&p))
-                        .then(|| p.file_name().map(|n| n.to_string_lossy().into_owned()))
-                        .flatten()
-                })
-                .filter(|n| seen.insert(n.clone()))
-                .collect();
-            // Deterministic order for files that were dropped in, not imported.
-            extra.sort_unstable();
-            changed |= !extra.is_empty();
-            order.append(&mut extra);
-        }
+        // Files dropped in rather than imported, in a deterministic order.
+        let mut extra: Vec<String> = present
+            .keys()
+            .filter(|n| !seen.contains(*n))
+            .cloned()
+            .collect();
+        extra.sort_unstable();
+        changed |= !extra.is_empty();
+        order.append(&mut extra);
 
         // Assign fresh ids and remember the filename each maps to, so playlists
-        // can be resolved below.
+        // can be resolved below. The path comes from the directory listing, so
+        // it carries the file's real bytes even when the key is lossy.
         let mut by_name: FxHashMap<String, TrackId> = FxHashMap::default();
         let mut tracks: Vec<Track> = Vec::with_capacity(order.len());
         let mut next_track_id: TrackId = 1;
         for name in order {
+            let path = present
+                .get(&name)
+                .cloned()
+                .unwrap_or_else(|| music_dir.join(&name));
             let id = next_track_id;
             next_track_id += 1;
             by_name.insert(name.clone(), id);
-            tracks.push(Track::at(id, music_dir.join(name)));
+            tracks.push(Track::at(id, path));
         }
 
         // The index carries no metadata; read it from every file now. Files are
