@@ -884,7 +884,9 @@ impl AppState {
                     // library view deletes from the library itself.
                     let (description, target) = match self.active_playlist_id() {
                         None => (
-                            format!("Remove \"{}\" from library?", track.name),
+                            // Deletes audium's imported copy; the removal has
+                            // to stick, or the file re-imports on next launch.
+                            format!("Delete \"{}\" from the library?", track.name),
                             RemoveTarget::TrackFromLibrary { track_id: track.id },
                         ),
                         Some(playlist_id) => {

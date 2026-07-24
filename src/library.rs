@@ -38,29 +38,67 @@ const INDEX_FILE: &str = "audium.json";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     pub id: TrackId,
-    /// Display name: title tag if present, otherwise the filename stem.
-    pub name: String,
-    /// Absolute path to the audio file (inside $`XDG_DATA_HOME/audium/music`/ after import).
+    /// Absolute path to the audio file, always inside the music directory.
+    ///
+    /// Serialized as the bare filename and rebuilt against the *current* music
+    /// directory on load, so the index is portable: copying or moving the data
+    /// directory cannot leave a path pointing at where it used to be.
+    #[serde(with = "path_as_filename")]
     pub path: PathBuf,
 
-    // Optional metadata read from file tags on import.
-    // All default to None so an index written before they existed still
-    // deserializes cleanly.
-    #[serde(default)]
+    // Everything below is read from the file's own tags on load, never
+    // persisted: the file is the source of truth, so the index cannot hold a
+    // copy that drifts from it. `#[serde(skip)]` keeps these out of the index
+    // and defaults them until `Library::load` fills them in.
+    /// Display name: title tag if present, otherwise the filename stem.
+    #[serde(skip)]
+    pub name: String,
+    #[serde(skip)]
     pub artist: Option<String>,
-    #[serde(default)]
+    #[serde(skip)]
     pub album: Option<String>,
-    /// Raw LRC text or plain lyrics, set by the user in-app.
-    #[serde(default)]
+    /// Raw LRC text or plain lyrics.
+    #[serde(skip)]
     pub lyrics: Option<String>,
-    /// Track length in seconds, read from the file's own headers at import.
-    /// `None` for tracks registered before this was recorded, or for formats
-    /// whose headers do not carry it.
-    #[serde(default)]
+    /// Track length in seconds, from the file's headers.
+    #[serde(skip)]
     pub duration_secs: Option<u64>,
 }
 
 impl Track {
+    /// A track known only by id and path; metadata is empty until read from
+    /// the file with [`Self::reload_metadata`].
+    const fn at(id: TrackId, path: PathBuf) -> Self {
+        Self {
+            id,
+            path,
+            name: String::new(),
+            artist: None,
+            album: None,
+            lyrics: None,
+            duration_secs: None,
+        }
+    }
+
+    /// Replaces the metadata fields from the file's own tags, falling back to
+    /// the filename stem for the display name.
+    fn reload_metadata(&mut self) {
+        let tags = read_file_tags(&self.path);
+        self.name = tags
+            .as_ref()
+            .and_then(|t| t.title.clone())
+            .or_else(|| {
+                self.path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+            })
+            .unwrap_or_else(|| "Unknown".to_string());
+        self.artist = tags.as_ref().and_then(|t| t.artist.clone());
+        self.album = tags.as_ref().and_then(|t| t.album.clone());
+        self.lyrics = tags.as_ref().and_then(|t| t.lyrics.clone());
+        self.duration_secs = tags.as_ref().and_then(|t| t.duration_secs);
+    }
+
     /// Returns `"{artist} - {name}"` when an artist is set, otherwise `"{name}"`.
     pub fn display(&self) -> String {
         self.artist
@@ -70,6 +108,25 @@ impl Track {
                 || self.name.clone(),
                 |artist| format!("{artist} - {}", self.name),
             )
+    }
+}
+
+/// Serializes a track path as its bare filename and reads it back as a
+/// relative `PathBuf`; [`Library::load`] rebuilds the absolute path against the
+/// current music directory.
+mod path_as_filename {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::path::PathBuf;
+
+    pub fn serialize<S: Serializer>(path: &std::path::Path, s: S) -> Result<S::Ok, S::Error> {
+        let name = path
+            .file_name()
+            .map_or_else(|| path.to_string_lossy(), |n| n.to_string_lossy());
+        s.serialize_str(&name)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<PathBuf, D::Error> {
+        Ok(PathBuf::from(String::deserialize(d)?))
     }
 }
 
@@ -86,21 +143,30 @@ struct FileTags {
 /// Builds a `Track` for `path`, reading metadata tags if available and
 /// falling back to the filename stem for the display name.
 fn track_from_file(id: TrackId, path: PathBuf) -> Track {
-    let tags = read_file_tags(&path);
-    let name = tags
-        .as_ref()
-        .and_then(|t| t.title.clone())
-        .or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()))
-        .unwrap_or_else(|| "Unknown".to_string());
-    Track {
-        id,
-        name,
-        artist: tags.as_ref().and_then(|t| t.artist.clone()),
-        album: tags.as_ref().and_then(|t| t.album.clone()),
-        lyrics: tags.as_ref().and_then(|t| t.lyrics.clone()),
-        duration_secs: tags.as_ref().and_then(|t| t.duration_secs),
-        path,
+    let mut track = Track::at(id, path);
+    track.reload_metadata();
+    track
+}
+
+/// Reads every track's metadata from its file, in parallel.
+///
+/// The tracks are disjoint and the reads are pure file I/O, so the work splits
+/// cleanly across threads with no shared state.
+fn load_metadata(tracks: &mut [Track]) {
+    if tracks.is_empty() {
+        return;
     }
+    let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    let chunk = tracks.len().div_ceil(threads.max(1));
+    std::thread::scope(|s| {
+        for slice in tracks.chunks_mut(chunk) {
+            s.spawn(|| {
+                for t in slice {
+                    t.reload_metadata();
+                }
+            });
+        }
+    });
 }
 
 fn read_file_tags(path: &Path) -> Option<FileTags> {
@@ -411,19 +477,21 @@ impl Library {
 
         let mut changed = false;
 
-        // Re-locate tracks whose recorded path no longer exists but whose file
-        // is still present under the current music directory (e.g. after the
-        // data directory itself was moved).
+        // Point every track at the current music directory, keeping only the
+        // filename from whatever was stored. A path saved before this version
+        // was absolute; one saved now is already just a name. Either way the
+        // track resolves here, so the data directory can be moved or copied
+        // freely without stranding anything.
         let music_dir = Self::music_dir()?;
         for t in &mut lib.tracks {
-            if !t.path.exists()
-                && let Some(name) = t.path.file_name()
-            {
-                let candidate = music_dir.join(name);
-                if candidate.exists() {
-                    t.path = candidate;
+            if let Some(name) = t.path.file_name() {
+                // An index written by this version already stores just the
+                // name; an older one stored an absolute path. Flag the latter
+                // so it is rewritten to the compact, portable form once.
+                if t.path.as_os_str() != name {
                     changed = true;
                 }
+                t.path = music_dir.join(name);
             }
         }
 
@@ -444,46 +512,41 @@ impl Library {
             }
         }
 
-        // Re-import any audio files sitting in the music directory but not
-        // registered in the library, e.g. left behind after tracks were
-        // pruned due to a stale recorded path.
-        let known: FxHashSet<PathBuf> = lib
+        // Import any audio file in the music directory that no track claims.
+        // This is the rebuild path (a set-aside index re-populates from the
+        // files) and a convenience (drop a file in and it appears). Identity is
+        // the filename, which `add_file` keeps unique, so a registered track is
+        // never mistaken for a new file however the directory was relocated.
+        let known: FxHashSet<std::ffi::OsString> = lib
             .tracks
             .iter()
-            .filter_map(|t| t.path.canonicalize().ok())
+            .filter_map(|t| t.path.file_name().map(std::ffi::OsStr::to_os_string))
             .collect();
 
         if let Ok(entries) = fs::read_dir(&music_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if !path.is_file() {
+                if !path.is_file() || !crate::filepicker::is_audio(&path) {
                     continue;
                 }
-                let Ok(canon) = path.canonicalize() else {
-                    continue;
-                };
-                if known.contains(&canon) || !crate::filepicker::is_audio(&path) {
-                    continue;
+                let is_new = path
+                    .file_name()
+                    .is_some_and(|n| !known.contains(&n.to_os_string()));
+                if is_new {
+                    let id = lib.next_track_id;
+                    lib.next_track_id += 1;
+                    // Metadata is filled by the pass below with everyone else.
+                    lib.tracks.push(Track::at(id, path));
+                    changed = true;
                 }
-
-                let id = lib.next_track_id;
-                lib.next_track_id += 1;
-                lib.tracks.push(track_from_file(id, path));
-                changed = true;
             }
         }
 
-        // Backfill lengths for tracks registered before they were recorded.
-        // Only files still missing one are probed (~0.1 ms each), so this is a
-        // one-off cost that the next save makes permanent.
-        for track in &mut lib.tracks {
-            if track.duration_secs.is_none()
-                && let Some(secs) = read_file_tags(&track.path).and_then(|f| f.duration_secs)
-            {
-                track.duration_secs = Some(secs);
-                changed = true;
-            }
-        }
+        // The index carries no metadata; read it from every file now. Files are
+        // independent, so this fans out across the CPU -- warm it costs a few
+        // ms even for thousands of tracks, and cold the overlapping I/O waits
+        // are what parallelism helps most.
+        load_metadata(&mut lib.tracks);
 
         lib.reindex();
 
@@ -586,18 +649,25 @@ impl Library {
 
     /// Removes a track from the registry and from all playlists.
     /// Does NOT delete the file from disk.
+    /// Removes a track from the library, and deletes audium's copy of the file.
+    ///
+    /// The music directory holds copies audium made on import, not the user's
+    /// originals, and the load-time scan re-imports anything left in it. So a
+    /// removal that did not delete the file would reappear on the next launch,
+    /// which is the whole point of removing it. The delete is best effort: if
+    /// it fails the track is still gone from the library for this session.
     pub fn remove_track(&mut self, id: TrackId) -> Result<()> {
-        let before = self.tracks.len();
-        self.tracks.retain(|t| t.id != id);
-        if self.tracks.len() != before {
-            // Removal shifts every later index, so the whole map is rebuilt.
-            self.reindex();
-            for pl in &mut self.playlists {
-                pl.tracks.retain(|&tid| tid != id);
-            }
-            self.save()?;
+        let Some(pos) = self.tracks.iter().position(|t| t.id == id) else {
+            return Ok(());
+        };
+        let path = self.tracks.remove(pos).path;
+        // Removal shifts every later index, so the whole map is rebuilt.
+        self.reindex();
+        for pl in &mut self.playlists {
+            pl.tracks.retain(|&tid| tid != id);
         }
-        Ok(())
+        let _ = fs::remove_file(&path);
+        self.save()
     }
 
     /// Replaces all user-editable metadata for a track (no file is touched).

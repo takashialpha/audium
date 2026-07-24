@@ -42,14 +42,14 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 - **Keyboard-driven:** built to be driven entirely from the keyboard, for people who live in the terminal and never reach for the mouse. Press `?` in-app for grouped help covering every keybinding.
 - **Library & metadata:** import through the built-in file picker; title, artist, album and track length are read from the files' own tags, and edits are written straight back to them.
 - **Lyrics:** store plain text or LRC synced lyrics per track. An overlay auto-scrolls synced lyrics to the current line, with a built-in editor.
-- **It's your library:** metadata you edit is written into the files' own tags, so it travels with them and any other player can read it. `$XDG_DATA_HOME/audium/audium.json` is a plain-JSON index over the top: edit it by hand, back it up, move it anywhere. audium never phones home.
+- **It's your library:** all metadata lives in the files' own tags, edits included, so it travels with them and any other player can read it. `$XDG_DATA_HOME/audium/audium.json` is a small plain-JSON index that only records which files exist and your playlists; delete it and audium rebuilds it from the tags. audium never phones home.
 - **Themes:** 15 built-in truecolor themes plus 2 console themes (nord, gruvbox, catppuccin, rose pine, dracula, tokyo night, and more). Switch live with instant preview. Optional background transparency for composited terminals.
 - **Adapts to your terminal:** detects truecolor support and, on a bare Linux console (tty) or any terminal without it, automatically falls back to a 16-color theme with ASCII-only glyphs so the UI stays readable everywhere. Two console themes are built from named ANSI colors, one for a dark background and one for a light one, and each color mode remembers its own theme. The settings menu shows what it detected and lets you override it if the guess is wrong.
 - **Library and playlists:** your whole collection and your playlists are separate things, in their own panels. Create, rename and delete playlists, queue or shuffle either one, and pick a loop mode.
 - **Playback control:** tracks are listed as a table of title, artist, album and length; filter it in real time, adjust playback speed and seek freely.
 - **Threaded audio:** playback runs on its own thread; the UI never stutters your music.
 - **System audio output:** audium plays through your default system output. Change the output device in your OS and audium follows, no in-app device switching, no surprises.
-- **Format agnostic:** MP3, MP2, FLAC, OGG/Vorbis, WAV, AAC, M4A and AIFF via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
+- **Wide format support:** MP1, MP2, MP3, FLAC, Ogg Vorbis, WAV, AAC, M4A and AIFF via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
 - **Tiny binary:** ~4 MB stripped release build.
 - **100% safe Rust:** zero `unsafe` blocks in the codebase; it's forbidden.
 
@@ -118,14 +118,16 @@ sudo dnf install alsa-utils alsa-lib-devel
 
 ```
 $XDG_DATA_HOME/audium/     # typically ~/.local/share/audium/
-  audium.json              # track registry + playlists
+  audium.json              # index: track ids, filenames, and playlists
   music/                   # copies of all imported audio files
 
 $XDG_CONFIG_HOME/audium/   # typically ~/.config/audium/
   settings.json            # user preferences (volume, seek step, theme, transparency, color mode)
 ```
 
-`audium.json` is human-readable and editable by hand. audium re-validates it on next launch, so feel free to reorganise playlists, fix track names, or move the file to another machine.
+`music/` holds audium's own copies of your imported files, so importing never moves or renames your originals and removing a track deletes only audium's copy. Track metadata is read from the files' tags on every launch, never cached in the index, so the two can never disagree. The index stores each track by its filename within `music/`, not an absolute path, so the whole `$XDG_DATA_HOME/audium/` directory can be copied or moved anywhere and still opens correctly.
+
+`audium.json` is human-readable and editable by hand. audium re-validates it on next launch, so feel free to reorganise playlists or move the directory to another machine.
 
 It carries a `version` field, and audium **never migrates an index it cannot read**. Anything unrecognised is renamed to `audium.v<n>.json` and left in place; the collection is then rebuilt by re-scanning `music/`. Nothing is ever deleted.
 
