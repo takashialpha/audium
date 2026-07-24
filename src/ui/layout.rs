@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -552,11 +554,9 @@ pub fn cursor_spans_windowed(
     theme: &Theme,
 ) -> Vec<Span<'static>> {
     let start = h_window_start(value, cursor, width);
-    if start == 0 && value.chars().count() < width.max(1) {
-        return cursor_spans(value, cursor, theme);
-    }
+    let window = h_window(value, start, width);
 
-    let window: String = value.chars().skip(start).take(width).collect();
+    // Translate the cursor's char index into a byte offset within the window.
     let cur = value[..cursor].chars().count();
     let window_cursor = window
         .char_indices()
@@ -566,26 +566,64 @@ pub fn cursor_spans_windowed(
     cursor_spans(&window, window_cursor, theme)
 }
 
-/// First visible character of a `width`-wide window that keeps `cursor` in
-/// view.
+/// Character index of the first visible column in a `width`-*column* window
+/// that keeps the block cursor at char index derived from `cursor` in view.
 ///
-/// Exposed so a multi-line editor can offset every row by the same amount:
+/// Column-based, not char-based: a window of `width` wide characters would be
+/// twice `width` cells and overflow the field, clipping the cursor off the
+/// right edge exactly when you type past the halfway point.
+///
+/// Exposed so a multi-line editor can offset every row by the same amount;
 /// scrolling only the cursor's row would slide it out of alignment with the
 /// lines above and below it.
 pub fn h_window_start(value: &str, cursor: usize, width: usize) -> usize {
-    let len = value.chars().count();
-    // The block cursor needs one cell past the final character, so a value
-    // only fits untouched when it is strictly shorter than the field.
-    if width == 0 || len < width {
+    if width == 0 {
+        return 0;
+    }
+    let chars: Vec<char> = value.chars().collect();
+    // Total columns, plus the one cell the block cursor needs past the end.
+    let total: usize = chars.iter().map(|c| char_cols(*c)).sum::<usize>() + 1;
+    if total <= width {
         return 0;
     }
     let cur = value[..cursor].chars().count();
-    cur.saturating_sub(width - 1).min(len + 1 - width)
+    // Walk back from the cursor, accumulating columns, until one more character
+    // would push the window past `width`. The cursor's own cell is reserved
+    // first so it always has somewhere to sit.
+    let cursor_cell = chars.get(cur).map_or(1, |c| char_cols(*c));
+    let mut used = cursor_cell;
+    let mut start = cur;
+    while start > 0 {
+        let w = char_cols(chars[start - 1]);
+        if used + w > width {
+            break;
+        }
+        used += w;
+        start -= 1;
+    }
+    start
 }
 
-/// A `width`-wide slice of `line` starting at `start` characters in.
+/// A slice of `line` starting `start` characters in and at most `width`
+/// *columns* wide, stopping before a wide character that would straddle the
+/// edge.
 pub fn h_window(line: &str, start: usize, width: usize) -> String {
-    line.chars().skip(start).take(width).collect()
+    let mut out = String::new();
+    let mut used = 0;
+    for c in line.chars().skip(start) {
+        let w = char_cols(c);
+        if used + w > width {
+            break;
+        }
+        out.push(c);
+        used += w;
+    }
+    out
+}
+
+/// Display columns of a single character (0 for combining marks, 2 for wide).
+fn char_cols(c: char) -> usize {
+    UnicodeWidthChar::width(c).unwrap_or(0)
 }
 
 /// Centred two-line prompt for an empty panel: a statement of what is missing,
@@ -711,18 +749,18 @@ impl Columns {
             // Right-aligned: durations line up on the colon.
             out.push(Span::raw(format!(
                 "{GAP_S}{time:>w$}",
-                w = self.time.max(time.chars().count())
+                w = self.time.max(str_width(time))
             )));
         }
         out
     }
 }
 
-/// Truncates to `width` and pads back out to it, so a short value still
-/// occupies its whole column.
+/// Truncates to `width` columns and pads back out to it, so a short value
+/// still occupies its whole column and the next one starts where expected.
 fn pad(s: &str, width: usize) -> String {
     let s = truncate(s, width);
-    let fill = width.saturating_sub(s.chars().count());
+    let fill = width.saturating_sub(str_width(&s));
     format!("{s}{blank:fill$}", blank = "")
 }
 
@@ -759,9 +797,22 @@ pub fn styled_block<'a>(title: &'a str, focused: bool, theme: &Theme) -> Block<'
         )
 }
 
-/// Truncates a string to `max` chars, appending `~` if truncated.
+/// Display width of `s` in terminal columns.
+///
+/// A CJK ideograph or a wide emoji occupies two cells but one `char`, so every
+/// layout measurement uses this rather than `chars().count()`; counting chars
+/// makes those rows overflow and push later columns off the edge.
+pub fn str_width(s: &str) -> usize {
+    UnicodeWidthStr::width(s)
+}
+
+/// Truncates a string to `max` display columns, appending `~` if it had to cut.
+///
+/// Width-aware on both ends: it stops before a wide character that would
+/// straddle the limit, and never returns more than `max` columns even when the
+/// final kept character is two cells wide.
 pub fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
+    if str_width(s) <= max {
         return s.to_string();
     }
     // At max == 0 there is not even room for the ellipsis, and returning "~"
@@ -769,7 +820,19 @@ pub fn truncate(s: &str, max: usize) -> String {
     if max == 0 {
         return String::new();
     }
-    format!("{}~", s.chars().take(max - 1).collect::<String>())
+    // Keep whole characters until one more would leave no room for the `~`.
+    let mut out = String::new();
+    let mut used = 0;
+    for c in s.chars() {
+        let w = UnicodeWidthChar::width(c).unwrap_or(0);
+        if used + w > max - 1 {
+            break;
+        }
+        out.push(c);
+        used += w;
+    }
+    out.push('~');
+    out
 }
 
 pub fn format_duration(secs: u64) -> String {

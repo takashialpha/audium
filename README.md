@@ -51,7 +51,7 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 - **System audio output:** audium plays through your default system output. Change the output device in your OS and audium follows, no in-app device switching, no surprises.
 - **Format agnostic:** MP3, MP2, FLAC, OGG/Vorbis, WAV, AAC, M4A and AIFF via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
 - **Tiny binary:** ~4 MB stripped release build.
-- **100% safe Rust:** zero `unsafe` blocks in the codebase.
+- **100% safe Rust:** zero `unsafe` blocks in the codebase; it's forbidden.
 
 ---
 
@@ -139,11 +139,9 @@ The same procedure applies to every upgrade, from any version, and to downgrades
 
 Playlists are the only thing lost, because they are the only thing that exists solely in the index. Titles, artists, albums and lyrics all live in the files' own tags, including the ones you edit inside audium, so they come back with the tracks. Your old index file is left on disk untouched: open it to see what your playlists held, then delete it once you're done.
 
-Preferences are not carried over either: `settings.json` moved from the data directory to `$XDG_CONFIG_HOME/audium/` in this release.
+Preferences are not carried over either: `settings.json` moved from the data directory to `$XDG_CONFIG_HOME/audium/`.
 
 Old files audium no longer reads, safe to remove by hand: `$XDG_DATA_HOME/audium/settings.json`, `library.json`, `~/.audium/`, and any `audium.v<n>.json`.
-
-2.0 is a clean break in every one of these: the index filename, its schema, where preferences live, and several keybindings. That is what the major version marks.
 
 ---
 
@@ -159,7 +157,7 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 
 ## TODO
 
-- MPRIS, so desktop media keys and status bars can see and drive playback (needs D-Bus, so deferred past 2.0.0)
+- MPRIS, so desktop media keys and status bars can see and drive playback
 - Resuming where playback left off
 - YouTube audio import (no external binary deps)
 

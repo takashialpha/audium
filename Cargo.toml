@@ -16,6 +16,7 @@ xdg = "3"
 lofty = "0"
 rand = "0"
 rustc-hash = "2"
+unicode-width = "0"
 ratatui = { version = "0", default-features = false, features = [
   "crossterm",
   "layout-cache",

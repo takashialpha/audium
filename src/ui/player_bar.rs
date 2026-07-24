@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Padding, Paragraph},
 };
 
-use super::layout::{Theme, format_duration};
+use super::layout::{Theme, format_duration, str_width};
 use crate::app::{AppState, LoopMode};
 use crate::library::Track;
 use crate::numeric::{ratio_to_unit_count, ratio_to_whole_percent};
@@ -300,13 +300,7 @@ fn volume_spans(vol: f32, row_width: u16, t: &Theme) -> Vec<Span<'static>> {
 // -- Helpers ----------------------------------------------------------------
 
 fn span_width(spans: &[Span<'_>]) -> u16 {
-    u16::try_from(
-        spans
-            .iter()
-            .map(|s| s.content.chars().count())
-            .sum::<usize>(),
-    )
-    .unwrap_or(u16::MAX)
+    u16::try_from(spans.iter().map(|s| str_width(&s.content)).sum::<usize>()).unwrap_or(u16::MAX)
 }
 
 /// Splits a row into a flexible left side and a fixed right side, dropping the

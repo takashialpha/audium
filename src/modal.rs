@@ -949,7 +949,7 @@ fn wrapped_height(text: &str, width: usize) -> u16 {
     let mut rows = 1usize;
     let mut used = 0usize;
     for word in text.split_whitespace() {
-        let w = word.chars().count();
+        let w = crate::ui::layout::str_width(word);
         if used > 0 && used + 1 + w > width {
             rows += 1;
             used = 0;

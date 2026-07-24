@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{List, ListItem, ListState, Paragraph},
 };
 
-use super::layout::{Theme, render_empty_state, styled_block, truncate};
+use super::layout::{Theme, render_empty_state, str_width, styled_block, truncate};
 use crate::app::{AppState, Focus, SidebarItem};
 
 /// Columns a list row spends on its selection marker.
@@ -121,13 +121,14 @@ fn row_style(t: &Theme, is_active: bool, is_cursor: bool) -> Style {
 /// into the name from the right rather than overflowing the row.
 fn entry(name: &str, count: usize, width: usize) -> String {
     let count = count.to_string();
-    let room = width.saturating_sub(count.chars().count() + 1);
+    // The count is ASCII digits, so its width equals its length.
+    let room = width.saturating_sub(count.len() + 1);
     if room == 0 {
         // Narrower than the count plus a separator: the count is the more
         // useful of the two, and this keeps the row within `width`.
         return truncate(&count, width);
     }
     let name = truncate(name, room);
-    let pad = width.saturating_sub(name.chars().count() + count.chars().count());
+    let pad = width.saturating_sub(str_width(&name) + count.len());
     format!("{name}{blank:pad$}{count}", blank = "")
 }
