@@ -11,7 +11,7 @@ description = "A terminal music app"
 authors = ["takashialpha <takashialpha@protonmail.com>"]
 license = "GPL-3.0-or-later"
 repository = "https://github.com/takashialpha/audium"
-keywords = ["music", "app", "player", "tui", "terminal", "audio"]
+keywords = ["music", "player", "tui", "terminal", "audio"]
 categories = ["command-line-utilities", "multimedia::audio"]
 # won't be pulled by cargo install/crates.io.
 exclude = ["audium-demo.mp4"]
