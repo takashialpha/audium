@@ -15,7 +15,7 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 [![Website](https://img.shields.io/badge/website-takashialpha.com%2Faudium-64b4ff?style=flat-square&labelColor=161616)](https://takashialpha.com/audium)
 [![crates.io](https://img.shields.io/crates/v/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://crates.io/crates/audium)
 [![AUR](https://img.shields.io/aur/version/audium?style=flat-square&color=64b4ff&labelColor=161616)](https://aur.archlinux.org/packages/audium)
-[![License](https://img.shields.io/crates/l/audium?style=flat-square&color=64b4ff&labelColor=161616)](LICENSE)
+[![License](https://img.shields.io/crates/l/audium?style=flat-square&color=2E8B57&label=license&labelColor=161616&v=2)](LICENSE)
 [![Built With Ratatui](https://img.shields.io/badge/Built_With_Ratatui-000?logo=ratatui&logoColor=fff)](https://ratatui.rs/)
 
 [Features](#features) | [Installation](#installation) | [Usage](#usage) | [Building](#building-from-source) | [Library layout](#library-layout) | [Why audium?](#why-audium) | [TODO](#todo) | [Contributing](#contributing)
