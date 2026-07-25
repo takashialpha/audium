@@ -35,7 +35,7 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
   GitHub.com). audium-demo.mp4 is kept in the repo root as a fallback for
   local/offline viewers who clone the repo.
 -->
-<video src="" autoplay loop muted playsinline></video>
+<video src="https://github.com/user-attachments/assets/47378664-1c18-427f-8b80-ec59f9238b11" autoplay loop muted playsinline></video>
 
 ## Features
 
