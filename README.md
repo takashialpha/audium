@@ -51,12 +51,14 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 - **Threaded audio:** playback runs on its own thread; the UI never stutters your music.
 - **System audio output:** audium plays through your default system output. Change the output device in your OS and audium follows, no in-app device switching, no surprises.
 - **Wide format support:** MP1, MP2, MP3, FLAC, Ogg Vorbis, WAV, AAC, M4A and AIFF via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
-- **Tiny binary:** ~4 MB stripped release build.
+- **Tiny binary:** ~5 MB stripped release build.
 - **100% safe Rust:** zero `unsafe` blocks in the codebase; it's forbidden.
 
 ---
 
 ## Installation
+
+> **Linux only:** Audium is developed and tested exclusively on Linux. It may work on macOS or other POSIX-compatible systems, but support for those platforms is not provided.
 
 ### Cargo
 
@@ -111,8 +113,6 @@ sudo pacman -S alsa-utils alsa-lib
 sudo dnf install alsa-utils alsa-lib-devel
 ```
 
-> **Linux only:** audium targets Linux exclusively; other platforms are not supported.
-
 ---
 
 ## Library layout
@@ -145,9 +145,9 @@ The same procedure applies to every upgrade, from any version, and to downgrades
 2. Start audium. Every file in `music/` is re-imported, with its name and metadata read back from the file's own tags.
 3. Recreate your playlists.
 
-Playlists are the only thing lost, because they are the only thing that exists solely in the index. Titles, artists, albums and lyrics all live in the files' own tags, including the ones you edit inside audium, so they come back with the tracks. Your old index file is left on disk untouched: open it to see what your playlists held, then delete it once you're done.
+Playlists are the only thing lost, because they are the only thing that exists solely in the index. Titles, artists, albums and lyrics all live in the files' own tags, that includes the ones you edit inside audium, so they come back with the tracks. Your old index file is left on disk untouched: open it to see what your playlists held, then delete it once you're done.
 
-Preferences are not carried over either: `settings.json` moved from the data directory to `$XDG_CONFIG_HOME/audium/`.
+Preferences are not carried over either: `settings.json` moved from the data directory to `$XDG_CONFIG_HOME/audium/`; it's recommended to set them inside audium.
 
 Old files audium no longer reads, safe to remove by hand: `$XDG_DATA_HOME/audium/settings.json`, `library.json`, `~/.audium/`, and any `audium.v<n>.json`.
 
@@ -158,7 +158,7 @@ Old files audium no longer reads, safe to remove by hand: `$XDG_DATA_HOME/audium
 Alternatives like termusic and cmus are solid, but they come with tradeoffs: heavy dependency trees, FFmpeg requirements, daemon processes, or configuration formats that take longer to learn than the app itself. audium is different in a few concrete ways:
 
 - **No FFmpeg, no daemon:** one binary, zero background processes.
-- **Smaller and faster to build:** fewer dependencies means shorter compile times and a ~4 MB release binary.
+- **Smaller and faster to build:** fewer dependencies means shorter compile times and a ~5 MB release binary.
 - **Cleaner UI:** built on ratatui with a layout designed for actual daily use, not just feature completeness.
 - **More modern codebase:** written in current Rust with edition 2024, Symphonia for decoding, and rodio for playback.
 - **Plain JSON library:** your data is always readable, portable, and yours.
@@ -166,12 +166,10 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 ## TODO
 
 - MPRIS, so desktop media keys and status bars can see and drive playback
-- Safe concurrent instances (the index is last-writer-wins; needs a lock or reload-before-write)
+- Safe concurrent instances (state; the index is last-writer-wins; needs a lock or reload-before-write)
 - Pitch-preserving speed control (time-stretch DSP), so faster playback does not raise the pitch
 - YouTube/Web audio import (no external binary deps)
 
 ## Contributing
 
-Issues and pull requests are welcome.
-Please open an issue before starting work on a large change.
-Conventions the codebase follows are in [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
