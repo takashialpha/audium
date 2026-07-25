@@ -1520,16 +1520,17 @@ fn event_loop(mut terminal: DefaultTerminal, state: &mut AppState) -> Result<()>
     let mut last_state_save = Instant::now();
     // The last snapshot actually written, so an unchanged session (paused or
     // idle) is not rewritten every tick. The cheapest write is the one skipped.
-    let mut saved_state: Option<crate::state::PlaybackState> = None;
+    // Seeded with the session as it stands so the first tick does not rewrite
+    // an unchanged (just-restored or empty) state.
+    let mut saved_state = Some(state.snapshot_state());
 
     loop {
-        // Autosave a track's position periodically, but only when it differs
-        // from what is on disk: while paused the position is frozen, so the
-        // snapshot matches and nothing is written.
-        if state.settings.resume_playback
-            && state.now_playing.is_some()
-            && last_state_save.elapsed() >= STATE_SAVE
-        {
+        // Autosave the whole session periodically, but only when it differs
+        // from what is on disk. Dirty-tracking is what makes this cheap and
+        // complete at once: a paused player (position frozen) writes nothing,
+        // while a queue edit or a clear -- even with no track playing -- is a
+        // change and so is captured, rather than surviving only a clean exit.
+        if state.settings.resume_playback && last_state_save.elapsed() >= STATE_SAVE {
             let snapshot = state.snapshot_state();
             if saved_state.as_ref() != Some(&snapshot) && snapshot.save().is_ok() {
                 saved_state = Some(snapshot);
