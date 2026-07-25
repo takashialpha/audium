@@ -2,6 +2,11 @@
 name = "audium"
 version = "2.0.0"
 edition = "2024"
+# The current stable at the time of release, not a support floor: audium tracks
+# the stable channel (see rust-toolchain.toml). Raise this to the new stable
+# whenever the channel moves. It is here so an old toolchain fails with a clear
+# message instead of a syntax error on a feature it does not have.
+rust-version = "1.97.1"
 description = "A terminal music app"
 authors = ["takashialpha <takashialpha@protonmail.com>"]
 license = "GPL-3.0-or-later"

@@ -66,7 +66,7 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 cargo install audium --locked
 ```
 
-Installs the `audium` binary to `~/.cargo/bin/`. Latest stable rust toolchain is recommended.
+Installs the `audium` binary to `~/.cargo/bin/`. Build with the latest stable Rust: audium tracks the stable channel rather than supporting a minimum version, and uses new language features as they land. If cargo reports your toolchain is too old, run `rustup update stable`.
 
 Audio goes through ALSA, the standard on Linux, and its development headers are needed to build. See [Building from source](#building-from-source) for the package names on your distro.
 

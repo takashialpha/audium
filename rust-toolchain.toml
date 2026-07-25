@@ -1,0 +1,7 @@
+[toolchain]
+# audium tracks the latest stable Rust, using new language features as soon as
+# they stabilise. rustup reads this file and installs stable on demand, so a
+# clone builds with the same compiler CI uses. `rust-version` in Cargo.toml is
+# kept at the stable of the day to match, and is raised alongside it.
+channel = "stable"
+components = ["rustfmt", "clippy"]

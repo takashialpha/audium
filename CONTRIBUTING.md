@@ -13,6 +13,17 @@ cargo test
 
 These are what CI runs, so a green local run is a green CI run.
 
+audium tracks the latest stable Rust, so new language features can be used the
+day they stabilise. `rust-toolchain.toml` pins the channel to `stable` and
+rustup fetches it for you; keep yours current with `rustup update stable`
+before blaming a build failure on the code.
+
+`rust-version` in `Cargo.toml` is the stable of the day, not a support floor.
+It is what makes `cargo install` fail with a readable message rather than a
+syntax error on a feature the user's compiler lacks, and it **must be raised to
+the new stable when the channel moves**: treat it as part of cutting a release.
+Nothing enforces this, so a stale value quietly stops protecting anyone.
+
 The lint set lives in `Cargo.toml` rather than in CI flags, so a plain
 `cargo build` fails the same way the pipeline does. It is strict on purpose:
 warnings denied, `unsafe_code` forbidden, and clippy with `pedantic`, `nursery`
