@@ -58,8 +58,6 @@ pub struct Glyphs {
     pub note: &'static str,
     /// Directory marker in the file picker's title.
     pub folder: &'static str,
-    /// Terminal-capability banner bullet.
-    pub bullet: &'static str,
     /// Playback-speed multiplier sign.
     pub times: &'static str,
     /// Horizontal rule fill, used under the track table's header row.
@@ -85,7 +83,6 @@ static UNICODE_GLYPHS: Glyphs = Glyphs {
     sep: "  ·  ",
     note: "♪",
     folder: "📁",
-    bullet: "●",
     times: "×",
     rule: "─",
     track: "━",
@@ -104,7 +101,6 @@ static ASCII_GLYPHS: Glyphs = Glyphs {
     sep: "  -  ",
     note: "*",
     folder: "[/]",
-    bullet: "*",
     times: "x",
     rule: "-",
     track: "=",
@@ -216,15 +212,15 @@ pub fn console_theme_by_name(name: &str) -> &'static Theme {
 }
 
 static CONSOLE_THEMES: [Theme; 2] = [
-    // Default: a tty is black out of the box, so `bg` stays at the terminal's
-    // own color and every foreground is picked for contrast against black.
-    // Sixteen colors do not offer three legible neutral steps above black:
-    // darkgray is 2.8:1 and reads as black on a real tty, so it is not used at
-    // all here.  Dim text and hints therefore share one step below white, and
-    // the bar's empty remainder is told apart by its glyph (`-` against `#`)
-    // rather than by being dimmer.
+    // "native": leaves `bg` at the terminal's own background (usually dark) and
+    // picks every foreground for contrast against it, so the UI blends into the
+    // terminal rather than painting over it.  Sixteen colors do not offer three
+    // legible neutral steps above black: darkgray is 2.8:1 and reads as black on
+    // a real tty, so it is not used at all here.  Dim text and hints therefore
+    // share one step below white, and the bar's empty remainder is told apart by
+    // its glyph (`-` against `#`) rather than by being dimmer.
     Theme {
-        name: "console_dark",
+        name: "native",
         bg: Color::Reset,
         panel_bg: Color::Reset,
         sidebar_bg: Color::Reset,
@@ -239,11 +235,12 @@ static CONSOLE_THEMES: [Theme; 2] = [
         transparent: false,
         ascii: true,
     },
-    // For a light console.  `bg` is set explicitly rather than inherited:
-    // "light" has to paint the background white, or on a tty it renders black
-    // text on the console's black.  Only the dim ANSI variants survive here.
+    // "paper": paints its own white background rather than inheriting one, so it
+    // renders as an ink-on-paper light theme on any terminal, including a black
+    // tty (where inheriting would put black text on black).  Only the dim ANSI
+    // variants survive against white.
     Theme {
-        name: "console_light",
+        name: "paper",
         bg: Color::White,
         panel_bg: Color::White,
         sidebar_bg: Color::White,

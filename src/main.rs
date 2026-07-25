@@ -8,6 +8,7 @@ mod nav;
 mod numeric;
 mod player;
 mod settings;
+mod state;
 mod ui;
 
 use anyhow::Result;

@@ -228,6 +228,8 @@ pub struct SettingsState {
     pub cursor: usize,
     pub volume_pct: u32,
     pub seek_secs: u64,
+    /// Whether the playback session is remembered across restarts.
+    pub resume_playback: bool,
     pub preview_theme_idx: usize,
     pub transparent: bool,
     /// Index into the 16-color console themes, previewed independently of
@@ -308,6 +310,19 @@ pub enum ModalOutcome {
     Dismissed,
 }
 
+/// The settings modal's values, applied together when it closes. Bundled into
+/// one struct so the apply path takes a single argument rather than a long list.
+#[derive(Debug)]
+pub struct SettingsSave {
+    pub volume_pct: u32,
+    pub seek_secs: u64,
+    pub resume_playback: bool,
+    pub theme_name: String,
+    pub console_theme_name: String,
+    pub transparent: bool,
+    pub color_mode: ColorMode,
+}
+
 #[derive(Debug)]
 pub enum ModalConfirm {
     Remove(RemoveTarget),
@@ -323,14 +338,7 @@ pub enum ModalConfirm {
         track_id: TrackId,
         playlist_id: PlaylistId,
     },
-    SaveSettings {
-        volume_pct: u32,
-        seek_secs: u64,
-        theme_name: String,
-        console_theme_name: String,
-        transparent: bool,
-        color_mode: ColorMode,
-    },
+    SaveSettings(SettingsSave),
     /// Apply a theme live during settings preview without closing the modal.
     PreviewTheme {
         theme_name: String,
@@ -417,10 +425,11 @@ fn handle_text_key(input: &mut TextInput, code: KeyCode) -> TextInputResult {
 // Settings rows, in display order.
 const SET_VOLUME: usize = 0;
 const SET_SEEK: usize = 1;
-const SET_COLOR_MODE: usize = 2;
-const SET_THEME: usize = 3;
-const SET_TRANSPARENCY: usize = 4;
-const SET_ROWS: usize = 5;
+const SET_RESUME: usize = 2;
+const SET_COLOR_MODE: usize = 3;
+const SET_THEME: usize = 4;
+const SET_TRANSPARENCY: usize = 5;
+const SET_ROWS: usize = 6;
 
 /// Which rows accept input.  Every mode has themes to choose from, so only
 /// transparency is locked (and skipped by the cursor) without truecolor: the
@@ -428,7 +437,7 @@ const SET_ROWS: usize = 5;
 /// already whatever the terminal is.
 const fn settings_enabled(color_mode: ColorMode, detected: bool) -> [bool; SET_ROWS] {
     let tc = color_mode.truecolor(detected);
-    [true, true, true, true, tc]
+    [true, true, true, true, true, tc]
 }
 
 fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
@@ -491,6 +500,11 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
                     }
                     ModalOutcome::Consumed
                 }
+                SET_RESUME => {
+                    // A behavior toggle with no visual effect, so no preview.
+                    s.resume_playback = !s.resume_playback;
+                    ModalOutcome::Consumed
+                }
                 SET_COLOR_MODE => {
                     // Two states, so both directions are the same toggle.
                     s.color_mode = s.color_mode.toggle(s.detected_truecolor);
@@ -518,14 +532,15 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
         }
         // Enter, Esc and q all save and close.
         KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') => {
-            ModalOutcome::Confirm(ModalConfirm::SaveSettings {
+            ModalOutcome::Confirm(ModalConfirm::SaveSettings(SettingsSave {
                 volume_pct: s.volume_pct,
                 seek_secs: s.seek_secs,
+                resume_playback: s.resume_playback,
                 theme_name: themes()[s.preview_theme_idx].name.to_string(),
                 console_theme_name: console_themes()[s.preview_console_idx].name.to_string(),
                 transparent: s.transparent,
                 color_mode: s.color_mode,
-            })
+            }))
         }
         _ => ModalOutcome::Consumed,
     }
@@ -1564,8 +1579,9 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
         hint("Enter / Esc", "close"),
     ];
     let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
-    // banner(1) + spacer(1) + 5xrow(3) + footnote(2) + spacer(1), then hints.
-    let rect = centered_rect(WIDTH, 20 + hint_h + MODAL_CHROME_H, area);
+    // 6xrow(3) + footnote(2) + gap(1), then hints. The inset above the first
+    // row is the modal's own padding (MODAL_PAD_Y), not a spacer row.
+    let rect = centered_rect(WIDTH, 21 + hint_h + MODAL_CHROME_H, area);
     frame.render_widget(Clear, rect);
 
     let block = modal_block("Settings", theme);
@@ -1575,10 +1591,9 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),      // banner
-            Constraint::Length(1),      // spacer
             Constraint::Length(3),      // volume
             Constraint::Length(3),      // seek
+            Constraint::Length(3),      // resume
             Constraint::Length(3),      // color mode
             Constraint::Length(3),      // theme
             Constraint::Length(3),      // transparency
@@ -1588,11 +1603,9 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
         ])
         .split(inner);
 
-    render_settings_header(frame, rows[0], view, theme);
-
     render_settings_row(
         frame,
-        rows[2],
+        rows[0],
         "Default volume",
         view.cursor == SET_VOLUME,
         volume_bar(view.volume_pct, theme),
@@ -1600,7 +1613,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     );
     render_settings_row(
         frame,
-        rows[3],
+        rows[1],
         "Seek step",
         view.cursor == SET_SEEK,
         seek_display(view.seek_secs, theme),
@@ -1608,10 +1621,18 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     );
     render_settings_row(
         frame,
-        rows[4],
+        rows[2],
+        "Resume playback",
+        view.cursor == SET_RESUME,
+        toggle_display(if view.resume_playback { "on" } else { "off" }, theme),
+        theme,
+    );
+    render_settings_row(
+        frame,
+        rows[3],
         "Color mode",
         view.cursor == SET_COLOR_MODE,
-        color_mode_display(view.color_mode, theme),
+        color_mode_display(view.color_mode, view.detected_truecolor, theme),
         theme,
     );
 
@@ -1624,7 +1645,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     let theme_value = theme_cycle_display(theme_name, theme);
     render_settings_row(
         frame,
-        rows[5],
+        rows[4],
         "Theme",
         view.cursor == SET_THEME,
         theme_value,
@@ -1638,7 +1659,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     };
     render_settings_row(
         frame,
-        rows[6],
+        rows[5],
         "Terminal transparency",
         view.cursor == SET_TRANSPARENCY,
         transparency_value,
@@ -1654,10 +1675,10 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
         ))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true }),
-        rows[7],
+        rows[6],
     );
 
-    render_hints(frame, rows[9], &hints, theme);
+    render_hints(frame, rows[8], &hints, theme);
 }
 
 /// One-line description of a settings row, shown in the footnote when selected.
@@ -1665,65 +1686,21 @@ const fn settings_row_description(cursor: usize, truecolor: bool) -> &'static st
     match cursor {
         SET_VOLUME => "Volume applied each time audium starts.",
         SET_SEEK => "How far the seek keys jump, in seconds.",
+        SET_RESUME => "Reopen with the last queue and position, paused. Off forgets it.",
         SET_COLOR_MODE if truecolor => {
-            "Auto follows what your terminal reports. Switch to 16-color if the colors look wrong."
+            "Auto detects truecolor support. Switch to 16-color only if your terminal does not truly support it."
         }
         SET_COLOR_MODE => {
-            "Auto follows what your terminal reports. Switch to Truecolor only if it does support it."
+            "Auto detects truecolor support. Switch to Truecolor only if your terminal actually supports it."
         }
         SET_THEME if truecolor => "Color scheme for the interface.",
-        SET_THEME => {
-            "Console themes track your terminal's own palette. Pick the one matching its background."
-        }
+        SET_THEME => "Color scheme built from your terminal's own 16 colors.",
         SET_TRANSPARENCY if truecolor => {
             "Shows the terminal background through the UI. Best with a transparent or blurred terminal."
         }
         // SET_TRANSPARENCY, 16-color
         _ => "Console themes already leave the background untouched, so there is nothing to blend.",
     }
-}
-
-/// Renders the settings modal header: capability banner plus key hint.
-fn render_settings_header(
-    frame: &mut Frame<'_>,
-    banner_area: Rect,
-    view: &SettingsState,
-    theme: &Theme,
-) {
-    frame.render_widget(
-        Paragraph::new(terminal_banner(
-            view.color_mode,
-            view.detected_truecolor,
-            theme,
-        ))
-        .alignment(Alignment::Center),
-        banner_area,
-    );
-}
-
-/// The terminal-capability banner shown at the top of the settings modal.
-fn terminal_banner(color_mode: ColorMode, detected: bool, theme: &Theme) -> Line<'static> {
-    let truecolor = color_mode.truecolor(detected);
-    let (label, color) = if truecolor {
-        ("truecolor", theme.now_playing)
-    } else {
-        ("16-color console", theme.dir_col)
-    };
-    let source = if matches!(color_mode, ColorMode::Auto) {
-        "auto-detected"
-    } else {
-        "forced"
-    };
-    Line::from(vec![
-        Span::styled(theme.glyphs().bullet, Style::default().fg(color)),
-        Span::raw(" "),
-        Span::styled("Terminal: ", Style::default().fg(theme.text_dim)),
-        Span::styled(
-            label,
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(format!("  ({source})"), Style::default().fg(theme.subtle)),
-    ])
 }
 
 fn render_settings_row<'a>(
@@ -1808,8 +1785,22 @@ fn theme_cycle_display(name: &str, theme: &Theme) -> Line<'static> {
     cycle_value(name, theme.accent, theme)
 }
 
-fn color_mode_display(mode: ColorMode, theme: &Theme) -> Line<'static> {
-    cycle_value(mode.label(), theme.accent, theme)
+/// The color-mode value.  `Auto` names the mode it resolved to -- `auto
+/// (truecolor)` or `auto (16-color)` -- so the detected capability is visible
+/// on the row itself rather than in a separate banner.  A forced mode shows its
+/// own name, which reads as deliberate against `auto`.
+fn color_mode_display(mode: ColorMode, detected: bool, theme: &Theme) -> Line<'static> {
+    let text = if matches!(mode, ColorMode::Auto) {
+        let resolved = if mode.truecolor(detected) {
+            "truecolor"
+        } else {
+            "16-color"
+        };
+        format!("auto ({resolved})")
+    } else {
+        mode.label().to_string()
+    };
+    cycle_value(&text, theme.accent, theme)
 }
 
 fn toggle_display(value: &str, theme: &Theme) -> Line<'static> {

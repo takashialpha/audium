@@ -47,6 +47,7 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 - **Adapts to your terminal:** detects truecolor support and, on a bare Linux console (tty) or any terminal without it, automatically falls back to a 16-color theme with ASCII-only glyphs so the UI stays readable everywhere. Two console themes are built from named ANSI colors, one for a dark background and one for a light one, and each color mode remembers its own theme. The settings menu shows what it detected and lets you override it if the guess is wrong.
 - **Library and playlists:** your whole collection and your playlists are separate things, in their own panels. Create, rename and delete playlists, queue or shuffle either one, and pick a loop mode.
 - **Playback control:** tracks are listed as a table of title, artist, album and length; filter it in real time, adjust playback speed and seek freely.
+- **Resumes where you left off:** the queue, current track, position and playback modes are restored on the next launch, paused, so nothing plays until you press Space.
 - **Threaded audio:** playback runs on its own thread; the UI never stutters your music.
 - **System audio output:** audium plays through your default system output. Change the output device in your OS and audium follows, no in-app device switching, no surprises.
 - **Wide format support:** MP1, MP2, MP3, FLAC, Ogg Vorbis, WAV, AAC, M4A and AIFF via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
@@ -122,7 +123,10 @@ $XDG_DATA_HOME/audium/     # typically ~/.local/share/audium/
   music/                   # copies of all imported audio files
 
 $XDG_CONFIG_HOME/audium/   # typically ~/.config/audium/
-  settings.json            # user preferences (volume, seek step, theme, transparency, color mode)
+  settings.json            # user preferences (volume, seek step, theme, transparency, color mode, resume)
+
+$XDG_STATE_HOME/audium/    # typically ~/.local/state/audium/
+  state.json               # last session: queue, position, loop/speed/volume (safe to delete)
 ```
 
 `music/` holds audium's own copies of your imported files, so importing never moves or renames your originals and removing a track deletes only audium's copy. Track metadata is read from the files' tags on every launch.
@@ -162,7 +166,7 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 ## TODO
 
 - MPRIS, so desktop media keys and status bars can see and drive playback
-- Resuming where playback left off
+- Safe concurrent instances (the index is last-writer-wins; needs a lock or reload-before-write)
 - Pitch-preserving speed control (time-stretch DSP), so faster playback does not raise the pitch
 - YouTube/Web audio import (no external binary deps)
 

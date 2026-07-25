@@ -436,6 +436,23 @@ impl Library {
         Self::xdg().find_config_file(name)
     }
 
+    /// Highest-priority existing copy of a state file, or `None`.
+    ///
+    /// State (playback position, the queue) is losable application state, so it
+    /// lives under `$XDG_STATE_HOME`, apart from data (the index + music) and
+    /// preferences (settings).
+    pub fn find_state_file(name: &str) -> Option<PathBuf> {
+        Self::xdg().find_state_file(name)
+    }
+
+    /// Where a state file is written: `$XDG_STATE_HOME/audium`. Creates the
+    /// directory if needed.
+    pub fn place_state_file(name: &str) -> Result<PathBuf> {
+        Self::xdg()
+            .place_state_file(name)
+            .context("could not determine state directory")
+    }
+
     /// Where a config file is *written*: always `$XDG_CONFIG_HOME/audium`,
     /// never a system directory. Creates the directory if needed.
     ///
@@ -798,6 +815,12 @@ impl Library {
             album.as_deref(),
             lyrics.as_deref(),
         )
+    }
+
+    /// Finds a track by its filename. Used to resolve saved playback state at
+    /// startup, which is a one-off, so a linear scan is fine.
+    pub fn track_by_filename(&self, filename: &str) -> Option<&Track> {
+        self.tracks.iter().find(|t| t.filename() == filename)
     }
 
     /// Returns a reference to a track by id.

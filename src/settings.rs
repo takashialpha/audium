@@ -58,7 +58,28 @@ impl ColorMode {
 }
 
 fn default_console_theme() -> String {
-    "console_dark".to_string()
+    "native".to_string()
+}
+
+/// Bumped only if this file's shape changes incompatibly.  Written to every
+/// file; currently informational, since every field defaults independently and
+/// an older file simply gains the new keys on its next save.
+const SETTINGS_VERSION: u32 = 1;
+
+const fn default_version() -> u32 {
+    SETTINGS_VERSION
+}
+const fn default_volume() -> f32 {
+    0.7
+}
+const fn default_seek() -> u64 {
+    1
+}
+const fn default_true() -> bool {
+    true
+}
+fn default_theme() -> String {
+    "dark".to_string()
 }
 
 /// Persistent user preferences.
@@ -66,38 +87,53 @@ fn default_console_theme() -> String {
 /// Read from the highest-priority copy across `$XDG_CONFIG_HOME` and
 /// `$XDG_CONFIG_DIRS`; always written to `$XDG_CONFIG_HOME/audium/settings.json`.
 ///
-/// All fields have sensible defaults via `Default` so missing keys in an
-/// older file are silently filled in on load.
+/// Every field defaults independently, so a missing key in an older file is
+/// filled in on load without disturbing the others.  Field order matches the
+/// settings modal, so the file reads top-to-bottom like the dialog.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
+    /// Schema version of this file.  See `SETTINGS_VERSION`.
+    #[serde(default = "default_version")]
+    version: u32,
     /// Initial volume applied when audium starts (0.0-1.0).
+    #[serde(default = "default_volume")]
     pub default_volume: f32,
     /// How many seconds <- / -> seek by.
+    #[serde(default = "default_seek")]
     pub seek_step_secs: u64,
+    /// Whether to remember the playback session (queue, position, modes) across
+    /// restarts.  When off, nothing is written to `$XDG_STATE_HOME` and any
+    /// existing `state.json` is removed on launch.
+    #[serde(default = "default_true")]
+    pub resume_playback: bool,
+    /// How colors are selected.  `Auto` detects truecolor support and falls
+    /// back to the console theme when it is missing.
+    #[serde(default)]
+    pub color_mode: ColorMode,
     /// Name of the active truecolor theme.  Must match one of the built-in
     /// theme names; unknown values fall back to "dark" silently on load.
+    #[serde(default = "default_theme")]
     pub theme_name: String,
     /// Name of the active 16-color console theme.  Kept separate from
     /// `theme_name` so switching color modes does not overwrite either choice.
     #[serde(default = "default_console_theme")]
     pub console_theme_name: String,
     /// Whether background transparency is enabled.
-    pub transparent: bool,
-    /// How colors are selected.  `Auto` detects truecolor support and falls
-    /// back to the console theme when it is missing.
     #[serde(default)]
-    pub color_mode: ColorMode,
+    pub transparent: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            version: SETTINGS_VERSION,
             default_volume: 0.7,
             seek_step_secs: 1,
+            resume_playback: true,
+            color_mode: ColorMode::Auto,
             theme_name: "dark".to_string(),
             console_theme_name: default_console_theme(),
             transparent: false,
-            color_mode: ColorMode::Auto,
         }
     }
 }

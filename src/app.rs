@@ -2,6 +2,7 @@ use anyhow::Result;
 use rand::seq::SliceRandom;
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -10,12 +11,12 @@ use crate::{
     library::{Library, PlaylistId, Track, TrackId},
     lyrics,
     modal::{
-        Modal, ModalConfirm, ModalOutcome, RemoveTarget, SettingsState, TextInput,
+        Modal, ModalConfirm, ModalOutcome, RemoveTarget, SettingsSave, SettingsState, TextInput,
         make_lyrics_textarea,
     },
     nav, numeric,
     player::{PlayerEvent, PlayerHandle, resolve_duration, spawn_audio_thread},
-    settings::{ColorMode, Settings},
+    settings::Settings,
     ui,
     ui::layout::{Theme, console_theme_by_name, console_themes, theme_by_name, themes},
 };
@@ -71,7 +72,8 @@ const SPEED_MAX: f32 = 3.0;
 // - LoopMode -
 
 /// Playback loop mode, cycled with `l`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum LoopMode {
     #[default]
     Off,
@@ -255,6 +257,55 @@ impl AppState {
 
     pub fn enqueue(&mut self, track: Track) {
         self.queue.push(track);
+    }
+
+    /// Captures the current playback session for `$XDG_STATE_HOME`.
+    pub fn snapshot_state(&self) -> crate::state::PlaybackState {
+        crate::state::PlaybackState::new(
+            self.queue.iter().map(Track::filename).collect(),
+            self.now_playing,
+            self.elapsed().as_secs(),
+            self.loop_mode,
+            self.player.playback_speed,
+            self.player.volume,
+        )
+    }
+
+    /// Restores a saved session: the queue, modes and volume, and the current
+    /// track loaded but *paused* at its saved position, so launching audium
+    /// never suddenly makes sound -- the user presses Space to continue.
+    ///
+    /// Queue entries whose file is gone are dropped, and `now_playing` follows
+    /// its track to the new index (or clears if that track itself is gone).
+    pub fn restore_state(&mut self, saved: &crate::state::PlaybackState) {
+        let mut queue = Vec::with_capacity(saved.queue.len());
+        let mut now_playing = None;
+        for (i, name) in saved.queue.iter().enumerate() {
+            if let Some(track) = self.library.track_by_filename(name) {
+                if saved.now_playing == Some(i) {
+                    now_playing = Some(queue.len());
+                }
+                queue.push(track.clone());
+            }
+        }
+        self.queue = queue;
+        self.queue_cursor = now_playing.unwrap_or(0);
+        self.loop_mode = saved.loop_mode;
+        self.player.set_speed(saved.speed);
+        self.player.set_volume(saved.volume);
+
+        if let Some(idx) = now_playing {
+            let track = &self.queue[idx];
+            let path = track.path.clone();
+            let pos = Duration::from_secs(saved.position_secs);
+            self.now_playing = Some(idx);
+            self.track_duration = resolve_duration(&path);
+            self.seek_offset = pos;
+            self.track_start = None; // paused
+            self.player.is_paused = true;
+            // Load, seek and hold paused so Space resumes from here instantly.
+            self.player.seek(path, pos, true);
+        }
     }
 
     /// Starts playing `queue[idx]`.  The duration is resolved synchronously
@@ -976,6 +1027,7 @@ impl AppState {
             cursor: 0,
             volume_pct: vol_pct,
             seek_secs: self.settings.seek_step_secs,
+            resume_playback: self.settings.resume_playback,
             preview_theme_idx,
             preview_console_idx,
             transparent: self.settings.transparent,
@@ -1295,21 +1347,7 @@ impl AppState {
                 self.should_quit = true;
             }
 
-            ModalConfirm::SaveSettings {
-                volume_pct,
-                seek_secs,
-                theme_name,
-                console_theme_name,
-                transparent,
-                color_mode,
-            } => self.apply_save_settings(
-                volume_pct,
-                seek_secs,
-                &theme_name,
-                &console_theme_name,
-                transparent,
-                color_mode,
-            ),
+            ModalConfirm::SaveSettings(save) => self.apply_save_settings(&save),
 
             ModalConfirm::PreviewTheme {
                 theme_name,
@@ -1377,28 +1415,26 @@ impl AppState {
         }
     }
 
-    fn apply_save_settings(
-        &mut self,
-        volume_pct: u32,
-        seek_secs: u64,
-        theme_name: &str,
-        console_theme_name: &str,
-        transparent: bool,
-        color_mode: ColorMode,
-    ) {
+    fn apply_save_settings(&mut self, save: &SettingsSave) {
         self.settings
-            .set_default_volume(numeric::whole_percent_to_ratio(volume_pct));
-        self.settings.set_seek_step_secs(seek_secs);
-        self.settings.set_theme(theme_name);
-        self.settings.set_console_theme(console_theme_name);
-        self.settings.transparent = transparent;
-        self.settings.color_mode = color_mode;
+            .set_default_volume(numeric::whole_percent_to_ratio(save.volume_pct));
+        self.settings.set_seek_step_secs(save.seek_secs);
+        // Turning resume off forgets the saved session at once, rather than
+        // leaving a stale file to be cleared on the next launch.
+        if !save.resume_playback && self.settings.resume_playback {
+            crate::state::PlaybackState::discard();
+        }
+        self.settings.resume_playback = save.resume_playback;
+        self.settings.set_theme(&save.theme_name);
+        self.settings.set_console_theme(&save.console_theme_name);
+        self.settings.transparent = save.transparent;
+        self.settings.color_mode = save.color_mode;
         // Apply the resolved theme live (console fallback when not truecolor).
         self.theme = resolve_theme(
-            theme_name,
-            console_theme_name,
-            transparent,
-            color_mode.truecolor(detect_truecolor()),
+            &save.theme_name,
+            &save.console_theme_name,
+            save.transparent,
+            save.color_mode.truecolor(detect_truecolor()),
         );
         let _ = self.settings.save();
     }
@@ -1437,6 +1473,8 @@ pub fn run(cli: Cli) -> Result<()> {
     let mut state = AppState::new(library, player, settings);
 
     if let Some((track, is_new)) = initial_track {
+        // A file argument is an explicit "play this", so it wins over any saved
+        // session rather than restoring the old queue.
         let msg = if is_new {
             format!("\"{}\" added to library.", track.name)
         } else {
@@ -1445,11 +1483,22 @@ pub fn run(cli: Cli) -> Result<()> {
         state.enqueue(track);
         state.play_queue_index(0);
         state.modal = Some(Modal::Notify { message: msg });
+    } else if !state.settings.resume_playback {
+        // Resume is off: forget any session a previous run may have left behind.
+        crate::state::PlaybackState::discard();
+    } else if let Some(saved) = crate::state::PlaybackState::load() {
+        state.restore_state(&saved);
     }
 
     let terminal = ratatui::init();
     let result = event_loop(terminal, &mut state);
     ratatui::restore();
+
+    // Persist the final session on the way out. Best effort: a failure here
+    // must not mask the event loop's result.
+    if state.settings.resume_playback {
+        let _ = state.snapshot_state().save();
+    }
     result
 }
 
@@ -1459,14 +1508,35 @@ fn event_loop(mut terminal: DefaultTerminal, state: &mut AppState) -> Result<()>
     /// Refresh rate while a track is playing, enough for a smooth elapsed
     /// time without redrawing on every poll.
     const PLAYBACK_REFRESH: Duration = Duration::from_millis(250);
+    /// How often the playback session is written out, so an unclean exit (a
+    /// crash, a SIGKILL, a closed terminal) loses at most this much position.
+    const STATE_SAVE: Duration = Duration::from_secs(5);
 
     // Redrawing unconditionally each poll costs a full render 20 times a
     // second forever, whatever the library size. Draw only when something
     // actually changed.
     let mut dirty = true;
     let mut last_draw = Instant::now();
+    let mut last_state_save = Instant::now();
+    // The last snapshot actually written, so an unchanged session (paused or
+    // idle) is not rewritten every tick. The cheapest write is the one skipped.
+    let mut saved_state: Option<crate::state::PlaybackState> = None;
 
     loop {
+        // Autosave a track's position periodically, but only when it differs
+        // from what is on disk: while paused the position is frozen, so the
+        // snapshot matches and nothing is written.
+        if state.settings.resume_playback
+            && state.now_playing.is_some()
+            && last_state_save.elapsed() >= STATE_SAVE
+        {
+            let snapshot = state.snapshot_state();
+            if saved_state.as_ref() != Some(&snapshot) && snapshot.save().is_ok() {
+                saved_state = Some(snapshot);
+            }
+            last_state_save = Instant::now();
+        }
+
         if state.tick() {
             dirty = true;
         }
