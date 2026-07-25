@@ -18,7 +18,7 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 [![License](https://img.shields.io/crates/l/audium?style=flat-square&color=64b4ff&labelColor=161616)](LICENSE)
 [![Built With Ratatui](https://img.shields.io/badge/Built_With_Ratatui-000?logo=ratatui&logoColor=fff)](https://ratatui.rs/)
 
-[Installation](#installation) | [Building](#building-from-source)
+[Installation](#installation) | [Usage](#usage) | [Building](#building-from-source) | [Library layout](#library-layout)
 
 </div>
 
@@ -45,12 +45,12 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 - **It's your library:** all metadata lives in the files' own tags, edits included, so it travels with them and any other player can read it. `$XDG_DATA_HOME/audium/audium.json` is a small plain-JSON index that only records which files exist and your playlists; delete it and audium rebuilds it from the tags. audium never phones home.
 - **Themes:** 15 built-in truecolor themes plus 2 console themes (nord, gruvbox, catppuccin, rose pine, dracula, tokyo night, and more). Switch live with instant preview. Optional background transparency for composited terminals.
 - **Adapts to your terminal:** detects truecolor support and, on a bare Linux console (tty) or any terminal without it, automatically falls back to a 16-color theme with ASCII-only glyphs so the UI stays readable everywhere. Two console themes are built from named ANSI colors, one for a dark background and one for a light one, and each color mode remembers its own theme. The settings menu shows what it detected and lets you override it if the guess is wrong.
-- **Library and playlists:** your whole collection and your playlists are separate things, in their own panels. Create, rename and delete playlists, queue or shuffle either one, and pick a loop mode.
+- **Playlists:** your whole collection and your playlists are separate things, in their own panels. Create, rename and delete playlists, queue or shuffle either one, and pick a loop mode.
 - **Playback control:** tracks are listed as a table of title, artist, album and length; filter it in real time, adjust playback speed and seek freely.
 - **Resumes where you left off:** the queue, current track, position and playback modes are restored on the next launch, paused, so nothing plays until you press Space.
 - **Threaded audio:** playback runs on its own thread; the UI never stutters your music.
 - **System audio output:** audium plays through your default system output. Change the output device in your OS and audium follows, no in-app device switching, no surprises.
-- **Wide format support:** MP1, MP2, MP3, FLAC, Ogg Vorbis, WAV, AAC, M4A and AIFF via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
+- **Wide format support:** MP1, MP2, MP3, FLAC, Ogg Vorbis, WAV, AAC, M4A, M4B and AIFF via [Symphonia](https://github.com/pdeljanov/Symphonia). No FFmpeg required.
 - **Tiny binary:** ~5 MB stripped release build.
 - **100% safe Rust:** zero `unsafe` blocks in the codebase; it's forbidden.
 
@@ -63,12 +63,12 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 ### Cargo
 
 ```sh
-cargo install audium
+cargo install audium --locked
 ```
 
-Requires a Rust toolchain with edition 2024 support. Installs the `audium` binary to `~/.cargo/bin/`.
+Installs the `audium` binary to `~/.cargo/bin/`. Latest stable rust toolchain is recommended.
 
-audium uses ALSA for audio, the standard on Linux, its development headers are needed to build, see [Building from source](#building-from-source) for distro-specific instructions.
+Audio goes through ALSA, the standard on Linux, and its development headers are needed to build. See [Building from source](#building-from-source) for the package names on your distro.
 
 ### AUR (Arch Linux)
 
@@ -124,6 +124,7 @@ $XDG_DATA_HOME/audium/     # typically ~/.local/share/audium/
 
 $XDG_CONFIG_HOME/audium/   # typically ~/.config/audium/
   settings.json            # user preferences (volume, seek step, theme, transparency, color mode, resume)
+                           # reads from $XDG_CONFIG_DIRS too, so the system can ship defaults
 
 $XDG_STATE_HOME/audium/    # typically ~/.local/state/audium/
   state.json               # last session: queue, position, loop/speed/volume (safe to delete)
@@ -131,11 +132,11 @@ $XDG_STATE_HOME/audium/    # typically ~/.local/state/audium/
 
 `music/` holds audium's own copies of your imported files, so importing never moves or renames your originals and removing a track deletes only audium's copy. Track metadata is read from the files' tags on every launch.
 
-The index lists tracks and playlist entries by filename, so it is genuinely hand-editable (add a song to a playlist by typing its filename) and identical across machines. Because identity is the filename within `music/`, the whole `$XDG_DATA_HOME/audium/` directory can be copied or moved anywhere and still opens correctly.
+The index lists tracks and playlist entries by filename, so it is genuinely hand-editable (add a song to a playlist by typing its filename) and identical across machines. audium re-validates it on the next launch, so feel free to reorganise playlists in a text editor.
 
-`audium.json` is human-readable and editable by hand. audium re-validates it on next launch, so feel free to reorganise playlists or move the directory to another machine.
+`audium.json` carries a `version` field, and audium **never migrates an index it cannot read**. Anything unrecognised is renamed to `audium.v<n>.json` and left in place; the collection is then rebuilt by re-scanning `music/`. Nothing is ever deleted.
 
-It carries a `version` field, and audium **never migrates an index it cannot read**. Anything unrecognised is renamed to `audium.v<n>.json` and left in place; the collection is then rebuilt by re-scanning `music/`. Nothing is ever deleted.
+Every file audium writes, index and tags alike, is written to a temporary file and renamed into place, so a crash or a power cut leaves the previous version intact rather than a half-written one.
 
 ### Upgrading
 
