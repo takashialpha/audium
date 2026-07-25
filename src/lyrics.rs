@@ -6,12 +6,11 @@ pub struct LyricLine {
     pub text: String,
 }
 
-/// Parses raw LRC text or plain text into lyric lines.
+/// Parses raw LRC or plain text into lyric lines.
 ///
-/// If the input contains any `[mm:ss.xx]` timestamp tags those lines are
-/// extracted and returned sorted by time; metadata tags like `[ti:...]` are
-/// skipped.  If no timed lines are found every non-empty input line is
-/// returned with `time_ms: None`.
+/// Any `[mm:ss.xx]` lines are extracted and sorted by time, skipping metadata
+/// tags like `[ti:...]`. With no timed lines, every non-empty line comes back
+/// with `time_ms: None`.
 pub fn parse_lrc(raw: &str) -> Vec<LyricLine> {
     let mut timed: Vec<LyricLine> = Vec::new();
     let mut plain: Vec<LyricLine> = Vec::new();
@@ -44,7 +43,7 @@ fn try_timed(line: &str) -> Option<LyricLine> {
     let tag = &line[1..close];
     let text = line[close + 1..].trim().to_string();
 
-    // Reject metadata tags whose first char is not a digit (e.g. [ti:Title]).
+    // a metadata tag does not start with a digit, e.g. [ti:Title]
     if !tag.starts_with(|c: char| c.is_ascii_digit()) {
         return None;
     }

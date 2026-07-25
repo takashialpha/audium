@@ -1,20 +1,14 @@
-//! Shared list-navigation keymap.
-//!
-//! Every scrollable list in the app (library panels, file picker, menus,
-//! playlist picker, lyrics scroll) routes cursor movement through
-//! [`list_move`] so the keys behave identically everywhere.
+//! Shared list-navigation keymap. Every scrollable list routes cursor
+//! movement through [`list_move`], so the keys behave the same everywhere.
 
 use ratatui::crossterm::event::KeyCode;
 
 /// Rows moved by `PageUp` / `PageDown`.
 pub const PAGE: usize = 10;
 
-/// Maps a navigation key to the new cursor index over a list of `len` items.
-///
-/// Returns `None` for keys that are not list navigation, so callers can fall
-/// through to their own bindings.  Supported keys (all clamped to range):
-/// `j`/`Down`, `k`/`Up`, `g`/`Home` (top), `G`/`End` (bottom),
-/// `PageDown`, `PageUp`.
+/// Maps a navigation key to the new cursor index over a list of `len` items,
+/// clamped to range. `None` for anything that is not navigation, so callers
+/// fall through to their own bindings.
 pub fn list_move(code: KeyCode, cursor: usize, len: usize) -> Option<usize> {
     let last = len.saturating_sub(1);
     let target = match code {

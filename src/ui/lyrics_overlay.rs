@@ -69,12 +69,12 @@ pub fn render_lyrics_overlay(frame: &mut Frame<'_>, state: &AppState, track_id: 
     let total = lines.len();
 
     let scroll = if is_synced {
-        // Auto-scroll: keep the current line centred.
+        // auto-scroll keeps the current line centred
         current
             .map_or(0, |cur| cur.saturating_sub(visible / 2))
             .min(total.saturating_sub(visible))
     } else {
-        // Manual scroll via j/k; clamp to content length.
+        // manual scroll via j/k, clamped to content
         state.lyrics_scroll.min(total.saturating_sub(visible))
     };
 

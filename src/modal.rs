@@ -310,8 +310,8 @@ pub enum ModalOutcome {
     Dismissed,
 }
 
-/// The settings modal's values, applied together when it closes. Bundled into
-/// one struct so the apply path takes a single argument rather than a long list.
+/// The settings modal's values, applied together when it closes: one struct
+/// so the apply path takes a single argument, not a long list.
 #[derive(Debug)]
 pub struct SettingsSave {
     pub volume_pct: u32,
@@ -431,10 +431,9 @@ const SET_THEME: usize = 4;
 const SET_TRANSPARENCY: usize = 5;
 const SET_ROWS: usize = 6;
 
-/// Which rows accept input.  Every mode has themes to choose from, so only
-/// transparency is locked (and skipped by the cursor) without truecolor: the
-/// console themes leave the background at the terminal default, which is
-/// already whatever the terminal is.
+/// Which rows accept input. Every mode has themes, so only transparency is
+/// locked without truecolor: the console themes already leave the background
+/// at whatever the terminal's is.
 const fn settings_enabled(color_mode: ColorMode, detected: bool) -> [bool; SET_ROWS] {
     let tc = color_mode.truecolor(detected);
     [true, true, true, true, true, tc]
@@ -501,17 +500,17 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
                     ModalOutcome::Consumed
                 }
                 SET_RESUME => {
-                    // A behavior toggle with no visual effect, so no preview.
+                    // a behavior toggle with no visual effect, so no preview
                     s.resume_playback = !s.resume_playback;
                     ModalOutcome::Consumed
                 }
                 SET_COLOR_MODE => {
-                    // Two states, so both directions are the same toggle.
+                    // two states, so both directions are the same toggle
                     s.color_mode = s.color_mode.toggle(s.detected_truecolor);
                     preview(s)
                 }
                 SET_THEME => {
-                    // Cycle whichever palette is actually on screen.
+                    // cycle whichever palette is on screen
                     let (idx, len) = if s.color_mode.truecolor(s.detected_truecolor) {
                         (&mut s.preview_theme_idx, themes().len())
                     } else {
@@ -530,7 +529,7 @@ fn handle_settings_key(code: KeyCode, s: &mut SettingsState) -> ModalOutcome {
                 }
             }
         }
-        // Enter, Esc and q all save and close.
+        // Enter, Esc and q all save and close
         KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') => {
             ModalOutcome::Confirm(ModalConfirm::SaveSettings(SettingsSave {
                 volume_pct: s.volume_pct,
@@ -559,8 +558,8 @@ fn handle_edit_metadata_key(
     original_name: &str,
 ) -> ModalOutcome {
     match code {
-        // Esc/Enter close and write.  A cleared name falls back to the
-        // original, so the editor always commits and never traps.
+        // Esc/Enter close and write; a cleared name falls back to the
+        // original, so the editor always commits and never traps
         KeyCode::Esc | KeyCode::Enter => {
             let typed = fields[0].value.trim();
             let name = if typed.is_empty() {
@@ -594,7 +593,7 @@ fn handle_edit_metadata_key(
             *active_field = (*active_field + META_ROWS - 1) % META_ROWS;
             ModalOutcome::Consumed
         }
-        // Text-input keys apply only to the text fields, not the button row.
+        // text-input keys apply to the fields, not the button row
         KeyCode::Char(c) if *active_field < META_FIELDS => {
             fields[*active_field].push(c);
             ModalOutcome::Consumed
@@ -725,8 +724,8 @@ impl Modal {
                 Confirm::Ignore => ModalOutcome::Consumed,
             },
 
-            // Editing existing data, so Enter and Esc both write the change;
-            // a blank name keeps the original (nothing is lost).
+            // editing existing data, so Enter and Esc both write; a blank
+            // name keeps the original
             Self::EditPlaylist { id, input } => match handle_text_key(input, code) {
                 TextInputResult::Submitted(name) => {
                     ModalOutcome::Confirm(ModalConfirm::RenamePlaylist {
@@ -847,13 +846,12 @@ fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     }
 }
 
-/// Every modal is inset from its border by [`MODAL_PAD_X`] columns and
-/// [`MODAL_PAD_Y`] rows on all four sides.  Applying it here rather than in
-/// each renderer is what keeps the gap identical across dialogs: a renderer
-/// only ever lays out content, never its own margins.
+/// Every modal is inset by [`MODAL_PAD_X`] columns and [`MODAL_PAD_Y`] rows on
+/// all four sides. Applying it here rather than per renderer is what keeps the
+/// gap identical across dialogs: a renderer lays out content, never margins.
 ///
-/// Consequence for sizing: a modal's height is `content rows + 2 borders +
-/// 2 * MODAL_PAD_Y`, and its usable width is `width - 2 - 2 * MODAL_PAD_X`.
+/// So a modal's height is `content rows + 2 borders + 2 * MODAL_PAD_Y`, and
+/// its usable width is `width - 2 - 2 * MODAL_PAD_X`.
 pub const MODAL_PAD_X: u16 = 2;
 pub const MODAL_PAD_Y: u16 = 1;
 
@@ -890,12 +888,9 @@ const fn danger_hint<'a>(key: &'a str, action: &'a str) -> Hint<'a> {
 /// Renders a dialog's hints as `[key] action` pairs joined by the theme
 /// separator, e.g. `[Tab] next field  -  [Esc] close`.
 ///
-/// The brackets carry the key/action boundary. Spacing alone cannot: a reader
-/// has no way to tell a wide gap *within* a pair from the gap *between* two,
-/// and the color difference disappears on a monochrome tty.
-///
-/// Wraps at whole pairs, never mid-pair, so a hint gains a row instead of
-/// being cut off. Size the dialog with [`hint_height`] first.
+/// The brackets carry the key/action boundary; spacing alone cannot tell a gap
+/// *within* a pair from one *between* two, and color dies on a monochrome tty.
+/// Wraps at whole pairs, so size the dialog with [`hint_height`] first.
 fn hint_lines<'a>(hints: &[Hint<'a>], width: usize, theme: &Theme) -> Vec<Line<'a>> {
     let sep = theme.glyphs().sep;
     let sep_w = sep.chars().count();
@@ -945,8 +940,8 @@ pub fn hint_height(hints: &[Hint<'_>], width: usize, theme: &Theme) -> u16 {
     usize_to_u16_saturating(hint_lines(hints, width, theme).len())
 }
 
-/// Draws the hint footer centred in `area`.  Every dialog puts it at the
-/// bottom; see the UI conventions in the README.
+/// Draws the hint footer centred in `area`. Every dialog puts it at the
+/// bottom; see the UI conventions in CONTRIBUTING.md.
 pub fn render_hints(frame: &mut Frame<'_>, area: Rect, hints: &[Hint<'_>], theme: &Theme) {
     frame.render_widget(
         Paragraph::new(hint_lines(hints, area.width as usize, theme)).alignment(Alignment::Center),
@@ -954,9 +949,8 @@ pub fn render_hints(frame: &mut Frame<'_>, area: Rect, hints: &[Hint<'_>], theme
     );
 }
 
-/// Rows `text` occupies once wrapped to `width`, so a dialog can be sized
-/// from its message instead of reserving a fixed guess that clips anything
-/// longer.  Greedy whitespace wrapping, matching `Paragraph`'s.
+/// Rows `text` occupies once wrapped to `width`, so a dialog is sized from
+/// its message rather than a fixed guess. Greedy, matching `Paragraph`.
 fn wrapped_height(text: &str, width: usize) -> u16 {
     if width == 0 {
         return 1;
@@ -969,8 +963,7 @@ fn wrapped_height(text: &str, width: usize) -> u16 {
             rows += 1;
             used = 0;
         }
-        // A word wider than the line cannot be fitted by moving it: it is
-        // broken across as many rows as it needs, so count them.
+        // a word wider than the line is broken across as many rows as it needs
         if w > width {
             let extra = (w - 1) / width;
             rows += extra;
@@ -1218,9 +1211,8 @@ struct HelpSection {
     keys: &'static [(&'static str, &'static str)],
 }
 
-/// Grouped by what you are trying to do, not by which key happens to be free.
-/// Anonymous blank-line groups told the reader that a break existed but never
-/// what it meant.
+/// Grouped by intent, not by which key was free: anonymous blank-line groups
+/// showed that a break existed but never what it meant.
 const HELP: &[HelpSection] = &[
     HelpSection {
         title: "Getting around",
@@ -1277,14 +1269,10 @@ const HELP: &[HelpSection] = &[
 
 /// Renders one section as `title` then its keys, indented under it.
 ///
-/// Keys are left-aligned at a fixed indent, so every key in the dialog starts
-/// on the same column as every other and sits directly under its heading;
-/// right-aligning them instead lined up only the descriptions and left a
-/// ragged edge running down the middle of each column.
-///
-/// The width is per column: one width shared across both would size the
-/// single-letter side to fit `Tab / S-Tab`, stranding its keys a dozen columns
-/// from the text they label.
+/// Keys are left-aligned at a fixed indent, so each starts on the same column
+/// and sits under its heading; right-aligning lined up only the descriptions
+/// and left a ragged edge down the middle. The width is per column: sharing
+/// one would size the single-letter side to fit `Tab / S-Tab`.
 fn help_lines<'a>(sections: &[&'a HelpSection], theme: &Theme) -> Vec<Line<'a>> {
     let key_w = sections
         .iter()
@@ -1321,10 +1309,9 @@ fn help_lines<'a>(sections: &[&'a HelpSection], theme: &Theme) -> Vec<Line<'a>> 
 /// too narrow for two.
 fn help_columns() -> (Vec<&'static HelpSection>, Vec<&'static HelpSection>) {
     let all: Vec<&HelpSection> = HELP.iter().collect();
-    // Balance by rendered height, not by section count, and pick the split
-    // with the smallest difference rather than the first one past halfway:
-    // crossing the midpoint can leave the columns further apart than stopping
-    // short of it would have.
+    // balance by rendered height, taking the smallest difference rather than
+    // the first split past halfway, which can land further apart than stopping
+    // short would have
     let rows = |s: &HelpSection| s.keys.len() + 2;
     let total: usize = all.iter().map(|s| rows(s)).sum();
     let mut used = 0;
@@ -1351,10 +1338,8 @@ fn lines_width(lines: &[Line<'_>]) -> u16 {
 fn render_help(frame: &mut Frame<'_>, scroll: usize, theme: &Theme) {
     let area = frame.area();
 
-    // Lay the columns out first and size the dialog to what they actually
-    // measure. A fixed width left the right-hand column floating in dead
-    // space, because its keys are single letters while the left column's run
-    // to `Tab / S-Tab`.
+    // laid out first, then sized to what they measure: a fixed width left the
+    // right column floating in dead space, its keys being single letters
     let (left_sections, right_sections) = help_columns();
     let left = help_lines(&left_sections, theme);
     let right = help_lines(&right_sections, theme);
@@ -1366,7 +1351,7 @@ fn render_help(frame: &mut Frame<'_>, scroll: usize, theme: &Theme) {
     let (body_lines, content_w) = if two_col {
         (left.len().max(right.len()), left_w + HELP_COL_GAP + right_w)
     } else {
-        // Too narrow to sit side by side: stack every section in one column.
+        // too narrow to sit side by side
         (0, left_w.max(right_w))
     };
 
@@ -1375,8 +1360,7 @@ fn render_help(frame: &mut Frame<'_>, scroll: usize, theme: &Theme) {
 
     let width = (content_w + chrome).min(area.width.saturating_sub(2));
 
-    // Clamp to the terminal: the list is taller than a short window, and being
-    // silently cut off with no way to reach the rest is worse than scrolling.
+    // clamped to the terminal: scrolling beats being silently cut off
     let stacked: Vec<Line<'_>>;
     let (lines_len, single) = if two_col {
         (body_lines, None)
@@ -1416,9 +1400,7 @@ fn render_help(frame: &mut Frame<'_>, scroll: usize, theme: &Theme) {
     if let Some(all) = single {
         frame.render_widget(Paragraph::new(all.clone()).scroll((scroll, 0)), rows[0]);
     } else {
-        // Fixed left column rather than an even split: the columns hold
-        // different amounts of text, so halving the width would strand one of
-        // them well short of the border.
+        // fixed left column: halving would strand one side short of the border
         let cols = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -1430,7 +1412,7 @@ fn render_help(frame: &mut Frame<'_>, scroll: usize, theme: &Theme) {
         frame.render_widget(Paragraph::new(right).scroll((scroll, 0)), cols[1]);
     }
 
-    // The scroll hint would be a lie when everything already fits.
+    // the scroll hint would be a lie when everything already fits
     let shown: Vec<Hint<'_>> = if scrollable {
         hints.to_vec()
     } else {
@@ -1440,8 +1422,8 @@ fn render_help(frame: &mut Frame<'_>, scroll: usize, theme: &Theme) {
 }
 
 fn render_menu(frame: &mut Frame<'_>, cursor: usize, theme: &Theme) {
-    // Wide enough that the hint footer wraps to two rows, not three, which
-    // would leave this small dialog bottom-heavy.
+    // wide enough that the footer wraps to two rows, not three, which would
+    // leave this small dialog bottom-heavy
     const WIDTH: u16 = 40;
     let area = frame.area();
     let hints = [
@@ -1498,7 +1480,7 @@ fn render_menu(frame: &mut Frame<'_>, cursor: usize, theme: &Theme) {
 
 fn render_about(frame: &mut Frame<'_>, theme: &Theme) {
     const WIDTH: u16 = 64;
-    // Single pure-ASCII logo, rendered the same on every terminal.
+    // pure ASCII, so it renders the same on every terminal
     const LOGO: [&str; 7] = [
         "                          mm     ##                       ",
         "                          ##     \"\"                       ",
@@ -1580,7 +1562,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
     ];
     let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
     // 6xrow(3) + footnote(2) + gap(1), then hints. The inset above the first
-    // row is the modal's own padding (MODAL_PAD_Y), not a spacer row.
+    // row is the modal's own padding, not a spacer row.
     let rect = centered_rect(WIDTH, 21 + hint_h + MODAL_CHROME_H, area);
     frame.render_widget(Clear, rect);
 
@@ -1636,7 +1618,7 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
         theme,
     );
 
-    // Both modes have themes; only transparency depends on truecolor.
+    // both modes have themes; only transparency depends on truecolor
     let theme_name = if truecolor {
         themes()[view.preview_theme_idx].name
     } else {
@@ -1666,8 +1648,8 @@ fn render_settings(frame: &mut Frame<'_>, view: &SettingsState, theme: &Theme) {
         theme,
     );
 
-    // Footnote follows the selected row in both modes.  Locked rows can't be
-    // selected, so the color-mode row's description carries the override hint.
+    // locked rows cannot be selected, so the color-mode row's description
+    // carries the override hint
     frame.render_widget(
         Paragraph::new(Span::styled(
             settings_row_description(view.cursor, truecolor),
@@ -1785,10 +1767,9 @@ fn theme_cycle_display(name: &str, theme: &Theme) -> Line<'static> {
     cycle_value(name, theme.accent, theme)
 }
 
-/// The color-mode value.  `Auto` names the mode it resolved to -- `auto
-/// (truecolor)` or `auto (16-color)` -- so the detected capability is visible
-/// on the row itself rather than in a separate banner.  A forced mode shows its
-/// own name, which reads as deliberate against `auto`.
+/// The color-mode value. `Auto` names what it resolved to (`auto (truecolor)`)
+/// so the detected capability shows on the row rather than in a banner; a
+/// forced mode shows its own name, which reads as deliberate beside `auto`.
 fn color_mode_display(mode: ColorMode, detected: bool, theme: &Theme) -> Line<'static> {
     let text = if matches!(mode, ColorMode::Auto) {
         let resolved = if mode.truecolor(detected) {
@@ -1857,8 +1838,8 @@ fn render_metadata_field(
             cols[1],
         );
     } else {
-        // Inactive fields have no cursor to follow, so a long value is marked
-        // as clipped rather than silently cut off at the border.
+        // no cursor to follow, so a long value is marked clipped rather than
+        // silently cut at the border
         let (text, style) = if input.value.is_empty() {
             ("-".to_string(), Style::default().fg(theme.subtle))
         } else {
@@ -1908,9 +1889,8 @@ fn render_edit_metadata(
     ];
     let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
 
-    // Every row is derived from META_FIELDS: one row per field, a spacer, the
-    // lyrics button, a gap, then the hints. Hardcoding these drifted the
-    // moment the field count changed.
+    // derived from META_FIELDS rather than hardcoded, which drifted the moment
+    // the field count changed
     let mut constraints = vec![Constraint::Length(1); META_FIELDS];
     constraints.extend([
         Constraint::Length(1),      // spacer
@@ -1936,8 +1916,8 @@ fn render_edit_metadata(
         render_metadata_field(frame, rows[i], label, input, active_field == i, theme);
     }
 
-    // The button is the row after the fields and the spacer; selecting it is
-    // `active_field == META_FIELDS`, the same index the key handler uses.
+    // the button follows the fields and the spacer, so selecting it is
+    // `active_field == META_FIELDS`, the index the key handler uses
     render_edit_lyrics_button(
         frame,
         rows[META_FIELDS + 1],
@@ -1947,9 +1927,9 @@ fn render_edit_metadata(
     render_hints(frame, rows[META_FIELDS + 3], &hints, theme);
 }
 
-// -- EditLyrics / tui-textarea renderer ------------------------------------
+// -- EditLyrics renderer ----------------------------------------------------
 
-/// Creates a `TextArea` (lyrics editor) pre-populated with `raw`.
+/// Creates a lyrics editor pre-populated with `raw`.
 pub fn make_lyrics_textarea(raw: &str) -> LyricsTextArea {
     TextArea::from_text(raw)
 }
@@ -1984,7 +1964,7 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
         ])
         .split(inner);
 
-    // Not a keybinding, so it sits above the footer rather than inside it.
+    // not a keybinding, so it sits above the footer rather than inside it
     frame.render_widget(
         Paragraph::new(Span::styled(
             "synced lyrics: prefix a line with [mm:ss.xx]",
@@ -2001,9 +1981,8 @@ fn render_edit_lyrics(frame: &mut Frame<'_>, textarea: &TextArea, theme: &Theme)
         .saturating_sub(visible.saturating_sub(1))
         .min(textarea.lines.len().saturating_sub(visible));
 
-    // A lyric line can be longer than the editor is wide. Every row shifts by
-    // the same amount as the cursor's, so the text stays in column with the
-    // lines above and below rather than only the edited row sliding.
+    // every row shifts by the same amount as the cursor's, so a long line
+    // stays in column with its neighbours instead of sliding alone
     let width = usize::from(splits[0].width);
     let cursor_line = textarea
         .lines

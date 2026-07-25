@@ -25,11 +25,9 @@ use crate::{
 
 /// Best-effort detection of 24-bit truecolor support.
 ///
-/// There is no portable query for this, so we use the widely-agreed
-/// heuristics: `NO_COLOR` disables color entirely, a real Linux tty
-/// (`TERM=linux`) or `TERM=dumb` is 16-color only, and `COLORTERM` set to
-/// `truecolor`/`24bit` is the standard opt-in signal.  Misdetection is
-/// recoverable from the settings menu via the Color mode override.
+/// No portable query exists, so this uses the agreed heuristics: `NO_COLOR`
+/// disables color, `TERM=linux`/`dumb` is 16-color, and `COLORTERM` is the
+/// opt-in signal. Misdetection is recoverable from the settings menu.
 fn detect_truecolor() -> bool {
     if std::env::var_os("NO_COLOR").is_some() {
         return false;
@@ -43,10 +41,8 @@ fn detect_truecolor() -> bool {
     )
 }
 
-/// Resolves the live theme for the current color state.
-///
-/// Each mode has its own saved choice, so switching between them never
-/// overwrites the other; transparency applies only to the RGB themes, whose
+/// Resolves the live theme for the current color state. Each mode keeps its
+/// own saved choice, and transparency applies only to the RGB themes, whose
 /// backgrounds are real colors rather than the terminal default.
 fn resolve_theme(
     theme_name: &str,
@@ -271,12 +267,9 @@ impl AppState {
         )
     }
 
-    /// Restores a saved session: the queue, modes and volume, and the current
-    /// track loaded but *paused* at its saved position, so launching audium
-    /// never suddenly makes sound -- the user presses Space to continue.
-    ///
-    /// Queue entries whose file is gone are dropped, and `now_playing` follows
-    /// its track to the new index (or clears if that track itself is gone).
+    /// Restores a saved session, with the current track loaded but *paused* at
+    /// its position: launching audium never suddenly makes sound. Entries
+    /// whose file is gone are dropped, and `now_playing` follows its track.
     pub fn restore_state(&mut self, saved: &crate::state::PlaybackState) {
         let mut queue = Vec::with_capacity(saved.queue.len());
         let mut now_playing = None;
@@ -303,13 +296,13 @@ impl AppState {
             self.seek_offset = pos;
             self.track_start = None; // paused
             self.player.is_paused = true;
-            // Load, seek and hold paused so Space resumes from here instantly.
+            // held paused so Space resumes from here instantly
             self.player.seek(path, pos, true);
         }
     }
 
-    /// Starts playing `queue[idx]`.  The duration is resolved synchronously
-    /// from the file headers on the UI thread (fast; just reads a few bytes).
+    /// Starts playing `queue[idx]`. The duration is resolved on the UI thread,
+    /// which is fine: it reads a few header bytes.
     pub fn play_queue_index(&mut self, idx: usize) {
         if idx >= self.queue.len() {
             return;
@@ -329,14 +322,12 @@ impl AppState {
     pub fn play_next(&mut self) {
         match self.loop_mode {
             LoopMode::Track => {
-                // Replay the same index; if now_playing is somehow None,
-                // fall back to starting from 0.
                 let idx = self.now_playing.unwrap_or(0);
                 self.play_queue_index(idx);
             }
             LoopMode::Queue => {
                 let next = self.now_playing.map_or(0, |i| i + 1);
-                // Wrap around to the first track instead of halting.
+                // wrap instead of halting
                 let idx = if next < self.queue.len() { next } else { 0 };
                 if !self.queue.is_empty() {
                     self.play_queue_index(idx);
@@ -378,9 +369,8 @@ impl AppState {
         }
     }
 
-    /// Stops playback and resets all progress state to idle.
-    /// Use this everywhere a track is forcibly interrupted (removal, queue
-    /// exhaustion, etc.) so the player bar always shows a clean 0:00 / -:--.
+    /// Stops playback and resets progress to idle. Use wherever a track is
+    /// interrupted, so the player bar always shows a clean 0:00 / -:--.
     fn halt_playback(&mut self) {
         self.now_playing = None;
         self.track_start = None;
@@ -408,9 +398,8 @@ impl AppState {
         }
     }
 
-    /// Name of the active view, for the tracklist panel title.
     /// Name for the tracklist panel. The library view says "All tracks"
-    /// rather than "Library", which is already the sidebar frame's title.
+    /// rather than "Library", already the sidebar frame's title.
     pub fn active_view_name(&self) -> &str {
         match self.active_view {
             SidebarItem::Library => "All tracks",
@@ -497,11 +486,9 @@ impl AppState {
         if self.handle_quit_shortcut(code, modifiers) {
             return;
         }
-        // Ctrl+C is the only chord audium binds; every other handler matches on
-        // the key alone, so without this a Ctrl or Alt chord lands on the same
-        // arm as the bare key. Ctrl+D in particular opened the destructive
-        // "remove from library" prompt, and Ctrl+D is what a terminal habit
-        // sends at EOF.
+        // Ctrl+C is the only chord audium binds, and every other handler
+        // matches the key alone, so without this a chord lands on the same arm
+        // as the bare key: Ctrl+D used to open the destructive remove prompt.
         if modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER) {
             return;
         }
@@ -612,12 +599,12 @@ impl AppState {
                 self.rebuild_filter_cache();
                 true
             }
-            // Enter exits typing mode; falls through to action_enter below.
+            // exits typing mode, then falls through to action_enter
             KeyCode::Enter => {
                 self.filter_active = false;
                 false
             }
-            // All other keys (navigation, playback shortcuts) fall through.
+            // navigation and playback shortcuts fall through
             _ => false,
         }
     }
@@ -648,8 +635,7 @@ impl AppState {
                 self.tracklist_filter.clear();
                 self.tracklist_cursor = 0;
                 self.rebuild_filter_cache();
-                // Landing on a sidebar frame points the tracklist at it, the
-                // same as moving its cursor does.
+                // landing on a sidebar frame points the tracklist at it
                 self.sync_active_view();
             }
             KeyCode::Char('j' | 'k' | 'g' | 'G')
@@ -693,7 +679,7 @@ impl AppState {
     /// Returns `true` if `code` was a navigation key.
     fn move_cursor(&mut self, code: KeyCode) -> bool {
         let (cursor, len) = match self.focus {
-            // The library frame is a single row: nothing to move between.
+            // a single row: nothing to move between
             Focus::Library => (0, 1),
             Focus::Playlists => (self.playlist_cursor, self.library.playlists.len()),
             Focus::TrackList => (self.tracklist_cursor, self.active_tracks().len()),
@@ -741,13 +727,12 @@ impl AppState {
                 self.play_queue_index(0);
             }
         } else if self.player.is_paused {
-            // Currently paused -> resume.
+            // paused -> resume
             self.track_start = Some(Instant::now());
             self.player.resume();
         } else {
-            // Currently playing -> pause.
-            // Snapshot elapsed before setting is_paused so elapsed() still
-            // accumulates track_start.elapsed() during this call.
+            // playing -> pause. Snapshot elapsed before setting is_paused, so
+            // elapsed() still accumulates track_start during this call.
             self.seek_offset = self.elapsed();
             self.track_start = None;
             self.player.pause();
@@ -765,7 +750,7 @@ impl AppState {
         };
         let path = track.path.clone();
 
-        // Compute new position, clamped to [0, duration].
+        // clamped to [0, duration]
         let current = self.elapsed().as_secs().cast_signed();
         let max_secs = self
             .track_duration
@@ -773,7 +758,7 @@ impl AppState {
         let target_secs = (current + delta_secs).clamp(0, max_secs).cast_unsigned();
         let target = Duration::from_secs(target_secs);
 
-        // Update UI-side clock immediately so the bar moves on the next frame.
+        // updated UI-side at once, so the bar moves on the next frame
         self.seek_offset = target;
         self.track_start = if self.player.is_paused {
             None
@@ -781,7 +766,7 @@ impl AppState {
             Some(Instant::now())
         };
 
-        // Tell the audio thread to reopen, seek, and continue (or stay paused).
+        // the audio thread reopens, seeks, and continues or stays paused
         self.player.seek(path, target, self.player.is_paused);
     }
 
@@ -840,10 +825,9 @@ impl AppState {
     /// `J` / `K`: moves the selected track one place through a playlist or the
     /// queue, carrying the cursor with it.
     ///
-    /// The library view has no order of its own to rearrange, and a filtered
-    /// tracklist has no unambiguous one: the row above on screen may be many
-    /// places away in the playlist, so "swap with it" would fling the track
-    /// somewhere the user cannot see. Both are left alone.
+    /// A filtered tracklist has no unambiguous order: the row above on screen
+    /// may be many places away in the real list, so a swap would fling the
+    /// track out of sight. Filtered views are left alone.
     fn action_move_selection(&mut self, down: bool) {
         match self.focus {
             Focus::TrackList => self.move_in_tracklist(down),
@@ -854,15 +838,13 @@ impl AppState {
                 }
             }
             Focus::Queue => self.move_in_queue(down),
-            // The library row is a single entry; nothing to reorder.
+            // a single row; nothing to reorder
             Focus::Library => {}
         }
     }
 
     /// Reorders the focused track list: a playlist's contents, or the whole
-    /// library. A filtered view has no unambiguous order to move within (the
-    /// row above on screen may be far away in the real list), so it is left
-    /// alone.
+    /// library. Filtered views are skipped, see [`Self::action_move_selection`].
     fn move_in_tracklist(&mut self, down: bool) {
         if !self.tracklist_filter.is_empty() {
             return;
@@ -913,8 +895,8 @@ impl AppState {
                 .map(|p| (p.id, p.name.clone()))
                 .collect();
 
-            // No playlists yet: skip the empty picker and go straight to
-            // creating one, then drop this track into it.
+            // no playlists yet: skip the empty picker, create one, drop the
+            // track into it
             self.modal = Some(if choices.is_empty() {
                 Modal::NewPlaylist {
                     input: TextInput::default(),
@@ -933,7 +915,7 @@ impl AppState {
 
     fn action_remove(&mut self) {
         match self.focus {
-            // The library itself is not deletable; only playlists are.
+            // only playlists are deletable
             Focus::Library => {}
             Focus::Playlists => {
                 if let Some(pl) = self.library.playlists.get(self.playlist_cursor) {
@@ -945,12 +927,11 @@ impl AppState {
             }
             Focus::TrackList => {
                 if let Some(track) = self.selected_track() {
-                    // Inside a playlist `d` scopes to that playlist; only the
-                    // library view deletes from the library itself.
+                    // inside a playlist `d` scopes to that playlist
                     let (description, target) = match self.active_playlist_id() {
                         None => (
-                            // Deletes audium's imported copy; the removal has
-                            // to stick, or the file re-imports on next launch.
+                            // deletes audium's copy: it has to stick, or the
+                            // file re-imports on the next launch
                             format!("Delete \"{}\" from the library?", track.name),
                             RemoveTarget::TrackFromLibrary { track_id: track.id },
                         ),
@@ -1067,14 +1048,14 @@ impl AppState {
         if (new_speed - self.player.playback_speed).abs() < 0.001 {
             return;
         }
-        // Snapshot track position with the OLD speed before changing.
+        // snapshot the position at the OLD speed first
         let current_pos = if self.now_playing.is_some() {
             Some(self.elapsed())
         } else {
             None
         };
-        // Rebase the position accounting on the old speed, then switch: the
-        // sink changes speed in place, so there is no reopen and no gap.
+        // rebase on the old speed, then switch: the sink changes in place, so
+        // there is no reopen and no gap
         if let Some(pos) = current_pos {
             self.seek_offset = pos;
             self.track_start = if self.player.is_paused {
@@ -1277,13 +1258,11 @@ impl AppState {
         }
     }
 
-    /// Persists edited metadata to the library and syncs it into the live
-    /// queue. Shared by `SaveMetadata` and `SaveMetadataAndEditLyrics`.
     /// Tells the user when an edit reached the library but not the file.
     ///
-    /// The edit is not lost -- it is in `audium.json` and on screen -- but the
-    /// file is the record, so a rescan would revert it. Saying so now is
-    /// better than the value quietly changing back later.
+    /// The edit is not lost, being in `audium.json` and on screen, but the
+    /// file is the record, so a rescan would revert it. Better to say so now
+    /// than let the value quietly change back later.
     fn report_tag_failure(&mut self, result: &Result<()>) {
         if let Err(e) = result {
             self.modal = Some(Modal::Notify {
@@ -1419,8 +1398,7 @@ impl AppState {
         self.settings
             .set_default_volume(numeric::whole_percent_to_ratio(save.volume_pct));
         self.settings.set_seek_step_secs(save.seek_secs);
-        // Turning resume off forgets the saved session at once, rather than
-        // leaving a stale file to be cleared on the next launch.
+        // forget the session at once, rather than leave a stale file behind
         if !save.resume_playback && self.settings.resume_playback {
             crate::state::PlaybackState::discard();
         }
@@ -1429,7 +1407,7 @@ impl AppState {
         self.settings.set_console_theme(&save.console_theme_name);
         self.settings.transparent = save.transparent;
         self.settings.color_mode = save.color_mode;
-        // Apply the resolved theme live (console fallback when not truecolor).
+        // applied live, console fallback included
         self.theme = resolve_theme(
             &save.theme_name,
             &save.console_theme_name,
@@ -1440,7 +1418,7 @@ impl AppState {
     }
 
     fn apply_shuffle_view(&mut self) {
-        // Resolve tracks, shuffle in place, replace queue, start playing.
+        // resolve, shuffle in place, replace the queue, start playing
         let mut tracks: Vec<Track> = self.view_tracks().into_iter().cloned().collect();
 
         if tracks.is_empty() {
@@ -1473,8 +1451,7 @@ pub fn run(cli: Cli) -> Result<()> {
     let mut state = AppState::new(library, player, settings);
 
     if let Some((track, is_new)) = initial_track {
-        // A file argument is an explicit "play this", so it wins over any saved
-        // session rather than restoring the old queue.
+        // a file argument is an explicit "play this", so it beats the session
         let msg = if is_new {
             format!("\"{}\" added to library.", track.name)
         } else {
@@ -1484,7 +1461,7 @@ pub fn run(cli: Cli) -> Result<()> {
         state.play_queue_index(0);
         state.modal = Some(Modal::Notify { message: msg });
     } else if !state.settings.resume_playback {
-        // Resume is off: forget any session a previous run may have left behind.
+        // resume is off: forget whatever a previous run left behind
         crate::state::PlaybackState::discard();
     } else if let Some(saved) = crate::state::PlaybackState::load() {
         state.restore_state(&saved);
@@ -1494,8 +1471,7 @@ pub fn run(cli: Cli) -> Result<()> {
     let result = event_loop(terminal, &mut state);
     ratatui::restore();
 
-    // Persist the final session on the way out. Best effort: a failure here
-    // must not mask the event loop's result.
+    // best effort on the way out: a failure here must not mask the loop's result
     if state.settings.resume_playback {
         let _ = state.snapshot_state().save();
     }
@@ -1512,24 +1488,19 @@ fn event_loop(mut terminal: DefaultTerminal, state: &mut AppState) -> Result<()>
     /// crash, a SIGKILL, a closed terminal) loses at most this much position.
     const STATE_SAVE: Duration = Duration::from_secs(5);
 
-    // Redrawing unconditionally each poll costs a full render 20 times a
-    // second forever, whatever the library size. Draw only when something
-    // actually changed.
+    // drawing unconditionally would cost a full render 20 times a second
+    // forever, whatever the library size
     let mut dirty = true;
     let mut last_draw = Instant::now();
     let mut last_state_save = Instant::now();
-    // The last snapshot actually written, so an unchanged session (paused or
-    // idle) is not rewritten every tick. The cheapest write is the one skipped.
-    // Seeded with the session as it stands so the first tick does not rewrite
-    // an unchanged (just-restored or empty) state.
+    // the last snapshot actually written, so an idle session is not rewritten
+    // every tick. Seeded with the current one so the first tick is a no-op.
     let mut saved_state = Some(state.snapshot_state());
 
     loop {
-        // Autosave the whole session periodically, but only when it differs
-        // from what is on disk. Dirty-tracking is what makes this cheap and
-        // complete at once: a paused player (position frozen) writes nothing,
-        // while a queue edit or a clear -- even with no track playing -- is a
-        // change and so is captured, rather than surviving only a clean exit.
+        // periodic autosave, but only when it differs from disk. That is what
+        // makes it cheap and complete at once: a paused player writes nothing,
+        // while a queue edit with nothing playing still counts as a change.
         if state.settings.resume_playback && last_state_save.elapsed() >= STATE_SAVE {
             let snapshot = state.snapshot_state();
             if saved_state.as_ref() != Some(&snapshot) && snapshot.save().is_ok() {
@@ -1557,7 +1528,7 @@ fn event_loop(mut terminal: DefaultTerminal, state: &mut AppState) -> Result<()>
                     state.handle_key(key.code, key.modifiers);
                     dirty = true;
                 }
-                // A resize invalidates the whole frame.
+                // a resize invalidates the whole frame
                 Event::Resize(..) => dirty = true,
                 _ => {}
             }

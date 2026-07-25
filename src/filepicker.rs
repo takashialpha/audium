@@ -14,13 +14,11 @@ use std::{
 use crate::modal::{hint, hint_height, modal_block, render_hints};
 use crate::ui::layout::{Theme, truncate};
 
-/// A file extension is considered audio if it is one of these.
-/// Extensions the bundled symphonia decoders can actually play.  Anything not
-/// listed here is hidden from the picker rather than offered and then rejected
-/// by `validate_decodable` at import.
+/// Extensions the bundled symphonia decoders can actually play. Anything else
+/// is hidden from the picker rather than offered and then rejected at import.
 ///
-/// Deliberately absent: `opus` (symphonia 0.5 demuxes Ogg but ships no Opus
-/// decoder) and `wma` (no ASF demuxer at all).
+/// Deliberately absent: `opus` (Ogg demuxes, but there is no Opus decoder) and
+/// `wma` (no ASF demuxer at all).
 const AUDIO_EXTS: &[&str] = &[
     "mp3", "mp2", "mp1", "flac", "ogg", "oga", "wav", "wave", "aac", "m4a", "m4b", "aiff", "aif",
     "aifc",
@@ -169,8 +167,8 @@ pub fn render_filepicker(frame: &mut Frame<'_>, picker: &FilePicker, theme: &The
         truncate(&path_str, path_max)
     );
 
-    // Same chrome as every other dialog; only the title alignment differs,
-    // because a long path reads better anchored to the left.
+    // same chrome as every dialog; only the title alignment differs, a long
+    // path reading better anchored left
     let block = modal_block(&title, theme).title_alignment(Alignment::Left);
     let inner = block.inner(rect);
     frame.render_widget(block, rect);

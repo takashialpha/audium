@@ -21,9 +21,8 @@ pub enum PlayerCommand {
     Stop,
     Pause,
     Resume,
-    /// Seek to an absolute position.  `paused` tells the thread whether to
-    /// stay paused after repositioning.  `speed` is re-applied to the fresh
-    /// decoder so speed changes take effect immediately.
+    /// Seek to an absolute position. `paused` says whether to stay paused
+    /// afterwards; `speed` is re-applied to the fresh decoder.
     Seek {
         path: PathBuf,
         position: Duration,
@@ -54,9 +53,8 @@ const VOLUME_MAX: f32 = 1.0;
 
 // -- Handle (UI-side) -------------------------------------------------------
 
-/// Owned by `AppState`.  Sends commands to the audio thread and receives
-/// events from it.  Also tracks UI-side volume and pause state so the UI
-/// never has to block on the audio thread for reads.
+/// Owned by `AppState`: sends commands to the audio thread and receives its
+/// events. Shadows volume and pause state so reads never block on that thread.
 pub struct PlayerHandle {
     cmd_tx: Sender<PlayerCommand>,
     event_rx: Receiver<PlayerEvent>,
@@ -98,9 +96,9 @@ impl PlayerHandle {
         self.send(PlayerCommand::Resume);
     }
 
-    /// Seek to `position` in the current track.  The path is required because
-    /// the audio thread must reopen the file to create a fresh decoder.
-    /// `is_paused` on the handle is not changed here; the caller manages that.
+    /// Seek to `position` in the current track. Takes the path because the
+    /// audio thread reopens the file for a fresh decoder. Leaves `is_paused`
+    /// to the caller.
     pub fn seek(&self, path: PathBuf, position: Duration, paused: bool) {
         self.send(PlayerCommand::Seek {
             path,
@@ -147,17 +145,16 @@ impl Drop for PlayerHandle {
 
 // -- Audio thread -----------------------------------------------------------
 
-/// Spawns the audio thread and returns a `PlayerHandle` for the UI thread.
-/// `default_volume` comes from `Settings` so both the handle shadow and the
-/// audio thread start at the user's saved value; no post-init correction needed.
+/// Spawns the audio thread and returns its `PlayerHandle`. `default_volume`
+/// comes from `Settings`, so both sides start at the saved value with no
+/// post-init correction.
 pub fn spawn_audio_thread(default_volume: f32) -> Result<PlayerHandle> {
     let volume = default_volume.clamp(VOLUME_MIN, VOLUME_MAX);
 
     let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
     let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
 
-    // Open the device on the *spawning* thread so we can propagate errors
-    // before handing off to the audio thread.
+    // opened on the *spawning* thread so errors propagate before the handoff
     let mut sink = DeviceSinkBuilder::open_default_sink()
         .context("could not open default audio output sink")?;
     sink.log_on_drop(false);
@@ -184,15 +181,14 @@ fn audio_thread_main(
 ) {
     let player = Player::connect_new(sink.mixer());
     player.set_volume(default_volume);
-    // Speed lives on the Player, applied to everything it plays. Setting it
-    // here and on SetSpeed changes speed in place, rather than reopening the
-    // file, which is what used to make a speed change stutter.
+    // speed lives on the Player, so a change applies in place rather than
+    // reopening the file, which is what used to make it stutter
     player.set_speed(1.0);
 
     let mut stopped_explicitly = true;
 
     loop {
-        // --- Process all pending commands first (non-blocking) ------------
+        // drain pending commands, non-blocking
         loop {
             match cmd_rx.try_recv() {
                 Ok(cmd) => {
@@ -203,7 +199,7 @@ fn audio_thread_main(
             }
         }
 
-        // --- Check for natural track completion ---------------------------
+        // natural track completion
         if !stopped_explicitly && player.empty() {
             stopped_explicitly = true;
             let _ = event_tx.send(PlayerEvent::TrackFinished);
@@ -238,9 +234,8 @@ fn handle_command(
                     player.play();
                 }
                 Err(e) => {
-                    // Keep stopped=true so the audio loop does not fire a
-                    // spurious TrackFinished (which would cause auto-advance
-                    // into an infinite error loop if all tracks are broken).
+                    // stopped=true suppresses a spurious TrackFinished, which
+                    // would auto-advance forever if every track were broken
                     *stopped = true;
                     let _ = event_tx.send(PlayerEvent::Error(e.to_string()));
                 }
@@ -257,9 +252,8 @@ fn handle_command(
             match open_source(&path) {
                 Ok(mut source) => {
                     *stopped = false;
-                    // `position` is a real track offset and the decoder seeks
-                    // in the same units, so it is passed straight through; the
-                    // Player applies speed to the rate, not the seek target.
+                    // passed straight through: the Player applies speed to the
+                    // rate, not to the seek target
                     let _ = source.try_seek(position);
                     player.set_speed(speed);
                     player.append(source);
@@ -305,18 +299,15 @@ fn handle_command(
 
 // -- Duration resolution ----------------------------------------------------
 
-/// Checks that `path` can be opened and decoded as audio.
-/// Used to reject files up front (e.g. a CLI argument) before playback starts.
+/// Checks that `path` opens and decodes, to reject a file (a CLI argument,
+/// say) before playback starts.
 pub fn validate_decodable(path: &std::path::Path) -> Result<()> {
     open_source(path).map(|_| ())
 }
 
-/// Opens a file purely to ask the decoder for its total duration, without
-/// starting playback.  Called from the UI thread after `Play` is dispatched
-/// so we can display a progress bar.
-///
-/// Returns `None` if the duration cannot be determined (e.g. live streams,
-/// some MP3s without Xing/VBRI headers).
+/// Opens a file only to ask the decoder its total duration, for the progress
+/// bar. `None` when it cannot be determined, as for an MP3 with no Xing
+/// header.
 pub fn resolve_duration(path: &std::path::Path) -> Option<Duration> {
     let file = File::open(path).ok()?;
     let source = Decoder::try_from(file).ok()?;

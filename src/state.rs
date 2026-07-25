@@ -1,11 +1,10 @@
-//! Persisted playback state: the queue, the current track and position, and
-//! the playback modes, so a restart resumes where the last session stopped.
+//! Persisted playback state: queue, current track and position, playback
+//! modes, so a restart resumes where the last session stopped.
 //!
-//! This is *losable* application state -- not the library (data) and not
-//! preferences (config) -- so it lives under `$XDG_STATE_HOME`. Tracks are
-//! referenced by filename, matching the index, so the file is stable and the
-//! same across machines. Anything unreadable is ignored and the app starts
-//! fresh; the state is disposable, so it is never migrated or set aside.
+//! *Losable* state, neither library nor preferences, so it lives under
+//! `$XDG_STATE_HOME` and references tracks by filename like the index.
+//! Anything unreadable is ignored and the app starts fresh: being disposable,
+//! it is never migrated or set aside.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,9 +18,8 @@ const STATE_FILE: &str = "state.json";
 
 /// A snapshot of playback, as written to disk.
 ///
-/// `Clone`/`PartialEq` let the event loop hold the last-written snapshot and
-/// skip the write when nothing changed, so a paused or idle session stops
-/// touching the disk entirely.
+/// `Clone`/`PartialEq` let the event loop keep the last-written snapshot and
+/// skip identical writes, so an idle session stops touching the disk.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlaybackState {
     version: u32,
@@ -66,9 +64,8 @@ impl PlaybackState {
         (state.version == STATE_VERSION).then_some(state)
     }
 
-    /// Writes the snapshot atomically (temp file + rename), matching how the
-    /// index is written. Failure is non-fatal: losing resume state is a minor
-    /// inconvenience, not a reason to interrupt playback or quitting.
+    /// Writes the snapshot atomically, like the index. Failure is non-fatal:
+    /// losing resume state is no reason to interrupt playback or quitting.
     pub fn save(&self) -> anyhow::Result<()> {
         let path = Library::place_state_file(STATE_FILE)?;
         let tmp = path.with_extension("json.tmp");

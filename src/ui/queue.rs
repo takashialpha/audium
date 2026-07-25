@@ -30,9 +30,8 @@ pub fn render_queue(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
         return;
     }
 
-    // Same table shape as the tracklist, so a track reads the same wherever
-    // it appears rather than as `artist - title` in one place and columns in
-    // the other.
+    // same table shape as the tracklist, so a track reads the same wherever
+    // it appears
     let cols = Columns::for_width(usize::from(area.width).saturating_sub(2));
 
     let items: Vec<ListItem<'_>> = state

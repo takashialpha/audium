@@ -17,20 +17,19 @@ pub const PLAYER_BAR_H: u16 = 4;
 /// Columns inset from each edge, matching the dialogs' gutter.
 const PAD_X: u16 = 2;
 
-/// Cells in the volume meter.  Wide enough that a step is visible rather than
-/// implied: at eight cells a 1% change often moved nothing.
+/// Cells in the volume meter, wide enough that a step shows: at eight cells a
+/// 1% change often moved nothing.
 const VOL_CELLS: usize = 14;
 
 /// Width below which the volume meter shrinks to a bare percentage.
 const NARROW: u16 = 64;
 
-/// Columns the title side keeps before a right-hand cluster is dropped
-/// altogether: the track and its position matter more than loop state or
-/// volume, so those yield first.
+/// Columns the title side keeps before a right-hand cluster is dropped: the
+/// track and its position outrank loop state and volume, so those yield.
 const MIN_LEFT: u16 = 24;
 
-/// Renders the bar for the current track.  Only called while something is
-/// playing; `ui::render` gives the rows back to the lists otherwise.
+/// Renders the bar for the current track. Only called while something is
+/// playing; otherwise `ui::render` gives the rows back to the lists.
 pub fn render_player_bar(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let t = &state.theme;
 
@@ -81,8 +80,8 @@ fn render_title_row(
         },
     );
 
-    // Playing or paused outranks the transport modes: if only one of them
-    // fits, it is the one that says whether audio is coming out.
+    // playing/paused outranks the modes: if only one fits, it is the one
+    // saying whether audio is coming out
     let full = transport_spans(state, true, t);
     let (left, right) = if let (left, Some(area)) = split_row(row, span_width(&full)) {
         (left, Some((area, full)))
@@ -136,9 +135,8 @@ fn render_meta_row(
     }
 }
 
-/// Elapsed time, the scrubber, and the track length, in that order across the
-/// full width: the arrangement every music player uses, and it lets the
-/// scrubber be the widest thing on screen rather than sharing a row.
+/// Elapsed, scrubber, length across the full width: what every music player
+/// does, and it lets the scrubber be the widest thing on screen.
 fn render_scrubber_row(frame: &mut Frame<'_>, row: Rect, state: &AppState, t: &Theme) {
     let playing = state.now_playing.is_some();
     let elapsed = if playing {
@@ -151,8 +149,8 @@ fn render_scrubber_row(frame: &mut Frame<'_>, row: Rect, state: &AppState, t: &T
         .filter(|_| playing)
         .map_or_else(|| "-:--".to_string(), |d| format_duration(d.as_secs()));
 
-    // Both cells are sized to the longer label so the scrubber does not shift
-    // when the clock rolls past ten minutes.
+    // both cells sized to the longer label, so the scrubber does not shift
+    // when the clock rolls past ten minutes
     let cell = elapsed.chars().count().max(total.chars().count()).max(4);
     let flank = cell + 2;
     let track_w = usize::from(row.width).saturating_sub(flank * 2);
@@ -172,9 +170,9 @@ fn render_scrubber_row(frame: &mut Frame<'_>, row: Rect, state: &AppState, t: &T
 
 // -- Pieces -----------------------------------------------------------------
 
-/// A single unbroken line with a head at the play position.  The line keeps
-/// one weight end to end and only its colour changes: a stroke that thins
-/// after the head reads as though the rest of the track had faded out.
+/// One unbroken line with a head at the play position. It keeps a single
+/// weight throughout and only changes colour: a stroke that thinned after the
+/// head would read as though the rest of the track had faded out.
 fn scrubber_spans(width: usize, ratio: f64, t: &Theme) -> Vec<Span<'static>> {
     let g = t.glyphs();
     if width == 0 {
@@ -206,11 +204,9 @@ fn scrubber_spans(width: usize, ratio: f64, t: &Theme) -> Vec<Span<'static>> {
 
 /// Playback state and the transport modes, each as `label value`.
 ///
-/// Every item is named. A bare glyph cannot say whether it reports the current
-/// state or the action a button would take, and a bare `1.00x` does not say
-/// what it measures. All three are always present, dim at their default value:
-/// a label that appears and vanishes makes the row jump, and one that is never
-/// shown is never discovered.
+/// Every item is named: a bare glyph cannot say whether it reports the state
+/// or the action a button would take, and a bare `1.00x` does not say what it
+/// measures.
 fn transport_spans(state: &AppState, with_modes: bool, t: &Theme) -> Vec<Span<'static>> {
     let g = t.glyphs();
     let on = Style::default().fg(t.accent).add_modifier(Modifier::BOLD);
@@ -221,8 +217,7 @@ fn transport_spans(state: &AppState, with_modes: bool, t: &Theme) -> Vec<Span<'s
         if playing {
             on
         } else {
-            // Paused is the state that explains why nothing is coming out of
-            // the speakers, so it is the one worth noticing.
+            // paused explains why nothing is coming out of the speakers
             Style::default().fg(t.danger).add_modifier(Modifier::BOLD)
         },
     );
@@ -232,7 +227,7 @@ fn transport_spans(state: &AppState, with_modes: bool, t: &Theme) -> Vec<Span<'s
 
     let speed = state.player.playback_speed;
     let speed_changed = (speed - 1.0).abs() > 0.001;
-    // Two decimals: the step is 1%, so anything coarser would not move.
+    // two decimals: the step is 1%, so anything coarser would not move
     let speed_value = format!("{speed:.2}{}", g.times);
 
     let (loop_value, loop_on) = match state.loop_mode {
@@ -241,10 +236,8 @@ fn transport_spans(state: &AppState, with_modes: bool, t: &Theme) -> Vec<Span<'s
         LoopMode::Track => ("track", true),
     };
 
-    // Only non-default modes are shown. Carrying `speed 1.00x` and `loop off`
-    // at all times filled the cluster with two items that say nothing is
-    // happening; the keybinding list is where these are discovered, and
-    // changing one is itself the moment you see it appear.
+    // only non-default modes: carrying `speed 1.00x` and `loop off` always
+    // filled the cluster with two items saying nothing is happening
     let mut spans = vec![status];
     if speed_changed {
         push_item(&mut spans, "speed", speed_value, t);
@@ -255,10 +248,8 @@ fn transport_spans(state: &AppState, with_modes: bool, t: &Theme) -> Vec<Span<'s
     spans
 }
 
-/// Appends `label value` to a status cluster, preceded by a rule.
-///
-/// Items set apart only by whitespace run together into one long string of
-/// words; a rule between them says where each one ends.
+/// Appends `label value` to a status cluster, preceded by a rule: items set
+/// apart by whitespace alone run together into one long string of words.
 fn push_item(spans: &mut Vec<Span<'static>>, label: &str, value: String, t: &Theme) {
     spans.push(Span::styled(
         format!("  {}  ", t.glyphs().divider),
@@ -303,8 +294,8 @@ fn span_width(spans: &[Span<'_>]) -> u16 {
     u16::try_from(spans.iter().map(|s| str_width(&s.content)).sum::<usize>()).unwrap_or(u16::MAX)
 }
 
-/// Splits a row into a flexible left side and a fixed right side, dropping the
-/// right side entirely when the row cannot hold both.
+/// Splits a row into a flexible left and a fixed right, dropping the right
+/// entirely when the row cannot hold both.
 fn split_row(row: Rect, right_w: u16) -> (Rect, Option<Rect>) {
     if right_w == 0 || row.width < right_w.saturating_add(MIN_LEFT) {
         return (row, None);

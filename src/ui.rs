@@ -31,8 +31,8 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState) {
         area,
     );
 
-    // With nothing playing the bar has nothing to report, so it yields its
-    // rows to the lists rather than sitting there stating that fact.
+    // with nothing playing the bar has nothing to report, so it yields its
+    // rows to the lists
     let player_h = if state.now_playing.is_some() {
         player_bar::PLAYER_BAR_H
     } else {
@@ -71,19 +71,18 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState) {
 }
 
 /// Name flush left, tagline centred against the *whole* bar, one hint flush
-/// right.  `?` is the only shortcut advertised here: it lists every binding
-/// there is, so repeating a handful of them alongside it just adds noise.
+/// right. `?` is the only shortcut advertised: it lists every binding there
+/// is, so repeating a handful beside it would only add noise.
 fn render_top_bar(frame: &mut Frame<'_>, area: ratatui::layout::Rect, state: &AppState) {
     let t = &state.theme;
     let width = area.width as usize;
-    // Centre the tagline on the bar, not on the space left over after the
-    // name -- otherwise it drifts whenever either end changes length.
+    // centred on the bar, not on the space left after the name, which would
+    // drift whenever either end changed length
     let tagline_start = width.saturating_sub(BAR_TAGLINE.len()) / 2;
     let lead = tagline_start.saturating_sub(BAR_NAME.len());
     let trail = width.saturating_sub(BAR_NAME.len() + lead + BAR_TAGLINE.len() + BAR_HINT.len());
 
-    // Too narrow to lay all three out without collision: keep the ends, which
-    // carry the useful information, and drop the tagline.
+    // too narrow for all three: keep the ends, drop the tagline
     let spans = if lead == 0 || trail == 0 {
         let gap = width.saturating_sub(BAR_NAME.len() + BAR_HINT.len());
         vec![

@@ -17,19 +17,15 @@ pub type PlaylistId = u64;
 
 /// On-disk schema version of the index.
 ///
-/// Bump this for any change that older audium versions cannot read, or that
-/// this version cannot read from an older file.  There is deliberately no
-/// migration path: [`Library::load`] sets an index of any other version aside
-/// and starts fresh, and the music directory is re-scanned so the tracks come
-/// back on their own.  Only playlists have to be rebuilt by hand.
+/// Bump for any change an older audium could not read. There is no migration
+/// path: [`Library::load`] sets a foreign version aside and re-scans the music
+/// directory, so only playlists have to be rebuilt by hand.
 const FORMAT_VERSION: u32 = 1;
 
 /// Basename of the index inside the data directory.
 ///
-/// Deliberately *not* `library.json`: every release up to 1.x wrote a
-/// different, incompatible schema under that name.  Using a name they never
-/// touched means neither version can read the other's file, so upgrading (or
-/// downgrading) can never half-load a foreign index.
+/// Deliberately *not* `library.json`, the incompatible name 1.x used: a name
+/// neither version touches cannot be half-loaded by the other.
 const INDEX_FILE: &str = "audium.json";
 
 // -- Track ------------------------------------------------------------------
@@ -37,10 +33,9 @@ const INDEX_FILE: &str = "audium.json";
 /// A single audio file registered in the library.
 ///
 /// Purely a runtime type: nothing here is serialized. On disk a track is just
-/// its filename (see [`IndexFile`]); everything else is derived -- the `id` is
-/// an in-memory handle assigned at load, and the metadata is read from the
-/// file's own tags. So the identity that survives on disk and across instances
-/// is the filename, which the filesystem already guarantees unique.
+/// its filename (see [`IndexFile`]), the `id` is an in-memory handle assigned
+/// at load, and the metadata comes from the file's own tags. Identity that
+/// survives a restart is therefore the filename, unique by the filesystem.
 #[derive(Debug, Clone)]
 pub struct Track {
     pub id: TrackId,
@@ -128,10 +123,8 @@ fn track_from_file(id: TrackId, path: PathBuf) -> Track {
     track
 }
 
-/// Reads every track's metadata from its file, in parallel.
-///
-/// The tracks are disjoint and the reads are pure file I/O, so the work splits
-/// cleanly across threads with no shared state.
+/// Reads every track's metadata from its file, in parallel: the tracks are
+/// disjoint and the reads are pure I/O, so there is no shared state to guard.
 fn load_metadata(tracks: &mut [Track]) {
     if tracks.is_empty() {
         return;
@@ -169,12 +162,11 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
         .read()
         .ok()?;
 
-    // Length comes from the container headers, which this probe already
-    // parsed; it costs nothing extra and needs no decoding.
+    // from the container headers this probe already parsed: no decoding needed
     let duration_secs = Some(tagged.properties().duration().as_secs()).filter(|&d| d > 0);
 
     let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
-        // No tags at all, but the length is still worth keeping.
+        // no tags at all, but the length is still worth keeping
         return Some(FileTags {
             title: None,
             artist: None,
@@ -210,14 +202,10 @@ fn read_file_tags(path: &Path) -> Option<FileTags> {
 
 /// Writes the editable fields back into the file's own tags.
 ///
-/// The file is the record; `audium.json` only caches it. Anything typed in the
-/// app therefore has to reach the tags, or re-importing the track (which any
-/// rescan or a version bump does) would quietly restore the old values.
-///
-/// Writes into whichever tag the container treats as primary, which for every
-/// format audium accepts is one that holds all four fields: `ID3v2` for MPEG,
-/// WAV and AIFF, Vorbis comments for FLAC and Ogg, and an MP4 atom list for
-/// M4A. Verified by writing each of those and reading them back.
+/// The file is the record and `audium.json` only caches it, so anything typed
+/// in the app has to reach the tags or the next rescan would restore the old
+/// values. Written into whichever tag the container treats as primary; for
+/// every format audium accepts that one holds all four fields.
 fn write_file_tags(
     path: &Path,
     name: &str,
@@ -231,7 +219,7 @@ fn write_file_tags(
     use lofty::probe::Probe;
     use lofty::tag::Tag;
 
-    // Errors reach a dialog, so they name the file rather than its whole path.
+    // errors reach a dialog, so they name the file rather than its whole path
     let file = path.file_name().map_or_else(
         || path.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
@@ -243,8 +231,7 @@ fn write_file_tags(
         .read()
         .with_context(|| format!("reading tags from {file}"))?;
 
-    // A file with no tag at all still needs one to write into; the primary
-    // type is whichever the container natively carries.
+    // a file with no tag still needs one to write into
     if tagged.primary_tag_mut().is_none() {
         let kind = tagged.primary_tag_type();
         tagged.insert_tag(Tag::new(kind));
@@ -257,9 +244,7 @@ fn write_file_tags(
     set_or_clear(tag, ItemKey::TrackArtist, artist);
     set_or_clear(tag, ItemKey::AlbumTitle, album);
 
-    // ID3v2 has no unsynchronised-lyrics equivalent under `Lyrics`; it wants
-    // USLT, which lofty exposes as a separate key. Writing the wrong one is
-    // silently dropped, so pick by tag type.
+    // ID3v2 wants USLT, a separate lofty key; the wrong one is dropped silently
     let lyrics_key = if tag.tag_type() == lofty::tag::TagType::Id3v2 {
         ItemKey::UnsyncLyrics
     } else {
@@ -267,20 +252,12 @@ fn write_file_tags(
     };
     set_or_clear(tag, lyrics_key, lyrics);
 
-    // Written to a copy and renamed into place, never edited where it lies.
-    //
-    // Growing a tag shifts everything after it, and the file may be open: the
-    // decoder streams the track that is playing, and audium can edit exactly
-    // that track. Rewriting underneath the reader moves the audio out from
-    // under its file offset. A rename instead leaves the open file on the old
-    // inode, so playback continues from what it already had.
-    //
-    // It is also the only way this is crash-safe. An interrupted in-place
-    // rewrite leaves a truncated or half-shifted music file; an interrupted
-    // copy leaves a stray temp file and an untouched original.
-    //
-    // The `.tmp` suffix keeps the scratch file out of `is_audio`, so a stray
-    // one is never imported as a track.
+    // Written to a copy and renamed, never edited in place. Growing a tag
+    // shifts everything after it, and the decoder may be streaming this very
+    // file: a rename leaves it reading the old inode, so playback survives. It
+    // is also what makes this crash-safe, since an interrupted copy leaves the
+    // original untouched. The `.tmp` suffix keeps the scratch file out of
+    // `is_audio`, so a leftover one is never imported.
     let tmp = path.with_extension("audium-tag.tmp");
     let write_via_tmp = || -> Result<()> {
         fs::copy(path, &tmp).with_context(|| format!("copying {file} to write its tags"))?;
@@ -293,7 +270,7 @@ fn write_file_tags(
 
     let result = write_via_tmp();
     if result.is_err() {
-        // Best effort: the original is already intact, this only tidies up.
+        // best effort: the original is already intact, this only tidies up
         let _ = fs::remove_file(&tmp);
     }
     result
@@ -316,15 +293,11 @@ fn set_or_clear(tag: &mut lofty::tag::Tag, key: lofty::prelude::ItemKey, value: 
 
 // -- Playlist ---------------------------------------------------------------
 
-/// A named, ordered collection of track references.
+/// A user-created, named, ordered collection of tracks. The full library is
+/// not one of these: it is `Library::tracks`, surfaced separately.
 ///
-/// A user-created playlist. The full library is not one of these -- it is
-/// `Library::tracks` itself, surfaced separately in the sidebar.
-///
-/// Runtime-only, like [`Track`]. On disk a playlist is its name and an ordered
-/// list of track filenames; the `id` here is an in-memory handle. Nothing on
-/// disk or in another instance ever refers to a playlist, so it needs no
-/// stable identity beyond the current session.
+/// Runtime-only like [`Track`]. On disk a playlist is a name and an ordered
+/// list of filenames, so the `id` needs no identity beyond this session.
 #[derive(Debug, Clone)]
 pub struct Playlist {
     pub id: PlaylistId,
@@ -345,17 +318,12 @@ impl Playlist {
 
 // -- Library ----------------------------------------------------------------
 
-/// Top-level persistent state: a registry of tracks + a set of playlists.
+/// Top-level state: a registry of tracks plus the user's playlists.
 ///
-/// Invariants upheld at all times:
-///  - Every playlist in `playlists` is user-created; the library as a whole is
-///    `tracks`, never a playlist entry.
-///  - Every `TrackId` inside any playlist exists in `tracks`.
-///  - `next_track_id` / `next_playlist_id` are strictly increasing.
-///  - `by_id` maps every track's id to its position in `tracks`.
-///
-/// `tracks` is public for iteration only.  Anything that adds or removes an
-/// entry must go through this type's methods, which keep `by_id` in step.
+/// Invariants: every `TrackId` in a playlist exists in `tracks`, the id
+/// counters strictly increase, and `by_id` maps every track's id to its index.
+/// `tracks` is public for iteration only -- adding or removing goes through
+/// this type's methods, which keep `by_id` in step.
 #[derive(Debug, Default)]
 pub struct Library {
     /// All registered tracks, keyed by insertion order.
@@ -368,12 +336,8 @@ pub struct Library {
     next_track_id: TrackId,
     next_playlist_id: PlaylistId,
 
-    /// `TrackId` -> index into `tracks`.  Derived state: without it every
-    /// lookup is a linear scan, and the callers that resolve a whole playlist
-    /// do one scan *per track*.
-    ///
-    /// `FxHash` rather than std's `SipHash`: the key is a `u64` we generate
-    /// ourselves and this is read on every render.
+    /// `TrackId` -> index into `tracks`. Derived state: without it resolving a
+    /// playlist costs one linear scan *per track*, on every render.
     by_id: FxHashMap<TrackId, usize>,
 }
 
@@ -436,11 +400,9 @@ impl Library {
         Self::xdg().find_config_file(name)
     }
 
-    /// Highest-priority existing copy of a state file, or `None`.
-    ///
-    /// State (playback position, the queue) is losable application state, so it
-    /// lives under `$XDG_STATE_HOME`, apart from data (the index + music) and
-    /// preferences (settings).
+    /// Highest-priority existing copy of a state file, or `None`. Playback
+    /// position and the queue are losable, so they live under
+    /// `$XDG_STATE_HOME`, apart from data and preferences.
     pub fn find_state_file(name: &str) -> Option<PathBuf> {
         Self::xdg().find_state_file(name)
     }
@@ -455,9 +417,6 @@ impl Library {
 
     /// Where a config file is *written*: always `$XDG_CONFIG_HOME/audium`,
     /// never a system directory. Creates the directory if needed.
-    ///
-    /// Config lives apart from the data directory so the spec's split holds:
-    /// config is hand-editable and portable, data is ours to manage.
     pub fn place_config_file(name: &str) -> Result<PathBuf> {
         Self::xdg()
             .place_config_file(name)
@@ -485,12 +444,10 @@ impl Library {
         let (file, reset) = Self::read_index(&index)?;
         let mut changed = reset;
 
-        // One listing of the music directory: the lossy filename each audio
-        // file presents, mapped to the real path used to open it. Matching by
-        // the lossy name keeps the index valid JSON (a non-UTF-8 name cannot be
-        // a JSON string) while still finding the file, whose real bytes live in
-        // the path -- so such a file round-trips instead of looking missing and
-        // being re-imported every launch.
+        // lossy filename -> real path. Matching on the lossy name keeps the
+        // index valid JSON (a non-UTF-8 name cannot be a JSON string) while the
+        // path keeps the real bytes, so such a file round-trips instead of
+        // looking missing and being re-imported every launch.
         let mut present: FxHashMap<String, PathBuf> = FxHashMap::default();
         if let Ok(entries) = fs::read_dir(&music_dir) {
             for entry in entries.flatten() {
@@ -512,12 +469,11 @@ impl Library {
             if present.contains_key(&name) && seen.insert(name.clone()) {
                 order.push(name);
             } else {
-                // A listed file vanished (or was listed twice); the index no
-                // longer matches the directory.
+                // listed file vanished, or was listed twice
                 changed = true;
             }
         }
-        // Files dropped in rather than imported, in a deterministic order.
+        // dropped in rather than imported, in a deterministic order
         let mut extra: Vec<String> = present
             .keys()
             .filter(|n| !seen.contains(*n))
@@ -527,9 +483,8 @@ impl Library {
         changed |= !extra.is_empty();
         order.append(&mut extra);
 
-        // Assign fresh ids and remember the filename each maps to, so playlists
-        // can be resolved below. The path comes from the directory listing, so
-        // it carries the file's real bytes even when the key is lossy.
+        // fresh ids, remembering the filename each maps to so playlists resolve
+        // below. The path comes from the listing, so it keeps the real bytes.
         let mut by_name: FxHashMap<String, TrackId> = FxHashMap::default();
         let mut tracks: Vec<Track> = Vec::with_capacity(order.len());
         let mut next_track_id: TrackId = 1;
@@ -544,14 +499,9 @@ impl Library {
             tracks.push(Track::at(id, path));
         }
 
-        // The index carries no metadata; read it from every file now. Files are
-        // independent, so this fans out across the CPU -- warm it costs a few
-        // ms even for thousands of tracks, and cold the overlapping I/O waits
-        // are what parallelism helps most.
+        // the index carries no metadata, so read it from every file now
         load_metadata(&mut tracks);
 
-        // Resolve each playlist's filenames to ids, dropping any the library no
-        // longer has (its file was removed).
         let mut next_playlist_id: PlaylistId = 1;
         let playlists: Vec<Playlist> = file
             .playlists
@@ -596,11 +546,9 @@ impl Library {
 
     /// Reads the on-disk index, or sets it aside and starts fresh.
     ///
-    /// An index this version cannot read -- a foreign schema version or a
-    /// corrupt file -- is renamed rather than migrated or deleted: the old copy
-    /// stays on disk for hand recovery, and the collection is rebuilt from the
-    /// files. Returns the parsed index (or an empty one) and whether a reset
-    /// happened, so the caller knows to rewrite the index in the current form.
+    /// A foreign version or a corrupt file is renamed, never migrated or
+    /// deleted, so the old copy stays for hand recovery. Returns the index and
+    /// whether a reset happened, which tells the caller to rewrite it.
     fn read_index(index: &Path) -> Result<(IndexFile, bool)> {
         if !index.exists() {
             return Ok((IndexFile::default(), false));
@@ -620,8 +568,7 @@ impl Library {
     }
 
     pub fn save(&self) -> Result<()> {
-        // Runtime ids become filenames on disk: the index records which files
-        // exist and, per playlist, which files belong to it.
+        // runtime ids become filenames on disk
         let file = IndexFile {
             version: FORMAT_VERSION,
             tracks: self.tracks.iter().map(Track::filename).collect(),
@@ -651,11 +598,8 @@ impl Library {
 
     // -- Track management -------------------------------------------------
 
-    /// Copies `source` into `$XDG_DATA_HOME/audium/music/` (if not already
-    /// there) and registers it in the library.
-    ///
-    /// Returns `(track, is_new)`.  `is_new` is false if the file was already
-    /// present (idempotent).
+    /// Copies `source` into the music directory (if not already there) and
+    /// registers it. Idempotent: `is_new` is false if it was already present.
     pub fn add_file(&mut self, source: &Path) -> Result<(Track, bool)> {
         crate::player::validate_decodable(source)
             .with_context(|| format!("cannot import \"{}\"", source.display()))?;
@@ -665,8 +609,7 @@ impl Library {
         let filename = source.file_name().context("source path has no filename")?;
         let default_dest = music_dir.join(filename);
 
-        // If the default destination already exists, check whether it is already
-        // registered: if so, the file was already imported and we're done.
+        // already at the default destination and registered: nothing to do
         if default_dest.exists() {
             let dest_canon = default_dest.canonicalize().ok();
             if let Some(existing) = self
@@ -678,8 +621,7 @@ impl Library {
             }
         }
 
-        // Also handle the case where the source itself is already registered
-        // (e.g. it lives inside the music directory under a different name).
+        // or registered under a different name inside the music directory
         let source_canon = source.canonicalize().ok();
         if source_canon.is_some()
             && let Some(existing) = self
@@ -690,8 +632,7 @@ impl Library {
             return Ok((existing.clone(), false));
         }
 
-        // Resolve the actual copy destination, generating a unique name when
-        // a different file already occupies the default path.
+        // a *different* file holds the default path: pick a free name
         let dest = if default_dest.exists() {
             let stem = default_dest
                 .file_stem()
@@ -728,21 +669,18 @@ impl Library {
         Ok((track, true))
     }
 
-    /// Removes a track from the registry and from all playlists.
-    /// Does NOT delete the file from disk.
     /// Removes a track from the library, and deletes audium's copy of the file.
     ///
-    /// The music directory holds copies audium made on import, not the user's
-    /// originals, and the load-time scan re-imports anything left in it. So a
-    /// removal that did not delete the file would reappear on the next launch,
-    /// which is the whole point of removing it. The delete is best effort: if
-    /// it fails the track is still gone from the library for this session.
+    /// The music directory holds copies audium made on import, never the
+    /// originals, and the load-time scan re-imports whatever is left in it, so
+    /// a removal that spared the file would undo itself on the next launch.
+    /// Best effort: if the delete fails the track is still gone this session.
     pub fn remove_track(&mut self, id: TrackId) -> Result<()> {
         let Some(pos) = self.tracks.iter().position(|t| t.id == id) else {
             return Ok(());
         };
         let path = self.tracks.remove(pos).path;
-        // Removal shifts every later index, so the whole map is rebuilt.
+        // removal shifts every later index
         self.reindex();
         for pl in &mut self.playlists {
             pl.tracks.retain(|&tid| tid != id);
@@ -751,15 +689,13 @@ impl Library {
         self.save()
     }
 
-    /// Replaces all user-editable metadata for a track (no file is touched).
     /// Replaces a track's user-editable metadata, in the index and in the
     /// file's own tags.
     ///
-    /// The index is written first and always: it is what the UI reads, so an
-    /// edit must survive on screen even when the file cannot be written (a
-    /// read-only mount, a format with nowhere to put the field). The tag error
-    /// is returned so the caller can say so, rather than leaving the user to
-    /// discover on the next rescan that the edit did not stick.
+    /// The index is written first and always, since it is what the UI reads:
+    /// an edit must survive on screen even when the file cannot be written.
+    /// The tag error is returned so the caller can say so, rather than let the
+    /// user find out at the next rescan that the edit did not stick.
     pub fn update_track_metadata(
         &mut self,
         id: TrackId,
@@ -791,9 +727,8 @@ impl Library {
         )
     }
 
-    /// Replaces (or clears) the raw lyrics text for a track, in the index and
-    /// in the file's own tags.  See [`Self::update_track_metadata`] for why the
-    /// index is written even when the file write fails.
+    /// Replaces (or clears) a track's raw lyrics, in the index and in the
+    /// file's tags. See [`Self::update_track_metadata`] for the write order.
     pub fn set_track_lyrics(&mut self, id: TrackId, lyrics: Option<String>) -> Result<()> {
         let Some(t) = self.tracks.iter_mut().find(|t| t.id == id) else {
             return Ok(());
@@ -828,8 +763,8 @@ impl Library {
         self.by_id.get(&id).and_then(|&i| self.tracks.get(i))
     }
 
-    /// Rebuilds [`Self::by_id`].  Call after anything reorders `tracks` or
-    /// changes its length; it is O(n) and those events are rare.
+    /// Rebuilds [`Self::by_id`]. Call after anything reorders `tracks` or
+    /// changes its length; O(n), and those events are rare.
     fn reindex(&mut self) {
         self.by_id = self
             .tracks
@@ -911,13 +846,11 @@ impl Library {
         Some(target)
     }
 
-    /// Reorders the whole library (the "All tracks" view). Playlists reference
-    /// tracks by id, not position, so this only changes the display order and
-    /// leaves every playlist intact.
+    /// Reorders the whole library. Playlists reference tracks by id, not
+    /// position, so this changes display order only.
     pub fn move_track(&mut self, index: usize, down: bool) -> Option<usize> {
         let target = neighbour(index, down, self.tracks.len())?;
         self.tracks.swap(index, target);
-        // Positions moved, so the id->index map has to be rebuilt.
         self.reindex();
         let _ = self.save();
         Some(target)
@@ -936,8 +869,7 @@ impl Library {
         self.playlists.iter().find(|p| p.id == id)
     }
 
-    /// Resolves the track objects for a given playlist, in order.
-    /// Silently skips any dangling ids.
+    /// The tracks of a playlist, in order; dangling ids are skipped.
     pub fn playlist_tracks(&self, playlist_id: PlaylistId) -> Vec<&Track> {
         self.playlist(playlist_id)
             .map(|pl| pl.tracks.iter().filter_map(|id| self.track(*id)).collect())

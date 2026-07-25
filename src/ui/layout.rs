@@ -36,10 +36,8 @@ pub struct Theme {
 
 // -- Glyphs ------------------------------------------------------------------
 
-/// Semantic UI glyphs, chosen per-terminal so a tty / limited console gets
-/// ASCII fallbacks instead of unrenderable Unicode.  One table is selected via
-/// [`Theme::glyphs`]; every render site reads from it rather than hard-coding
-/// glyph literals.
+/// Semantic UI glyphs, so a tty gets ASCII instead of unrenderable Unicode.
+/// [`Theme::glyphs`] picks the table; no render site hard-codes a literal.
 #[derive(Debug)]
 pub struct Glyphs {
     /// Vertical rule separating items in a status cluster.
@@ -52,7 +50,7 @@ pub struct Glyphs {
     /// Horizontal bar fill / empty (progress, thumb, settings volume).
     pub bar_fill: &'static str,
     pub bar_empty: &'static str,
-    /// Padded metadata separator (e.g. `album - year`).
+    /// Padded metadata separator (e.g. `artist - album`).
     pub sep: &'static str,
     /// Music note (lyrics title, file-picker audio entries).
     pub note: &'static str,
@@ -65,9 +63,8 @@ pub struct Glyphs {
     /// Scrubber: the track line, and the head riding along it.
     pub track: &'static str,
     pub thumb: &'static str,
-    /// Frames of the small equaliser shown against the playing row. Cycled by
-    /// elapsed time, so the list shows playback is live without the cost of a
-    /// real animation.
+    /// Frames of the equaliser on the playing row, cycled by elapsed time: it
+    /// shows playback is live without the cost of a real animation.
     pub eq: [&'static str; 4],
     /// The same equaliser at rest, for the track that is loaded but paused.
     pub eq_idle: &'static str,
@@ -141,13 +138,11 @@ impl Theme {
 
     /// Style marking the selected row of a list.
     ///
-    /// The RGB themes tint the row's background, which is legible because
-    /// `panel_bg` sits a shade off `bg`.  The console themes have no such
-    /// shade to spend: at 16 colors a mid-tone selection background wrecks
-    /// contrast from both sides, and leaving the row to a brighter foreground
-    /// alone gives only 2.3:1 against an unselected one, which on a real tty
-    /// is hard to pick out.  Reverse video swaps foreground and background
-    /// instead, so the row reads as a solid block whatever the palette is.
+    /// The RGB themes tint the background, legible because `panel_bg` sits a
+    /// shade off `bg`. The console themes have no shade to spend: a mid-tone
+    /// band wrecks contrast from both sides, and a brighter foreground alone
+    /// is only 2.3:1 against an unselected row. Reverse video sidesteps both
+    /// by swapping fg and bg, so the row is a solid block in any palette.
     pub fn selection_style(&self) -> Style {
         if self.ascii {
             Style::default().add_modifier(Modifier::REVERSED)
@@ -172,31 +167,12 @@ pub fn theme_by_name(name: &str) -> &'static Theme {
 
 /// The 16-color fallbacks used when truecolor is not in effect.
 ///
-/// Tuned against the Linux console's actual default palette, which the kernel
-/// exposes at `/sys/module/vt/parameters/default_{red,grn,blu}`:
-///
-/// ```text
-/// 0 black    (  0,  0,  0)    8  darkgray     ( 85, 85, 85)
-/// 1 red      (170,  0,  0)    9  lightred     (255, 85, 85)
-/// 2 green    (  0,170,  0)    10 lightgreen   ( 85,255, 85)
-/// 3 yellow   (170, 85,  0)    11 lightyellow  (255,255, 85)
-/// 4 blue     (  0,  0,170)    12 lightblue    ( 85, 85,255)
-/// 5 magenta  (170,  0,170)    13 lightmagenta (255, 85,255)
-/// 6 cyan     (  0,170,170)    14 lightcyan    ( 85,255,255)
-/// 7 gray     (170,170,170)    15 white        (255,255,255)
-/// ```
-///
-/// Those values decide which color can appear on which background.  On black,
-/// blue is 1.6:1 and darkgray 2.8:1 -- both effectively unreadable.  On white,
-/// every bright variant collapses (lightyellow is 1.1:1, lightcyan 1.2:1), so
-/// the two themes share almost no colors.
-///
-/// Both themes keep `panel_bg` equal to `bg`, so panels are flat and the
-/// selected row is marked by foreground and weight rather than a background
-/// band.  A mid-tone selection background is tempting but wrecks contrast from
-/// both sides at this palette size: lightred on darkgray is 2.4:1, yellow on
-/// gray is 2.3:1.  The `>` marker plus a bold, brighter foreground carries the
-/// selection instead, which is what console programs generally do.
+/// Tuned against the Linux console's default palette (the kernel exposes it at
+/// `/sys/module/vt/parameters/default_{red,grn,blu}`), which decides what may
+/// appear on what: on black, blue is 1.6:1 and darkgray 2.8:1; on white every
+/// bright variant collapses. So the dark and light themes share almost no
+/// colors, and both keep `panel_bg` equal to `bg`, leaving panels flat and the
+/// selection to [`Theme::selection_style`].
 ///
 /// Kept out of `THEMES` so they never appear in the truecolor theme cycler.
 pub fn console_themes() -> &'static [Theme] {
@@ -212,13 +188,11 @@ pub fn console_theme_by_name(name: &str) -> &'static Theme {
 }
 
 static CONSOLE_THEMES: [Theme; 2] = [
-    // "native": leaves `bg` at the terminal's own background (usually dark) and
-    // picks every foreground for contrast against it, so the UI blends into the
-    // terminal rather than painting over it.  Sixteen colors do not offer three
-    // legible neutral steps above black: darkgray is 2.8:1 and reads as black on
-    // a real tty, so it is not used at all here.  Dim text and hints therefore
-    // share one step below white, and the bar's empty remainder is told apart by
-    // its glyph (`-` against `#`) rather than by being dimmer.
+    // "native": inherits the terminal's own background and picks foregrounds
+    // for contrast against it, so the UI blends in rather than painting over.
+    // There is no legible third neutral above black (darkgray reads as black
+    // on a tty), so dim text and hints share one step below white and the
+    // bar's remainder is told apart by its glyph, not by being dimmer.
     Theme {
         name: "native",
         bg: Color::Reset,
@@ -235,10 +209,9 @@ static CONSOLE_THEMES: [Theme; 2] = [
         transparent: false,
         ascii: true,
     },
-    // "paper": paints its own white background rather than inheriting one, so it
-    // renders as an ink-on-paper light theme on any terminal, including a black
-    // tty (where inheriting would put black text on black).  Only the dim ANSI
-    // variants survive against white.
+    // "paper": paints its own white background instead of inheriting, so it is
+    // ink-on-paper even on a black tty, where inheriting would put black on
+    // black. Only the dim ANSI variants survive against white.
     Theme {
         name: "paper",
         bg: Color::White,
@@ -258,7 +231,6 @@ static CONSOLE_THEMES: [Theme; 2] = [
 ];
 
 static THEMES: [Theme; 15] = [
-    // 1: dark (default)
     Theme {
         name: "dark",
         bg: Color::Rgb(18, 18, 18),
@@ -275,7 +247,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 2: light
     Theme {
         name: "light",
         bg: Color::Rgb(245, 245, 245),
@@ -292,7 +263,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 3: nord
     Theme {
         name: "nord",
         bg: Color::Rgb(46, 52, 64),
@@ -309,7 +279,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 4: gruvbox dark
     Theme {
         name: "gruvbox",
         bg: Color::Rgb(40, 40, 40),
@@ -326,7 +295,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 5: gruvbox light
     Theme {
         name: "gruvbox_light",
         bg: Color::Rgb(251, 241, 199),
@@ -343,7 +311,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 6: rose pine
     Theme {
         name: "rosepine",
         bg: Color::Rgb(25, 23, 36),
@@ -360,7 +327,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 7: rose pine dawn
     Theme {
         name: "rosepine_dawn",
         bg: Color::Rgb(250, 244, 237),
@@ -377,7 +343,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 8: catppuccin mocha
     Theme {
         name: "catppuccin",
         bg: Color::Rgb(30, 30, 46),
@@ -394,7 +359,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 9: catppuccin latte
     Theme {
         name: "catppuccin_latte",
         bg: Color::Rgb(239, 241, 245),
@@ -411,7 +375,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 10: dracula
     Theme {
         name: "dracula",
         bg: Color::Rgb(40, 42, 54),
@@ -428,7 +391,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 11: tokyo night
     Theme {
         name: "tokyo_night",
         bg: Color::Rgb(26, 27, 38),
@@ -445,7 +407,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 12: solarized dark
     Theme {
         name: "solarized_dark",
         bg: Color::Rgb(0, 43, 54),
@@ -462,7 +423,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 13: solarized light
     Theme {
         name: "solarized_light",
         bg: Color::Rgb(253, 246, 227),
@@ -479,7 +439,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 14: everforest dark
     Theme {
         name: "everforest",
         bg: Color::Rgb(35, 38, 33),
@@ -496,7 +455,6 @@ static THEMES: [Theme; 15] = [
         transparent: false,
         ascii: false,
     },
-    // 15: kanagawa
     Theme {
         name: "kanagawa",
         bg: Color::Rgb(22, 22, 29),
@@ -517,11 +475,9 @@ static THEMES: [Theme; 15] = [
 
 // -- Shared widget helpers --------------------------------------------------
 
-/// Renders `value` with a vi-style block cursor: reverse-video *covering* the
-/// character at byte offset `cursor` (a trailing block at end-of-line) rather
-/// than an extra glyph inserted between characters.  Works in every color mode
-/// (`REVERSED` is a plain terminal attribute, so it renders as a real block on
-/// a tty too).
+/// Renders `value` with a vi-style block cursor: reverse video *covering* the
+/// character at byte offset `cursor`, not an extra glyph wedged between two.
+/// `REVERSED` is a plain terminal attribute, so this works on a tty too.
 pub fn cursor_spans(value: &str, cursor: usize, theme: &Theme) -> Vec<Span<'static>> {
     let text = Style::default().fg(theme.text);
     let block = Style::default()
@@ -540,10 +496,9 @@ pub fn cursor_spans(value: &str, cursor: usize, theme: &Theme) -> Vec<Span<'stat
     ]
 }
 
-/// Like [`cursor_spans`], but keeps the cursor visible in values too long for
-/// the field by scrolling a `width`-cell window over them, the way a shell
-/// prompt does.  Without this a long name simply runs past the right edge and
-/// you end up typing blind.
+/// Like [`cursor_spans`], but scrolls a `width`-cell window over values too
+/// long for the field, the way a shell prompt does. Without it a long name
+/// runs past the right edge and you type blind.
 pub fn cursor_spans_windowed(
     value: &str,
     cursor: usize,
@@ -553,7 +508,7 @@ pub fn cursor_spans_windowed(
     let start = h_window_start(value, cursor, width);
     let window = h_window(value, start, width);
 
-    // Translate the cursor's char index into a byte offset within the window.
+    // char index -> byte offset within the window
     let cur = value[..cursor].chars().count();
     let window_cursor = window
         .char_indices()
@@ -563,30 +518,25 @@ pub fn cursor_spans_windowed(
     cursor_spans(&window, window_cursor, theme)
 }
 
-/// Character index of the first visible column in a `width`-*column* window
-/// that keeps the block cursor at char index derived from `cursor` in view.
+/// First visible character index of a `width`-*column* window holding the
+/// cursor.
 ///
-/// Column-based, not char-based: a window of `width` wide characters would be
-/// twice `width` cells and overflow the field, clipping the cursor off the
-/// right edge exactly when you type past the halfway point.
-///
-/// Exposed so a multi-line editor can offset every row by the same amount;
-/// scrolling only the cursor's row would slide it out of alignment with the
-/// lines above and below it.
+/// Column-based, not char-based: `width` wide characters would be twice
+/// `width` cells and clip the cursor off the right edge. Exposed so a
+/// multi-line editor can offset every row alike, since scrolling only the
+/// cursor's row would knock it out of alignment with its neighbours.
 pub fn h_window_start(value: &str, cursor: usize, width: usize) -> usize {
     if width == 0 {
         return 0;
     }
     let chars: Vec<char> = value.chars().collect();
-    // Total columns, plus the one cell the block cursor needs past the end.
+    // plus the one cell the block cursor needs past the end
     let total: usize = chars.iter().map(|c| char_cols(*c)).sum::<usize>() + 1;
     if total <= width {
         return 0;
     }
     let cur = value[..cursor].chars().count();
-    // Walk back from the cursor, accumulating columns, until one more character
-    // would push the window past `width`. The cursor's own cell is reserved
-    // first so it always has somewhere to sit.
+    // walk back from the cursor until one more character would exceed `width`
     let cursor_cell = chars.get(cur).map_or(1, |c| char_cols(*c));
     let mut used = cursor_cell;
     let mut start = cur;
@@ -623,9 +573,8 @@ fn char_cols(c: char) -> usize {
     UnicodeWidthChar::width(c).unwrap_or(0)
 }
 
-/// Centred two-line prompt for an empty panel: a statement of what is missing,
-/// then the key that fixes it.  Shared so every empty panel reads the same
-/// way instead of each inventing its own one-liner.
+/// Centred two-line prompt for an empty panel: what is missing, then the key
+/// that fixes it. Shared so every empty panel reads the same way.
 pub fn render_empty_state(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -692,10 +641,9 @@ impl Columns {
         let time = GAP + Self::TIME_W;
 
         if body >= Self::MIN_TITLE + meta2 + time {
-            // Roughly 4:3:3. Giving the title every spare column instead left
-            // it sprawling on a wide terminal, with the metadata stranded far
-            // to the right; keeping the split proportional holds the columns
-            // together at any width.
+            // roughly 4:3:3. Giving the title every spare column left it
+            // sprawling on a wide terminal with the metadata stranded far off
+            // to the right; a proportional split holds them together.
             let rest = body - time - GAP * 2;
             let artist = rest * 3 / 10;
             let album = rest * 3 / 10;

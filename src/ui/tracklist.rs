@@ -22,7 +22,7 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    // Split inner area: list on top, filter bar at bottom when active.
+    // list on top, filter bar beneath it when active
     let (list_rect, filter_rect) = if has_filter {
         let s = Layout::default()
             .direction(Direction::Vertical)
@@ -38,9 +38,8 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     }
 
     // -- Track list ------------------------------------------------------
-    // The header and its rule sit outside the list: as list items they scroll
-    // away with the content, losing the column labels exactly when a long
-    // library makes them useful.
+    // outside the list: as list items they would scroll away with the content,
+    // losing the labels exactly when a long library makes them useful
     let table = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -77,8 +76,7 @@ pub fn render_tracklist(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
             } else {
                 Style::default().fg(t.text)
             };
-            // Three levels of depth: the title carries the row, the artist
-            // supports it, the album and length recede furthest.
+            // three levels of depth: title, then artist, then the rest
             let artist_style = Style::default().fg(t.text_dim);
             let meta_style = Style::default().fg(t.subtle);
 
@@ -121,11 +119,11 @@ fn render_filter_bar(frame: &mut Frame<'_>, area: Rect, state: &AppState, t: &Th
     } else {
         Style::default().fg(t.text_dim)
     };
-    // "/ " already took two columns of the row.
+    // "/ " already took two columns
     let field_w = usize::from(area.width).saturating_sub(2);
     let mut spans = vec![Span::styled("/ ", prefix_style)];
     if state.filter_active {
-        // Cursor sits at the end of the filter text (no in-place editing).
+        // no in-place editing, so the cursor sits at the end
         spans.extend(cursor_spans_windowed(
             &state.tracklist_filter,
             state.tracklist_filter.len(),
@@ -141,9 +139,8 @@ fn render_filter_bar(frame: &mut Frame<'_>, area: Rect, state: &AppState, t: &Th
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
-/// Column labels and the rule under them.
-/// Labels are uppercased, which reads as a table heading rather than as a
-/// first row of data, and the header picks up the accent while the panel has
+/// Column labels and the rule under them. Uppercased, so they read as a
+/// heading rather than a first row of data, and accented while the panel has
 /// focus so the eye lands on the active table.
 fn render_table_header(
     frame: &mut Frame<'_>,

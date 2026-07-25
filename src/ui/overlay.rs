@@ -3,8 +3,8 @@ use ratatui::Frame;
 use crate::ui::lyrics_overlay::render_lyrics_overlay;
 use crate::{app::AppState, filepicker::render_filepicker, modal::render_modal};
 
-/// Renders whichever overlay is active.
-/// Priority: file picker > modal > lyrics overlay.
+/// Renders whichever overlay is active, in priority order: file picker,
+/// modal, lyrics.
 pub fn render_overlay(frame: &mut Frame<'_>, state: &AppState) {
     if let Some(picker) = &state.file_picker {
         render_filepicker(frame, picker, &state.theme);

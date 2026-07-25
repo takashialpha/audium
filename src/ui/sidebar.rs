@@ -17,9 +17,8 @@ const MARKER_W: usize = 2;
 const LIBRARY_H: u16 = 3;
 
 pub fn render_sidebar(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
-    // The library and the playlists are different kinds of thing, so they get
-    // separate frames rather than being flattened into one list under a shared
-    // heading. Each frame is its own Tab stop.
+    // different kinds of thing, so separate frames rather than one flattened
+    // list; each is its own Tab stop
     let sections = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(LIBRARY_H), Constraint::Min(0)])
@@ -39,14 +38,13 @@ fn render_library(frame: &mut Frame<'_>, state: &AppState, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    // The marker is prepended below, so the label gets what is left after it.
+    // the marker is prepended below, so the label gets what is left
     let label = entry(
         &format!("{} All tracks", g.note),
         state.library.tracks.len(),
         (inner.width as usize).saturating_sub(MARKER_W),
     );
-    // The library row is a paragraph rather than a list, so it has to apply the
-    // selection style itself to match how the list widgets mark their rows.
+    // a paragraph, not a list, so it applies the selection style itself
     let mut style = row_style(t, is_active, selected);
     if selected {
         style = style.patch(t.selection_style());
@@ -114,18 +112,16 @@ fn row_style(t: &Theme, is_active: bool, is_cursor: bool) -> Style {
     }
 }
 
-/// A row with its name on the left and its track count flush right, so counts
-/// line up in a column instead of trailing each name at a ragged offset.
-///
-/// The count is laid out first and never truncated, so as it grows it eats
-/// into the name from the right rather than overflowing the row.
+/// Name left, track count flush right, so counts line up in a column instead
+/// of trailing each name raggedly. The count is laid out first and never
+/// truncated, so it eats into the name rather than overflowing the row.
 fn entry(name: &str, count: usize, width: usize) -> String {
     let count = count.to_string();
-    // The count is ASCII digits, so its width equals its length.
+    // ASCII digits, so width equals length
     let room = width.saturating_sub(count.len() + 1);
     if room == 0 {
-        // Narrower than the count plus a separator: the count is the more
-        // useful of the two, and this keeps the row within `width`.
+        // narrower than the count plus a separator: the count is the more
+        // useful of the two
         return truncate(&count, width);
     }
     let name = truncate(name, room);

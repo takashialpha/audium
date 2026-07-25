@@ -5,9 +5,8 @@ use std::fs;
 
 /// How colors are chosen for the UI.
 ///
-/// The built-in themes are authored in 24-bit RGB, which a real tty or a
-/// terminal without truecolor renders incorrectly.  When truecolor is not in
-/// effect the UI falls back to the named-ANSI `console` theme instead.
+/// The built-in themes are 24-bit RGB, which a tty renders wrongly, so without
+/// truecolor the UI falls back to a named-ANSI console theme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ColorMode {
@@ -61,9 +60,8 @@ fn default_console_theme() -> String {
     "native".to_string()
 }
 
-/// Bumped only if this file's shape changes incompatibly.  Written to every
-/// file; currently informational, since every field defaults independently and
-/// an older file simply gains the new keys on its next save.
+/// Bumped only on an incompatible change. Informational for now: every field
+/// defaults independently, so an older file just gains the new keys.
 const SETTINGS_VERSION: u32 = 1;
 
 const fn default_version() -> u32 {
@@ -85,11 +83,9 @@ fn default_theme() -> String {
 /// Persistent user preferences.
 ///
 /// Read from the highest-priority copy across `$XDG_CONFIG_HOME` and
-/// `$XDG_CONFIG_DIRS`; always written to `$XDG_CONFIG_HOME/audium/settings.json`.
-///
-/// Every field defaults independently, so a missing key in an older file is
-/// filled in on load without disturbing the others.  Field order matches the
-/// settings modal, so the file reads top-to-bottom like the dialog.
+/// `$XDG_CONFIG_DIRS`, always written to `$XDG_CONFIG_HOME`. Every field
+/// defaults independently, so a missing key is filled in without disturbing
+/// the rest. Field order matches the settings modal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     /// Schema version of this file.  See `SETTINGS_VERSION`.
@@ -101,21 +97,17 @@ pub struct Settings {
     /// How many seconds <- / -> seek by.
     #[serde(default = "default_seek")]
     pub seek_step_secs: u64,
-    /// Whether to remember the playback session (queue, position, modes) across
-    /// restarts.  When off, nothing is written to `$XDG_STATE_HOME` and any
-    /// existing `state.json` is removed on launch.
+    /// Remember the session across restarts. When off, nothing is written to
+    /// `$XDG_STATE_HOME` and any existing `state.json` is removed on launch.
     #[serde(default = "default_true")]
     pub resume_playback: bool,
-    /// How colors are selected.  `Auto` detects truecolor support and falls
-    /// back to the console theme when it is missing.
     #[serde(default)]
     pub color_mode: ColorMode,
-    /// Name of the active truecolor theme.  Must match one of the built-in
-    /// theme names; unknown values fall back to "dark" silently on load.
+    /// Active truecolor theme; an unknown name falls back to "dark" on load.
     #[serde(default = "default_theme")]
     pub theme_name: String,
-    /// Name of the active 16-color console theme.  Kept separate from
-    /// `theme_name` so switching color modes does not overwrite either choice.
+    /// Active console theme. Kept apart from `theme_name` so switching color
+    /// modes does not overwrite either choice.
     #[serde(default = "default_console_theme")]
     pub console_theme_name: String,
     /// Whether background transparency is enabled.
@@ -141,8 +133,8 @@ impl Default for Settings {
 impl Settings {
     const FILE: &'static str = "settings.json";
 
-    /// Loads settings from disk.  Missing file -> `Default`.
-    /// Corrupt file -> `Default` (non-fatal; we just overwrite on next save).
+    /// Loads settings from disk. Missing or corrupt -> `Default`, non-fatal:
+    /// the next save overwrites it.
     pub fn load() -> Self {
         let Some(path) = Library::find_config_file(Self::FILE) else {
             return Self::default();
