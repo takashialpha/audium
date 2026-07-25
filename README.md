@@ -18,7 +18,7 @@ m##"""##  ##    ##  ##    ##     ##     ##    ##  ## ## ##
 [![License](https://img.shields.io/crates/l/audium?style=flat-square&color=64b4ff&labelColor=161616)](LICENSE)
 [![Built With Ratatui](https://img.shields.io/badge/Built_With_Ratatui-000?logo=ratatui&logoColor=fff)](https://ratatui.rs/)
 
-[Installation](#installation) | [Usage](#usage) | [Building](#building-from-source) | [Library layout](#library-layout)
+[Features](#features) | [Installation](#installation) | [Usage](#usage) | [Building](#building-from-source) | [Library layout](#library-layout) | [Why audium?](#why-audium) | [TODO](#todo) | [Contributing](#contributing)
 
 </div>
 
@@ -82,10 +82,10 @@ paru -S audium
 ## Usage
 
 ```sh
-# Launch with your library
+# Launch audium
 audium
 
-# Open a specific file immediately (imports it to your library)
+# Open a specific file immediately (imports it to your library, plays it)
 audium path/to/song.flac
 ```
 
