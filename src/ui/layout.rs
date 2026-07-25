@@ -641,9 +641,9 @@ impl Columns {
         let time = GAP + Self::TIME_W;
 
         if body >= Self::MIN_TITLE + meta2 + time {
-            // roughly 4:3:3. Giving the title every spare column left it
-            // sprawling on a wide terminal with the metadata stranded far off
-            // to the right; a proportional split holds them together.
+            // roughly 4:3:3. Giving the title every spare column would leave
+            // it sprawling on a wide terminal, the metadata stranded off to
+            // the right; a proportional split holds them together.
             let rest = body - time - GAP * 2;
             let artist = rest * 3 / 10;
             let album = rest * 3 / 10;

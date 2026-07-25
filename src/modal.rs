@@ -197,7 +197,7 @@ fn clamp_col(line: &str, col: usize) -> usize {
     c
 }
 
-/// A `TextArea` wrapped with a name so app.rs can import it as `LyricsTextArea`.
+/// Alias naming the editor by what it edits, for use at the call site.
 pub type LyricsTextArea = TextArea;
 
 // -- RemoveTarget -----------------------------------------------------------
@@ -1211,8 +1211,8 @@ struct HelpSection {
     keys: &'static [(&'static str, &'static str)],
 }
 
-/// Grouped by intent, not by which key was free: anonymous blank-line groups
-/// showed that a break existed but never what it meant.
+/// Grouped by intent, not by which key is free, and every group titled: an
+/// anonymous blank line shows that a break exists but never what it means.
 const HELP: &[HelpSection] = &[
     HelpSection {
         title: "Getting around",
@@ -1270,9 +1270,9 @@ const HELP: &[HelpSection] = &[
 /// Renders one section as `title` then its keys, indented under it.
 ///
 /// Keys are left-aligned at a fixed indent, so each starts on the same column
-/// and sits under its heading; right-aligning lined up only the descriptions
-/// and left a ragged edge down the middle. The width is per column: sharing
-/// one would size the single-letter side to fit `Tab / S-Tab`.
+/// and sits under its heading; right-aligning would line up the descriptions
+/// alone, leaving a ragged edge down the middle. The width is per column:
+/// sharing one would size the single-letter side to fit `Tab / S-Tab`.
 fn help_lines<'a>(sections: &[&'a HelpSection], theme: &Theme) -> Vec<Line<'a>> {
     let key_w = sections
         .iter()
@@ -1311,7 +1311,7 @@ fn help_columns() -> (Vec<&'static HelpSection>, Vec<&'static HelpSection>) {
     let all: Vec<&HelpSection> = HELP.iter().collect();
     // balance by rendered height, taking the smallest difference rather than
     // the first split past halfway, which can land further apart than stopping
-    // short would have
+    // short of it
     let rows = |s: &HelpSection| s.keys.len() + 2;
     let total: usize = all.iter().map(|s| rows(s)).sum();
     let mut used = 0;
@@ -1338,8 +1338,8 @@ fn lines_width(lines: &[Line<'_>]) -> u16 {
 fn render_help(frame: &mut Frame<'_>, scroll: usize, theme: &Theme) {
     let area = frame.area();
 
-    // laid out first, then sized to what they measure: a fixed width left the
-    // right column floating in dead space, its keys being single letters
+    // laid out first, then sized to what they measure: a fixed width would
+    // leave the right column floating in dead space, its keys single letters
     let (left_sections, right_sections) = help_columns();
     let left = help_lines(&left_sections, theme);
     let right = help_lines(&right_sections, theme);
@@ -1889,8 +1889,8 @@ fn render_edit_metadata(
     ];
     let hint_h = hint_height(&hints, modal_inner_width(WIDTH), theme);
 
-    // derived from META_FIELDS rather than hardcoded, which drifted the moment
-    // the field count changed
+    // derived from META_FIELDS rather than hardcoded, so it cannot drift out
+    // of step with the field count
     let mut constraints = vec![Constraint::Length(1); META_FIELDS];
     constraints.extend([
         Constraint::Length(1),      // spacer

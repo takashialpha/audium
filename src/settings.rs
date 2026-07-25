@@ -60,8 +60,8 @@ fn default_console_theme() -> String {
     "native".to_string()
 }
 
-/// Bumped only on an incompatible change. Informational for now: every field
-/// defaults independently, so an older file just gains the new keys.
+/// Bumped only on an incompatible change. Informational: every field defaults
+/// independently, so a file missing keys simply gains them.
 const SETTINGS_VERSION: u32 = 1;
 
 const fn default_version() -> u32 {

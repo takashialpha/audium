@@ -17,8 +17,8 @@ pub const PLAYER_BAR_H: u16 = 4;
 /// Columns inset from each edge, matching the dialogs' gutter.
 const PAD_X: u16 = 2;
 
-/// Cells in the volume meter, wide enough that a step shows: at eight cells a
-/// 1% change often moved nothing.
+/// Cells in the volume meter, wide enough that a step shows rather than being
+/// implied: much narrower and a 1% change moves nothing.
 const VOL_CELLS: usize = 14;
 
 /// Width below which the volume meter shrinks to a bare percentage.
@@ -236,8 +236,8 @@ fn transport_spans(state: &AppState, with_modes: bool, t: &Theme) -> Vec<Span<'s
         LoopMode::Track => ("track", true),
     };
 
-    // only non-default modes: carrying `speed 1.00x` and `loop off` always
-    // filled the cluster with two items saying nothing is happening
+    // only non-default modes: a permanent `speed 1.00x` and `loop off` would
+    // fill the cluster with two items saying nothing is happening
     let mut spans = vec![status];
     if speed_changed {
         push_item(&mut spans, "speed", speed_value, t);

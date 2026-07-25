@@ -17,15 +17,15 @@ pub type PlaylistId = u64;
 
 /// On-disk schema version of the index.
 ///
-/// Bump for any change an older audium could not read. There is no migration
+/// Bump for any change another version could not read. There is no migration
 /// path: [`Library::load`] sets a foreign version aside and re-scans the music
 /// directory, so only playlists have to be rebuilt by hand.
 const FORMAT_VERSION: u32 = 1;
 
 /// Basename of the index inside the data directory.
 ///
-/// Deliberately *not* `library.json`, the incompatible name 1.x used: a name
-/// neither version touches cannot be half-loaded by the other.
+/// Must stay unique to this schema. A name shared with an incompatible format
+/// could be opened by something that cannot read it and half-loaded.
 const INDEX_FILE: &str = "audium.json";
 
 // -- Track ------------------------------------------------------------------
@@ -368,7 +368,7 @@ impl Default for IndexFile {
     }
 }
 
-/// Reads just the version, to name a set-aside index and to tell an older
+/// Reads just the version, to name a set-aside index and to tell a foreign
 /// schema apart from a corrupt file.
 #[derive(Deserialize)]
 struct VersionPeek {

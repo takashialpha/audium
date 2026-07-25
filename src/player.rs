@@ -181,8 +181,8 @@ fn audio_thread_main(
 ) {
     let player = Player::connect_new(sink.mixer());
     player.set_volume(default_volume);
-    // speed lives on the Player, so a change applies in place rather than
-    // reopening the file, which is what used to make it stutter
+    // speed lives on the Player, so a change applies in place: reopening the
+    // file to alter it would stutter
     player.set_speed(1.0);
 
     let mut stopped_explicitly = true;

@@ -91,7 +91,7 @@ impl LoopMode {
 
 // -- Focus ------------------------------------------------------------------
 
-/// Which panel currently owns keyboard focus.
+/// Which panel owns keyboard focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
     Library,
@@ -144,7 +144,7 @@ pub struct AppState {
     // -- UI --------------------------------------------------------------
     pub focus: Focus,
 
-    /// What the tracklist panel is currently showing.
+    /// What the tracklist panel is showing.
     pub active_view: SidebarItem,
 
     /// Cursor inside the playlists frame; indexes `library.playlists`.
@@ -176,7 +176,7 @@ pub struct AppState {
     // -- Tracklist filter -------------------------------------------------
     /// Current filter string applied to the active playlist's track list.
     pub tracklist_filter: String,
-    /// Whether the filter bar is currently receiving keyboard input.
+    /// Whether the filter bar is receiving keyboard input.
     pub filter_active: bool,
 
     // -- Lyrics overlay ---------------------------------------------------
@@ -487,8 +487,8 @@ impl AppState {
             return;
         }
         // Ctrl+C is the only chord audium binds, and every other handler
-        // matches the key alone, so without this a chord lands on the same arm
-        // as the bare key: Ctrl+D used to open the destructive remove prompt.
+        // matches the key alone, so without this a chord would land on the
+        // same arm as the bare key -- including on destructive actions.
         if modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER) {
             return;
         }
@@ -700,7 +700,7 @@ impl AppState {
         true
     }
 
-    /// Points the tracklist at whichever sidebar frame currently has focus.
+    /// Points the tracklist at whichever sidebar frame has focus.
     /// A no-op from the tracklist or queue, which do not choose the view.
     fn sync_active_view(&mut self) {
         let item = match self.focus {
