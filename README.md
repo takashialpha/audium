@@ -169,6 +169,7 @@ Alternatives like termusic and cmus are solid, but they come with tradeoffs: hea
 - MPRIS, so desktop media keys and status bars can see and drive playback
 - Safe concurrent instances (state; the index is last-writer-wins; needs a lock or reload-before-write)
 - Pitch-preserving speed control (time-stretch DSP), so faster playback does not raise the pitch
+- Enhance lyric modal
 - YouTube/Web audio import (no external binary deps)
 
 ## Contributing
