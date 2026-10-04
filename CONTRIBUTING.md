@@ -6,12 +6,16 @@ on a large change.
 ## Before you push
 
 ```sh
-cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+just check
 ```
 
-These are what CI runs, so a green local run is a green CI run.
+This runs `just fmt`, `just lint` and `just test`, the same recipes CI calls,
+so a green local run is a green CI run. Run `just` on its own to list every
+recipe. Install [just](https://github.com/casey/just) with your package manager
+or `cargo install just`.
+
+Every command CI runs lives in the `justfile`. If a check changes, change the
+recipe rather than spelling flags out in a workflow, so the two cannot drift.
 
 audium tracks the latest stable Rust, so new language features can be used the
 day they stabilise. `rust-toolchain.toml` pins the channel to `stable` and

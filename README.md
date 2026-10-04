@@ -95,9 +95,13 @@ audium path/to/song.flac
 ```sh
 git clone https://github.com/takashialpha/audium
 cd audium
-cargo build --release
+just build
 # binary is at ./target/release/audium
 ```
+
+`just build` is a thin wrapper over `cargo build --release`, the same recipe the
+release workflow uses; plain cargo works too if you do not have
+[just](https://github.com/casey/just). Run `just` to list the other recipes.
 
 Uses ALSA, the standard Linux audio API. Install its development headers:
 

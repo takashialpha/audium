@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 0"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test, Clippy, Fmt
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+
+    - name: Install just
+      uses: taiki-e/install-action@v2
+      with:
+        tool: just
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+
+    # if arch linux: pacman -S --noconfirm alsa-lib
+    - name: Install Linux Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libasound2-dev
+
+    # What each of these actually runs lives in the justfile, so CI and a
+    # local run cannot disagree about what "passing" means.
+    - name: Test
+      run: just test
+
+    - name: Clippy
+      run: just lint
+
+    - name: Format check
+      run: just fmt
