@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     env:
       target: x86_64-unknown-linux-gnu
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download all built archives
+      - name: Download built archive
         uses: actions/download-artifact@v8
         with:
           name: audium-x86_64-unknown-linux-gnu
