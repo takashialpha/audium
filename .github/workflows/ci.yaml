@@ -47,3 +47,20 @@ jobs:
 
       - name: Clippy
         run: just lint
+
+  deps:
+    name: Unused dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-shear, just
+
+      - name: Unused dependencies
+        run: just deps

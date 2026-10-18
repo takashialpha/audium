@@ -22,7 +22,7 @@ build target="":
     fi
 
 # everything CI runs
-check: fmt lint test
+check: fmt lint test deps
 
 # check formatting
 fmt:
@@ -35,6 +35,10 @@ lint:
 # run the tests (see CONTRIBUTING.md for why there are so few)
 test:
     cargo test --verbose
+
+# check for unused dependencies
+deps:
+    cargo shear
 
 # throw away everything built
 clean:
