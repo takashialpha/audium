@@ -495,7 +495,7 @@ impl Library {
                 .unwrap_or_else(|| music_dir.join(&name));
             let id = next_track_id;
             next_track_id += 1;
-            by_name.insert(name.clone(), id);
+            by_name.insert(name, id);
             tracks.push(Track::at(id, path));
         }
 
@@ -641,8 +641,7 @@ impl Library {
             let ext = default_dest
                 .extension()
                 .and_then(|s| s.to_str())
-                .map(|e| format!(".{e}"))
-                .unwrap_or_default();
+                .map_or_default(|e| format!(".{e}"));
             let mut i = 1u32;
             loop {
                 let candidate = music_dir.join(format!("{stem}-{i}{ext}"));
@@ -872,7 +871,6 @@ impl Library {
     /// The tracks of a playlist, in order; dangling ids are skipped.
     pub fn playlist_tracks(&self, playlist_id: PlaylistId) -> Vec<&Track> {
         self.playlist(playlist_id)
-            .map(|pl| pl.tracks.iter().filter_map(|id| self.track(*id)).collect())
-            .unwrap_or_default()
+            .map_or_default(|pl| pl.tracks.iter().filter_map(|id| self.track(*id)).collect())
     }
 }

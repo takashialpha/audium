@@ -1123,8 +1123,7 @@ impl AppState {
             .and_then(|i| self.queue.get(i))
             .and_then(|t| self.library.track(t.id))
             .and_then(|t| t.lyrics.as_ref())
-            .map(|raw| lyrics::parse_lrc(raw))
-            .unwrap_or_default();
+            .map_or_default(|raw| lyrics::parse_lrc(raw));
     }
 
     fn sync_queue_metadata(
